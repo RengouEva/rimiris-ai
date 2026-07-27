@@ -29,13 +29,13 @@ export function WelcomeScreen() {
       setView('workspace')
       return
     }
-    // If they started the interview but never finished, resume it.
+    // If they started the onboarding but never finished, resume it.
     if (interviewAnswers.length > 0) {
-      setView('interview')
+      setView('onboarding')
       return
     }
-    // Otherwise, start the guided interview.
-    setView('interview')
+    // Otherwise, start the guided onboarding.
+    setView('onboarding')
   }
 
   return (

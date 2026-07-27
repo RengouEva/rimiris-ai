@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Moon,
   Sun,
+  ClipboardCheck,
 } from 'lucide-react'
 import { useIrisStore, type ViewMode } from '@/store/iris-store'
 import { cn } from '@/lib/utils'
@@ -20,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 export const NAV_ITEMS: { id: ViewMode; label: string; icon: any }[] = [
   { id: 'workspace', label: 'Mon mémoire', icon: PenLine },
+  { id: 'audit', label: 'Audit final', icon: ClipboardCheck },
   { id: 'coherence', label: 'Cohérence', icon: ShieldCheck },
   { id: 'soutenance', label: 'Soutenance', icon: Presentation },
   { id: 'export', label: 'Exporter', icon: FileDown },

@@ -31,6 +31,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 export interface A4EditorHandle {
   insertHtml: (html: string) => void
+  replaceHtml: (html: string) => void
   focus: () => void
 }
 
@@ -79,6 +80,14 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
         const newHtml = el.innerHTML
         lastValueRef.current = newHtml
         onChange(newHtml)
+      },
+      replaceHtml: (html: string) => {
+        const el = editorRef.current
+        if (!el) return
+        el.innerHTML = html || ''
+        lastValueRef.current = html || ''
+        onChange(html || '')
+        el.focus()
       },
       focus: () => editorRef.current?.focus(),
     }))

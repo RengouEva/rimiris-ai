@@ -1,10 +1,13 @@
-// Store global IRIS Thesis AI — V2
-// L'étudiant crée SA propre structure de mémoire.
-// Le template académique (15 chapitres) est une suggestion optionnelle.
+// Store global IRIS Thesis AI — V3
+// Workflow obligatoire en 8 phases (0-7).
+// Chaque section passe par : interview → validation → rédaction → humanisation.
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { CHAPTERS } from '@/lib/iris/chapters'
+
+// ============================================================================
+// Types de base
+// ============================================================================
 
 export interface ChatMessage {
   id: string
@@ -20,21 +23,65 @@ export interface InterviewAnswer {
   answer: string
 }
 
-export type SectionStatus = 'not_started' | 'in_progress' | 'draft' | 'completed'
+export type SectionStatus = 'not_started' | 'interview' | 'validated' | 'draft' | 'humanized' | 'completed'
+
+export interface SectionUnderstanding {
+  // Phase 1 output — IRIS's analysis of the section's intent
+  concepts: string[]
+  keywords: string[]
+  domain: string
+  disciplines: string[]
+  similarResearch: string[]
+  applications: string[]
+  limits: string[]
+  summary: string
+  validated: boolean
+}
+
+export interface SectionValidation {
+  // Phase 4 output — pre-writing validation
+  coherence: { ok: boolean; notes: string }
+  feasibility: { ok: boolean; notes: string }
+  precision: { ok: boolean; notes: string }
+  logic: { ok: boolean; notes: string }
+  overallOk: boolean
+}
+
+export interface HumanizationResult {
+  // Phase 5 output — after the multi-engine pipeline
+  grammar: string
+  fluidity: string
+  style: string
+  academic: string
+  level: string
+  finalHtml: string
+}
 
 export interface Section {
   id: string
   title: string
-  content: string
+  content: string // HTML in the A4 editor
   messages: ChatMessage[]
   wordCount: number
   lastEdited: number | null
   status: SectionStatus
-  // If imported from a chapter template, keep the reference (for AI context)
   templateRef?: string
+
+  // Phase 1 — Understanding (filled by IRIS, validated by student)
+  understanding?: SectionUnderstanding
+
+  // Phase 3 — Structured interview answers (4-mode system)
+  interviewAnswers: InterviewAnswer[]
+
+  // Phase 4 — Validation
+  validation?: SectionValidation
+
+  // Phase 5 — Humanization pipeline result
+  humanization?: HumanizationResult
 }
 
 export interface ProjectInfo {
+  // Phase 0 — Permanent project context
   university: string
   faculty: string
   department: string
@@ -42,19 +89,30 @@ export interface ProjectInfo {
   level: 'Licence' | 'Master' | 'Doctorat' | ''
   country: string
   language: string
+  norme: 'APA' | 'Vancouver' | 'IEEE' | 'ISO 690' | 'Harvard' | ''
+  guideUrl?: string // optional PDF guide URL
   theme: string
   entreprise: string
   directeur: string
-  norme: 'APA' | 'Vancouver' | 'IEEE' | 'ISO 690' | 'Harvard' | ''
   title: string
 }
 
+export type WorkflowPhase =
+  | 'phase_0_project' // Create project, collect context
+  | 'phase_1_understanding' // IRIS analyzes theme, student validates
+  | 'phase_2_problem' // Build research problem via hypotheses
+  | 'phase_3_interview' // Per-section structured interview
+  | 'phase_4_validation' // Pre-writing validation
+  | 'phase_5_humanization' // Multi-engine writing pipeline
+  | 'phase_6_scientific' // Cross-section coherence check
+  | 'phase_7_audit' // Final report
+
 export type ViewMode =
   | 'welcome'
-  | 'interview'
+  | 'onboarding'
   | 'plan_review'
   | 'workspace'
-  | 'coherence'
+  | 'audit'
   | 'soutenance'
   | 'export'
   | 'agents'
@@ -67,6 +125,23 @@ export interface CoherenceIssue {
   suggestion: string
 }
 
+export interface AuditScore {
+  dimension: string
+  score: number // 0-100
+  notes: string
+  improvements: string[]
+}
+
+export interface AuditReport {
+  scores: AuditScore[]
+  globalScore: number
+  generatedAt: number
+}
+
+// ============================================================================
+// State
+// ============================================================================
+
 interface IrisState {
   // Navigation
   view: ViewMode
@@ -76,16 +151,27 @@ interface IrisState {
   project: ProjectInfo
   projectInitialized: boolean
 
-  // Onboarding interview
+  // Onboarding interview (Phase 0 collect)
   interviewAnswers: InterviewAnswer[]
   proposedPlan: { title: string; description: string }[]
 
-  // Sections libres (créées par l'étudiant)
+  // Phase 1 — Understanding (global)
+  themeUnderstanding?: SectionUnderstanding
+
+  // Phase 2 — Problem building
+  problemContext?: {
+    hypotheses: string[]
+    selected: string
+    rationale: string
+  }
+
+  // Sections
   sections: Section[]
 
-  // Cohérence
+  // Audit & coherence
   coherenceIssues: CoherenceIssue[]
   lastCoherenceCheck: number | null
+  auditReport?: AuditReport
 
   // Soutenance
   soutenanceData: {
@@ -109,13 +195,18 @@ interface IrisState {
 
   // Actions — Project
   updateProject: (data: Partial<ProjectInfo>) => void
-  completeQuickStart: (title: string, level?: ProjectInfo['level']) => void
   resetProject: () => void
 
-  // Actions — Interview
+  // Actions — Interview (onboarding)
   addInterviewAnswer: (answer: InterviewAnswer) => void
   setProposedPlan: (plan: { title: string; description: string }[]) => void
   acceptPlanAndCreateSections: () => void
+
+  // Actions — Theme understanding (Phase 1)
+  setThemeUnderstanding: (u: SectionUnderstanding) => void
+
+  // Actions — Problem building (Phase 2)
+  setProblemContext: (p: { hypotheses: string[]; selected: string; rationale: string }) => void
 
   // Actions — Sections
   addSection: (title?: string, templateRef?: string) => string
@@ -125,13 +216,24 @@ interface IrisState {
   moveSection: (id: string, direction: 'up' | 'down') => void
   updateSectionContent: (id: string, content: string) => void
   setSectionStatus: (id: string, status: SectionStatus) => void
+  setSectionUnderstanding: (id: string, u: SectionUnderstanding) => void
+  setSectionInterviewAnswers: (id: string, answers: InterviewAnswer[]) => void
+  addSectionInterviewAnswer: (id: string, answer: InterviewAnswer) => void
+  setSectionValidation: (id: string, v: SectionValidation) => void
+  setSectionHumanization: (id: string, h: HumanizationResult) => void
   addMessage: (sectionId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>) => void
-  importTemplate: () => void
+
+  // Actions — Audit
+  setAuditReport: (r: AuditReport) => void
 
   // Actions — Coherence & Soutenance
   setCoherenceIssues: (issues: CoherenceIssue[]) => void
   setSoutenanceData: (data: IrisState['soutenanceData']) => void
 }
+
+// ============================================================================
+// Defaults
+// ============================================================================
 
 const defaultProject: ProjectInfo = {
   university: '',
@@ -141,16 +243,21 @@ const defaultProject: ProjectInfo = {
   level: '',
   country: '',
   language: 'Français',
+  norme: 'APA',
+  guideUrl: '',
   theme: '',
   entreprise: '',
   directeur: '',
-  norme: 'APA',
   title: '',
 }
 
 function makeId() {
   return `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
+
+// ============================================================================
+// Store
+// ============================================================================
 
 export const useIrisStore = create<IrisState>()(
   persist(
@@ -175,42 +282,17 @@ export const useIrisStore = create<IrisState>()(
       blockedMode: false,
       sidebarCollapsed: false,
 
+      // ---- Navigation ----
       setView: (view) => set({ view }),
       setActiveSection: (id) => set({ activeSectionId: id }),
       setAIPanel: (open) => set({ aiPanelOpen: open }),
-      setBlockedMode: (on) => set({ blockedMode: on, aiPanelOpen: on ? true : get().aiPanelOpen }),
+      setBlockedMode: (on) =>
+        set({ blockedMode: on, aiPanelOpen: on ? true : get().aiPanelOpen }),
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
+      // ---- Project ----
       updateProject: (data) =>
         set((state) => ({ project: { ...state.project, ...data } })),
-
-      completeQuickStart: (title, level) =>
-        set((state) => ({
-          project: {
-            ...state.project,
-            title: title.trim(),
-            level: level || state.project.level || 'Master',
-            theme: state.project.theme || title.trim(),
-          },
-          projectInitialized: true,
-          view: 'workspace',
-          sections:
-            state.sections.length === 0
-              ? [
-                  {
-                    id: makeId(),
-                    title: 'Introduction',
-                    content: '',
-                    messages: [],
-                    wordCount: 0,
-                    lastEdited: null,
-                    status: 'not_started',
-                  },
-                ]
-              : state.sections,
-          activeSectionId:
-            state.activeSectionId || (state.sections.length === 0 ? null : state.sections[0]?.id),
-        })),
 
       resetProject: () =>
         set({
@@ -219,15 +301,19 @@ export const useIrisStore = create<IrisState>()(
           projectInitialized: false,
           interviewAnswers: [],
           proposedPlan: [],
+          themeUnderstanding: undefined,
+          problemContext: undefined,
           sections: [],
           coherenceIssues: [],
           lastCoherenceCheck: null,
+          auditReport: undefined,
           soutenanceData: null,
           activeSectionId: null,
           aiPanelOpen: false,
           blockedMode: false,
         }),
 
+      // ---- Onboarding interview ----
       addInterviewAnswer: (answer) =>
         set((state) => ({ interviewAnswers: [...state.interviewAnswers, answer] })),
 
@@ -241,7 +327,6 @@ export const useIrisStore = create<IrisState>()(
                 { title: 'Introduction générale', description: 'Présentation du sujet.' },
                 { title: 'Conclusion générale', description: 'Synthèse.' },
               ]
-          // Sync project info from interview answers
           const answers = state.interviewAnswers
           const answerMap: Record<string, string> = {}
           for (const a of answers) answerMap[a.questionId] = a.answer
@@ -262,16 +347,25 @@ export const useIrisStore = create<IrisState>()(
             wordCount: 0,
             lastEdited: null,
             status: 'not_started',
+            interviewAnswers: [],
           }))
           return {
             project: updatedProject,
             projectInitialized: true,
             sections: state.sections.length > 0 ? state.sections : newSections,
-            activeSectionId: state.sections.length > 0 ? state.activeSectionId : newSections[0]?.id || null,
+            activeSectionId:
+              state.sections.length > 0 ? state.activeSectionId : newSections[0]?.id || null,
             view: 'workspace',
           }
         }),
 
+      // ---- Phase 1 — Theme understanding ----
+      setThemeUnderstanding: (u) => set({ themeUnderstanding: u }),
+
+      // ---- Phase 2 — Problem building ----
+      setProblemContext: (p) => set({ problemContext: p }),
+
+      // ---- Sections ----
       addSection: (title, templateRef) => {
         const id = makeId()
         set((state) => ({
@@ -286,6 +380,7 @@ export const useIrisStore = create<IrisState>()(
               lastEdited: null,
               status: 'not_started',
               templateRef,
+              interviewAnswers: [],
             },
           ],
           activeSectionId: id,
@@ -319,6 +414,7 @@ export const useIrisStore = create<IrisState>()(
             title: `${src.title} (copie)`,
             messages: [],
             lastEdited: null,
+            interviewAnswers: [...src.interviewAnswers],
           }
           const idx = state.sections.findIndex((s) => s.id === id)
           const newSections = [...state.sections]
@@ -342,7 +438,6 @@ export const useIrisStore = create<IrisState>()(
         set((state) => ({
           sections: state.sections.map((s) => {
             if (s.id !== id) return s
-            // Content may be HTML (from the A4 editor) or plain text — strip tags for word count
             const plainText = content
               .replace(/<[^>]+>/g, ' ')
               .replace(/&nbsp;/g, ' ')
@@ -351,23 +446,52 @@ export const useIrisStore = create<IrisState>()(
             const wordCount = plainText ? plainText.split(/\s+/).length : 0
             const newStatus: SectionStatus =
               plainText.length > 100
-                ? s.status === 'not_started' || s.status === 'in_progress'
+                ? s.status === 'not_started' || s.status === 'interview' || s.status === 'validated'
                   ? 'draft'
                   : s.status
                 : s.status
-            return {
-              ...s,
-              content,
-              wordCount,
-              lastEdited: Date.now(),
-              status: newStatus,
-            }
+            return { ...s, content, wordCount, lastEdited: Date.now(), status: newStatus }
           }),
         })),
 
       setSectionStatus: (id, status) =>
         set((state) => ({
           sections: state.sections.map((s) => (s.id === id ? { ...s, status } : s)),
+        })),
+
+      setSectionUnderstanding: (id, u) =>
+        set((state) => ({
+          sections: state.sections.map((s) => (s.id === id ? { ...s, understanding: u } : s)),
+        })),
+
+      setSectionInterviewAnswers: (id, answers) =>
+        set((state) => ({
+          sections: state.sections.map((s) =>
+            s.id === id ? { ...s, interviewAnswers: answers } : s
+          ),
+        })),
+
+      addSectionInterviewAnswer: (id, answer) =>
+        set((state) => ({
+          sections: state.sections.map((s) =>
+            s.id === id
+              ? { ...s, interviewAnswers: [...s.interviewAnswers, answer] }
+              : s
+          ),
+        })),
+
+      setSectionValidation: (id, v) =>
+        set((state) => ({
+          sections: state.sections.map((s) =>
+            s.id === id ? { ...s, validation: v, status: v.overallOk ? 'validated' : s.status } : s
+          ),
+        })),
+
+      setSectionHumanization: (id, h) =>
+        set((state) => ({
+          sections: state.sections.map((s) =>
+            s.id === id ? { ...s, humanization: h, status: 'humanized' } : s
+          ),
         })),
 
       addMessage: (sectionId, message) =>
@@ -383,72 +507,45 @@ export const useIrisStore = create<IrisState>()(
               ...s,
               messages: [...s.messages, newMessage],
               lastEdited: Date.now(),
-              status: s.status === 'not_started' ? 'in_progress' : s.status,
+              status: s.status === 'not_started' ? 'interview' : s.status,
             }
           }),
         })),
 
-      importTemplate: () =>
-        set((state) => {
-          // Merge template chapters into existing sections (skip duplicates by templateRef)
-          const existingRefs = new Set(
-            state.sections.map((s) => s.templateRef).filter(Boolean) as string[]
-          )
-          const newSections: Section[] = CHAPTERS.filter((c) => !existingRefs.has(c.id)).map(
-            (c) => ({
-              id: makeId(),
-              title: c.title,
-              content: '',
-              messages: [],
-              wordCount: 0,
-              lastEdited: null,
-              status: 'not_started' as SectionStatus,
-              templateRef: c.id,
-            })
-          )
-          const allSections = [...state.sections, ...newSections]
-          return {
-            sections: allSections,
-            activeSectionId: state.activeSectionId || allSections[0]?.id || null,
-          }
-        }),
+      // ---- Audit ----
+      setAuditReport: (r) => set({ auditReport: r }),
 
+      // ---- Coherence & Soutenance ----
       setCoherenceIssues: (issues) =>
         set({ coherenceIssues: issues, lastCoherenceCheck: Date.now() }),
 
       setSoutenanceData: (data) => set({ soutenanceData: data }),
     }),
     {
-      name: 'iris-thesis-ai-v2',
+      name: 'iris-thesis-ai-v3',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         project: state.project,
         projectInitialized: state.projectInitialized,
         interviewAnswers: state.interviewAnswers,
         proposedPlan: state.proposedPlan,
+        themeUnderstanding: state.themeUnderstanding,
+        problemContext: state.problemContext,
         sections: state.sections,
         coherenceIssues: state.coherenceIssues,
         lastCoherenceCheck: state.lastCoherenceCheck,
+        auditReport: state.auditReport,
         soutenanceData: state.soutenanceData,
       }),
-      // Migrate from v1 if present
-      version: 2,
+      version: 3,
       migrate: (persisted: any, version: number) => {
         if (!persisted) return persisted
-        if (version < 2 && persisted.chapters) {
-          // Convert old chapters to sections
-          const sections: Section[] = Object.values(persisted.chapters).map((c: any) => ({
-            id: makeId(),
-            title:
-              CHAPTERS.find((ch) => ch.id === c.id)?.title || 'Section importée',
-            content: c.content || '',
-            messages: c.messages || [],
-            wordCount: c.wordCount || 0,
-            lastEdited: c.lastEdited || null,
-            status: c.status || 'not_started',
-            templateRef: c.id,
+        // v2 → v3 : re-init interviewAnswers on sections
+        if (version < 3 && persisted.sections) {
+          persisted.sections = persisted.sections.map((s: any) => ({
+            ...s,
+            interviewAnswers: s.interviewAnswers || [],
           }))
-          return { ...persisted, sections, chapters: undefined }
         }
         return persisted
       },
@@ -456,7 +553,10 @@ export const useIrisStore = create<IrisState>()(
   )
 )
 
+// ============================================================================
 // Helpers
+// ============================================================================
+
 export function selectTotalWords(state: IrisState) {
   return state.sections.reduce((sum, s) => sum + s.wordCount, 0)
 }
@@ -465,10 +565,8 @@ export function selectCompletedCount(state: IrisState) {
   return state.sections.filter((s) => s.status === 'completed').length
 }
 
-// Convert plain text to a basic HTML paragraph structure (used when seeding or importing)
 export function plainTextToHtml(text: string): string {
   if (!text || !text.trim()) return ''
-  // Already HTML? leave alone
   if (/<(p|h[1-6]|ul|ol|div|blockquote)/i.test(text)) return text
   return text
     .split(/\n\s*\n/)
@@ -476,7 +574,6 @@ export function plainTextToHtml(text: string): string {
     .join('')
 }
 
-// Strip HTML tags for plain text display (preview, export, AI context)
 export function htmlToPlainText(html: string): string {
   if (!html) return ''
   return html
@@ -489,4 +586,14 @@ export function htmlToPlainText(html: string): string {
     .replace(/&gt;/g, '>')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+// Compute the current global workflow phase based on state
+export function selectCurrentPhase(state: IrisState): WorkflowPhase {
+  if (!state.projectInitialized) return 'phase_0_project'
+  if (!state.themeUnderstanding?.validated) return 'phase_1_understanding'
+  if (!state.problemContext?.selected) return 'phase_2_problem'
+  // Per-section phases are managed inside the workspace
+  if (state.auditReport) return 'phase_7_audit'
+  return 'phase_3_interview'
 }

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 import { AGENTS } from '@/lib/iris/agents'
-import { CHAPTERS } from '@/lib/iris/chapters'
 
 export const runtime = 'nodejs'
 export const maxDuration = 90
@@ -26,6 +25,16 @@ interface DraftRequestBody {
     title?: string
   }
   allSections?: { title: string; content: string }[]
+  // NEW: structured interview answers collected during Phase 3
+  interviewAnswers?: { questionId: string; question: string; answer: string }[]
+  // NEW: theme understanding from Phase 1
+  themeUnderstanding?: {
+    concepts?: string[]
+    domain?: string
+    summary?: string
+  }
+  // NEW: selected problem hypothesis from Phase 2
+  problemContext?: { selected?: string; rationale?: string }
   userInstruction: string // what the student asked for
   mode?: 'generate' | 'rewrite' | 'expand' | 'structure'
 }
@@ -48,19 +57,17 @@ export async function POST(req: NextRequest) {
       agentId,
       project,
       allSections,
+      interviewAnswers,
+      themeUnderstanding,
+      problemContext,
       userInstruction,
       mode = 'generate',
     } = body
 
-    // Identify agent
-    let agent = AGENTS[0]
+    // Identify agent — default to the redacteur agent for drafting
+    let agent = AGENTS.find((a) => a.id === 'redacteur') || AGENTS[0]
     if (agentId) {
       agent = AGENTS.find((a) => a.id === agentId) || agent
-    } else if (templateRef) {
-      const chapter = CHAPTERS.find((c) => c.id === templateRef)
-      if (chapter) {
-        agent = AGENTS.find((a) => a.id === chapter.agent) || agent
-      }
     }
 
     const projectContext = `
@@ -73,17 +80,20 @@ CONTEXTE DU PROJET :
 - Terrain : ${project.entreprise || 'non précisé'}
 `.trim()
 
-    const chapterContext = templateRef
-      ? (() => {
-          const c = CHAPTERS.find((ch) => ch.id === templateRef)
-          if (!c) return ''
-          return `RÉFÉRENCE ACADÉMIQUE : "${c.title}". Éléments attendus : ${c.keyElements.join(', ')}.`
-        })()
+    const understandingContext = themeUnderstanding
+      ? `\nCOMPRÉHENSION DU THÈME (Phase 1) :\n- Concepts : ${(themeUnderstanding.concepts || []).join(', ')}\n- Domaine : ${themeUnderstanding.domain || 'non précisé'}\n- Résumé : ${themeUnderstanding.summary || ''}`
+      : ''
+
+    const problemContextStr = problemContext?.selected
+      ? `\nPROBLÉMATIQUE VALIDÉE (Phase 2) : ${problemContext.selected}\nJustification : ${problemContext.rationale || ''}`
+      : ''
+
+    const interviewContext = interviewAnswers && interviewAnswers.length > 0
+      ? `\nRÉPONSES COLLECTÉES LORS DE L'ENTRETIEN STRUCTURÉ (Phase 3) — UTILISE UNIQUEMENT CES INFORMATIONS, N'INVENTE RIEN :\n${interviewAnswers.map((a, i) => `${i + 1}. ${a.question || '(question)'}\n   → ${a.answer}`).join('\n')}`
       : ''
 
     const sectionContext = `
 SECTION : "${sectionTitle}"
-${chapterContext}
 
 BROUILLON ACTUEL (le cas échéant) :
 ${sectionContent?.trim() ? sectionContent.trim().slice(0, 2500) : '(vide)'}
@@ -114,6 +124,9 @@ ${sectionContent?.trim() ? sectionContent.trim().slice(0, 2500) : '(vide)'}
     const systemPrompt = `Tu es ${agent.name}, ${agent.role}. ${agent.systemPrompt}
 
 ${projectContext}
+${understandingContext}
+${problemContextStr}
+${interviewContext}
 
 ${sectionContext}
 ${otherSectionsContext}
@@ -123,17 +136,18 @@ ${modeInstruction}
 
 Demande spécifique de l'étudiant : "${userInstruction}"
 
-RÈGLES DE FORMATAGE (CRITIQUE) :
-1. Réponds UNIQUEMENT avec du HTML sémantique valide (pas de markdown, pas de code fences).
-2. Utilise ces balises : <h2>, <h3>, <h4>, <p>, <ul>, <ol>, <li>, <blockquote>, <strong>, <em>.
-3. N'UTILISE PAS <html>, <head>, <body>, <div>, <span> — uniquement des balises sémantiques de contenu.
-4. N'inclus PAS le titre de la section comme <h1> (l'éditeur l'affiche déjà séparément).
-5. Les paragraphes doivent être complets (min. 3-5 phrases chacun), développés, avec exemples concrets.
-6. Adapte le niveau de langue au niveau d'étude (${project.level || 'Master'}).
-7. Intègre des citations au format ${project.norme || 'APA'} quand pertinent, sous forme <em>(Auteur, année)</em>.
-8. Si tu utilises une liste, fais précéder d'une phrase d'introduction dans un <p>.
-9. Pour les citations directes, utilise <blockquote>.
-10. N'ajoute AUCUN commentaire, AUCUNE explication hors HTML. Réponds uniquement avec le HTML à insérer dans l'éditeur.
+RÈGLES CRITIQUES :
+1. N'INVENTE JAMAIS de faits, chiffres ou citations. Si une information n'est pas dans les réponses collectées, demande-la ou laisse un placeholder <em>(à compléter)</em>.
+2. Réponds UNIQUEMENT avec du HTML sémantique valide (pas de markdown, pas de code fences).
+3. Utilise ces balises : <h2>, <h3>, <h4>, <p>, <ul>, <ol>, <li>, <blockquote>, <strong>, <em>.
+4. N'UTILISE PAS <html>, <head>, <body>, <div>, <span> — uniquement des balises sémantiques de contenu.
+5. N'inclus PAS le titre de la section comme <h1> (l'éditeur l'affiche déjà séparément).
+6. Les paragraphes doivent être complets (min. 3-5 phrases chacun), développés, avec exemples concrets tirés des réponses.
+7. Adapte le niveau de langue au niveau d'étude (${project.level || 'Master'}).
+8. Intègre des citations au format ${project.norme || 'APA'} quand pertinent, sous forme <em>(Auteur, année)</em> UNIQUEMENT si elles sont présentes dans les réponses.
+9. Si tu utilises une liste, fais précéder d'une phrase d'introduction dans un <p>.
+10. Pour les citations directes, utilise <blockquote>.
+11. N'ajoute AUCUN commentaire, AUCUNE explication hors HTML. Réponds uniquement avec le HTML à insérer dans l'éditeur.
 
 EXEMPLE DE FORMAT ATTENDU :
 <h2>Contexte historique</h2>
