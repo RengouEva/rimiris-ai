@@ -1,0 +1,1005 @@
+     1→'use client'
+     2→
+     3→import * as React from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  Plus,
+     7→  Trash2,
+     8→  Copy,
+     9→  ChevronUp,
+    10→  ChevronDown,
+    11→  CheckCircle2,
+    12→  Circle,
+    13→  Edit3,
+    14→  MoreVertical,
+    15→  GripVertical,
+    16→  FileText,
+    17→  Library,
+    18→  Sparkles,
+    19→  X,
+    20→  Send,
+    21→  Loader2,
+    22→  Brain,
+    23→  HelpCircle,
+    24→  ArrowLeft,
+    25→  ListTree,
+    26→  PenLine,
+    27→  Wand2,
+    28→  FilePlus,
+    29→  RefreshCw,
+    30→  Expand,
+    31→  ListTree as ListTreeIcon,
+    32→  Check,
+    33→  Printer,
+    34→} from 'lucide-react'
+    35→import { useIrisStore, type Section, type SectionStatus, htmlToPlainText } from '@/store/iris-store'
+    36→import { AGENTS, getAgentForChapter } from '@/lib/iris/agents'
+    37→import { A4Editor, type A4EditorHandle } from '@/components/iris/a4-editor'
+    38→import { Button } from '@/components/ui/button'
+    39→import { Input } from '@/components/ui/input'
+    40→import { Textarea } from '@/components/ui/textarea'
+    41→import { Badge } from '@/components/ui/badge'
+    42→import { Card } from '@/components/ui/card'
+    43→import {
+    44→  DropdownMenu,
+    45→  DropdownMenuContent,
+    46→  DropdownMenuItem,
+    47→  DropdownMenuSeparator,
+    48→  DropdownMenuTrigger,
+    49→} from '@/components/ui/dropdown-menu'
+    50→import { cn } from '@/lib/utils'
+    51→import { toast } from 'sonner'
+    52→
+    53→const STATUS_CONFIG: Record<SectionStatus, { label: string; color: string; dot: string }> = {
+    54→  not_started: { label: 'Vide', color: 'text-muted-foreground', dot: 'bg-muted-foreground/30' },
+    55→  in_progress: { label: 'En cours', color: 'text-amber-500', dot: 'bg-amber-500' },
+    56→  draft: { label: 'Brouillon', color: 'text-blue-500', dot: 'bg-blue-500' },
+    57→  completed: { label: 'Terminé', color: 'text-emerald-500', dot: 'bg-emerald-500' },
+    58→}
+    59→
+    60→export function Workspace() {
+    61→  const {
+    62→    project,
+    63→    sections,
+    64→    activeSectionId,
+    65→    setActiveSection,
+    66→    addSection,
+    67→    renameSection,
+    68→    deleteSection,
+    69→    duplicateSection,
+    70→    moveSection,
+    71→    updateSectionContent,
+    72→    setSectionStatus,
+    73→    importTemplate,
+    74→    aiPanelOpen,
+    75→    setAIPanel,
+    76→    setBlockedMode,
+    77→    setView,
+    78→  } = useIrisStore()
+    79→
+    80→  const editorRef = React.useRef<A4EditorHandle>(null)
+    81→  const activeSection = sections.find((s) => s.id === activeSectionId) || sections[0] || null
+    82→
+    83→  const totalWords = sections.reduce((sum, s) => sum + s.wordCount, 0)
+    84→  const completedCount = sections.filter((s) => s.status === 'completed').length
+    85→
+    86→  // Bridge: AIPanel -> A4Editor (insert AI-generated draft HTML at cursor)
+    87→  const handleInsertDraft = React.useCallback((html: string) => {
+    88→    editorRef.current?.insertHtml(html)
+    89→  }, [])
+    90→
+    91→  return (
+    92→    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+    93→      {/* Sidebar with sections */}
+    94→      <aside className="w-72 border-r border-border bg-muted/20 flex flex-col flex-shrink-0">
+    95→        <div className="p-3 border-b border-border space-y-2">
+    96→          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
+    97→            Mon mémoire
+    98→          </p>
+    99→          <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
+   100→            <span>{sections.length} sections</span>
+   101→            <span>·</span>
+   102→            <span>{totalWords} mots</span>
+   103→            <span>·</span>
+   104→            <span className="text-emerald-500">{completedCount} terminées</span>
+   105→          </div>
+   106→        </div>
+   107→
+   108→        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+   109→          <AnimatePresence>
+   110→            {sections.map((section, idx) => (
+   111→              <SectionItem
+   112→                key={section.id}
+   113→                section={section}
+   114→                index={idx}
+   115→                total={sections.length}
+   116→                active={section.id === activeSection?.id}
+   117→                onSelect={() => setActiveSection(section.id)}
+   118→                onRename={(title) => renameSection(section.id, title)}
+   119→                onDelete={() => {
+   120→                  if (sections.length === 1) {
+   121→                    toast.error("Vous devez garder au moins une section.")
+   122→                    return
+   123→                  }
+   124→                  deleteSection(section.id)
+   125→                  toast.success("Section supprimée")
+   126→                }}
+   127→                onDuplicate={() => {
+   128→                  duplicateSection(section.id)
+   129→                  toast.success("Section dupliquée")
+   130→                }}
+   131→                onMoveUp={() => moveSection(section.id, 'up')}
+   132→                onMoveDown={() => moveSection(section.id, 'down')}
+   133→                onMarkCompleted={() =>
+   134→                  setSectionStatus(
+   135→                    section.id,
+   136→                    section.status === 'completed' ? 'draft' : 'completed'
+   137→                  )
+   138→                }
+   139→              />
+   140→            ))}
+   141→          </AnimatePresence>
+   142→
+   143→          {sections.length === 0 && (
+   144→            <div className="text-center py-8 px-4">
+   145→              <p className="text-sm text-muted-foreground mb-3">
+   146→                Aucune section pour le moment.
+   147→              </p>
+   148→            </div>
+   149→          )}
+   150→        </div>
+   151→
+   152→        {/* Bottom actions */}
+   153→        <div className="p-2 border-t border-border space-y-1.5">
+   154→          <Button
+   155→            onClick={() => addSection()}
+   156→            variant="outline"
+   157→            size="sm"
+   158→            className="w-full justify-start rounded-lg"
+   159→          >
+   160→            <Plus className="h-4 w-4 mr-1.5" />
+   161→            Nouvelle section
+   162→          </Button>
+   163→          <Button
+   164→            onClick={() => {
+   165→              importTemplate()
+   166→              toast.success('Template académique (15 chapitres) importé')
+   167→            }}
+   168→            variant="ghost"
+   169→            size="sm"
+   170→            className="w-full justify-start rounded-lg text-muted-foreground"
+   171→          >
+   172→            <Library className="h-4 w-4 mr-1.5" />
+   173→            Importer le template académique
+   174→          </Button>
+   175→        </div>
+   176→      </aside>
+   177→
+   178→      {/* Editor area */}
+   179→      <main className="flex-1 flex flex-col min-w-0">
+   180→        {activeSection ? (
+   181→          <EditorView
+   182→            section={activeSection}
+   183→            project={project}
+   184→            editorRef={editorRef}
+   185→            onUpdateContent={(c) => updateSectionContent(activeSection.id, c)}
+   186→            onOpenAI={() => setAIPanel(true)}
+   187→            onOpenBlocked={() => {
+   188→              setBlockedMode(true)
+   189→              setAIPanel(true)
+   190→            }}
+   191→          />
+   192→        ) : (
+   193→          <EmptyState
+   194→            onNewSection={() => addSection()}
+   195→            onImportTemplate={() => {
+   196→              importTemplate()
+   197→              toast.success('Template académique importé')
+   198→            }}
+   199→          />
+   200→        )}
+   201→      </main>
+   202→
+   203→      {/* AI Panel */}
+   204→      <AnimatePresence>
+   205→        {aiPanelOpen && activeSection && (
+   206→          <AIPanel
+   207→            section={activeSection}
+   208→            project={project}
+   209→            allSections={sections.map((s) => ({ title: s.title, content: s.content }))}
+   210→            onClose={() => {
+   211→              setAIPanel(false)
+   212→              setBlockedMode(false)
+   213→            }}
+   214→            onInsertDraft={handleInsertDraft}
+   215→          />
+   216→        )}
+   217→      </AnimatePresence>
+   218→    </div>
+   219→  )
+   220→}
+   221→
+   222→// ============================================================================
+   223→// Section item in sidebar
+   224→// ============================================================================
+   225→
+   226→function SectionItem({
+   227→  section,
+   228→  index,
+   229→  total,
+   230→  active,
+   231→  onSelect,
+   232→  onRename,
+   233→  onDelete,
+   234→  onDuplicate,
+   235→  onMoveUp,
+   236→  onMoveDown,
+   237→  onMarkCompleted,
+   238→}: {
+   239→  section: Section
+   240→  index: number
+   241→  total: number
+   242→  active: boolean
+   243→  onSelect: () => void
+   244→  onRename: (title: string) => void
+   245→  onDelete: () => void
+   246→  onDuplicate: () => void
+   247→  onMoveUp: () => void
+   248→  onMoveDown: () => void
+   249→  onMarkCompleted: () => void
+   250→}) {
+   251→  const [editing, setEditing] = React.useState(false)
+   252→  const [draftTitle, setDraftTitle] = React.useState(section.title)
+   253→  const status = STATUS_CONFIG[section.status]
+   254→
+   255→  React.useEffect(() => {
+   256→    setDraftTitle(section.title)
+   257→  }, [section.title])
+   258→
+   259→  function commitRename() {
+   260→    const t = draftTitle.trim()
+   261→    if (t && t !== section.title) {
+   262→      onRename(t)
+   263→    } else {
+   264→      setDraftTitle(section.title)
+   265→    }
+   266→    setEditing(false)
+   267→  }
+   268→
+   269→  return (
+   270→    <motion.div
+   271→      layout
+   272→      initial={{ opacity: 0, x: -10 }}
+   273→      animate={{ opacity: 1, x: 0 }}
+   274→      exit={{ opacity: 0, x: -10 }}
+   275→      className={cn(
+   276→        'group relative rounded-lg transition-all',
+   277→        active ? 'bg-card shadow-sm border border-primary/30' : 'hover:bg-card/60 border border-transparent'
+   278→      )}
+   279→    >
+   280→      <div
+   281→        onClick={onSelect}
+   282→        className="w-full text-left p-2.5 flex items-start gap-2 cursor-pointer"
+   283→      >
+   284→        <div className="flex flex-col items-center gap-1 pt-0.5">
+   285→          <span className="text-[10px] font-mono text-muted-foreground">{index + 1}</span>
+   286→          <span className={cn('w-1.5 h-1.5 rounded-full', status.dot)} />
+   287→        </div>
+   288→        <div className="flex-1 min-w-0">
+   289→          {editing ? (
+   290→            <input
+   291→              autoFocus
+   292→              value={draftTitle}
+   293→              onChange={(e) => setDraftTitle(e.target.value)}
+   294→              onBlur={commitRename}
+   295→              onKeyDown={(e) => {
+   296→                if (e.key === 'Enter') commitRename()
+   297→                if (e.key === 'Escape') {
+   298→                  setDraftTitle(section.title)
+   299→                  setEditing(false)
+   300→                }
+   301→              }}
+   302→              onClick={(e) => e.stopPropagation()}
+   303→              className="w-full text-sm font-medium bg-transparent border-b border-primary outline-none"
+   304→            />
+   305→          ) : (
+   306→            <p className="text-sm font-medium truncate">{section.title}</p>
+   307→          )}
+   308→          <div className="flex items-center gap-2 mt-0.5">
+   309→            <span className={cn('text-[10px]', status.color)}>{status.label}</span>
+   310→            {section.wordCount > 0 && (
+   311→              <span className="text-[10px] text-muted-foreground">{section.wordCount} mots</span>
+   312→            )}
+   313→          </div>
+   314→        </div>
+   315→
+   316→        <DropdownMenu>
+   317→          <DropdownMenuTrigger asChild>
+   318→            <button
+   319→              onClick={(e) => e.stopPropagation()}
+   320→              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
+   321→            >
+   322→              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+   323→            </button>
+   324→          </DropdownMenuTrigger>
+   325→          <DropdownMenuContent align="end" className="w-44">
+   326→            <DropdownMenuItem onClick={() => setEditing(true)}>
+   327→              <Edit3 className="h-3.5 w-3.5 mr-2" />
+   328→              Renommer
+   329→            </DropdownMenuItem>
+   330→            <DropdownMenuItem onClick={onDuplicate}>
+   331→              <Copy className="h-3.5 w-3.5 mr-2" />
+   332→              Dupliquer
+   333→            </DropdownMenuItem>
+   334→            <DropdownMenuItem onClick={onMarkCompleted}>
+   335→              <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
+   336→              {section.status === 'completed' ? 'Marquer brouillon' : 'Marquer terminé'}
+   337→            </DropdownMenuItem>
+   338→            <DropdownMenuSeparator />
+   339→            <DropdownMenuItem
+   340→              onClick={onMoveUp}
+   341→              disabled={index === 0}
+   342→            >
+   343→              <ChevronUp className="h-3.5 w-3.5 mr-2" />
+   344→              Monter
+   345→            </DropdownMenuItem>
+   346→            <DropdownMenuItem
+   347→              onClick={onMoveDown}
+   348→              disabled={index === total - 1}
+   349→            >
+   350→              <ChevronDown className="h-3.5 w-3.5 mr-2" />
+   351→              Descendre
+   352→            </DropdownMenuItem>
+   353→            <DropdownMenuSeparator />
+   354→            <DropdownMenuItem onClick={onDelete} className="text-red-500">
+   355→              <Trash2 className="h-3.5 w-3.5 mr-2" />
+   356→              Supprimer
+   357→            </DropdownMenuItem>
+   358→          </DropdownMenuContent>
+   359→        </DropdownMenu>
+   360→      </div>
+   361→    </motion.div>
+   362→  )
+   363→}
+   364→
+   365→// ============================================================================
+   366→// Editor view
+   367→// ============================================================================
+   368→
+   369→function EditorView({
+   370→  section,
+   371→  project,
+   372→  editorRef,
+   373→  onUpdateContent,
+   374→  onOpenAI,
+   375→  onOpenBlocked,
+   376→}: {
+   377→  section: Section
+   378→  project: any
+   379→  editorRef: React.RefObject<A4EditorHandle | null>
+   380→  onUpdateContent: (content: string) => void
+   381→  onOpenAI: () => void
+   382→  onOpenBlocked: () => void
+   383→}) {
+   384→  const [showAIHint, setShowAIHint] = React.useState(false)
+   385→
+   386→  // Show AI hint after some writing
+   387→  React.useEffect(() => {
+   388→    if (section.wordCount > 50 && section.wordCount < 200 && !section.messages.length) {
+   389→      setShowAIHint(true)
+   390→    } else {
+   391→      setShowAIHint(false)
+   392→    }
+   393→  }, [section.wordCount, section.messages.length])
+   394→
+   395→  // Compute "page count" (A4 = ~500 words/page)
+   396→  const pageCount = Math.max(1, Math.ceil(section.wordCount / 500))
+   397→
+   398→  function handlePrint() {
+   399→    window.print()
+   400→  }
+   401→
+   402→  return (
+   403→    <div className="flex-1 flex flex-col min-w-0 relative">
+   404→      {/* Section header — toolbar above the A4 page */}
+   405→      <div className="border-b border-border bg-background/80 backdrop-blur-sm px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+   406→        <div className="flex items-center gap-2 min-w-0">
+   407→          <Badge variant="outline" className={STATUS_CONFIG[section.status].color}>
+   408→            <span className={cn('w-1.5 h-1.5 rounded-full mr-1', STATUS_CONFIG[section.status].dot)} />
+   409→            {STATUS_CONFIG[section.status].label}
+   410→          </Badge>
+   411→          <span className="text-xs text-muted-foreground whitespace-nowrap">
+   412→            {section.wordCount} mots · {pageCount} page{pageCount > 1 ? 's' : ''} A4
+   413→            {section.lastEdited && ` · modifié ${timeAgo(section.lastEdited)}`}
+   414→          </span>
+   415→        </div>
+   416→        <div className="flex items-center gap-1.5">
+   417→          <Button
+   418→            size="sm"
+   419→            variant="ghost"
+   420→            onClick={handlePrint}
+   421→            className="rounded-full text-muted-foreground"
+   422→            title="Imprimer / Exporter en PDF"
+   423→          >
+   424→            <Printer className="h-3.5 w-3.5 mr-1" />
+   425→            <span className="hidden sm:inline">Imprimer</span>
+   426→          </Button>
+   427→          <Button
+   428→            size="sm"
+   429→            variant="outline"
+   430→            onClick={onOpenBlocked}
+   431→            className="rounded-full border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+   432→          >
+   433→            <HelpCircle className="h-3.5 w-3.5 mr-1" />
+   434→            <span className="hidden sm:inline">Bloqué ?</span>
+   435→          </Button>
+   436→          <Button
+   437→            size="sm"
+   438→            onClick={onOpenAI}
+   439→            className="rounded-full iris-gradient text-white"
+   440→          >
+   441→            <Sparkles className="h-3.5 w-3.5 mr-1" />
+   442→            IRIS
+   443→          </Button>
+   444→        </div>
+   445→      </div>
+   446→
+   447→      {/* A4 Editor — the white page */}
+   448→      <A4Editor
+   449→        ref={editorRef}
+   450→        value={section.content}
+   451→        onChange={onUpdateContent}
+   452→      />
+   453→
+   454→      {/* AI hint as a floating bottom-right toast */}
+   455→      <AnimatePresence>
+   456→        {showAIHint && (
+   457→          <motion.div
+   458→            initial={{ opacity: 0, y: 20 }}
+   459→            animate={{ opacity: 1, y: 0 }}
+   460→            exit={{ opacity: 0, y: 20 }}
+   461→            className="absolute bottom-4 right-4 max-w-xs p-3 rounded-xl border border-primary/30 bg-background shadow-lg z-20"
+   462→          >
+   463→            <div className="flex items-start gap-2">
+   464→              <div className="w-8 h-8 rounded-full iris-gradient flex items-center justify-center flex-shrink-0">
+   465→                <Sparkles className="h-3.5 w-3.5 text-white" />
+   466→              </div>
+   467→              <div className="flex-1">
+   468→                <p className="text-xs font-medium mb-1">Envie d'un retour ?</p>
+   469→                <p className="text-[11px] text-muted-foreground mb-2">
+   470→                  IRIS peut relire votre brouillon et proposer des améliorations.
+   471→                </p>
+   472→                <div className="flex gap-1.5">
+   473→                  <Button size="sm" variant="outline" onClick={onOpenAI} className="h-7 text-xs">
+   474→                    Demander un retour
+   475→                  </Button>
+   476→                  <Button
+   477→                    size="sm"
+   478→                    variant="ghost"
+   479→                    onClick={() => setShowAIHint(false)}
+   480→                    className="h-7 text-xs"
+   481→                  >
+   482→                    Plus tard
+   483→                  </Button>
+   484→                </div>
+   485→              </div>
+   486→            </div>
+   487→          </motion.div>
+   488→        )}
+   489→      </AnimatePresence>
+   490→    </div>
+   491→  )
+   492→}
+   493→
+   494→// ============================================================================
+   495→// Empty state
+   496→// ============================================================================
+   497→
+   498→function EmptyState({
+   499→  onNewSection,
+   500→  onImportTemplate,
+   501→}: {
+   502→  onNewSection: () => void
+   503→  onImportTemplate: () => void
+   504→}) {
+   505→  return (
+   506→    <div className="flex-1 flex items-center justify-center p-8">
+   507→      <div className="text-center max-w-md">
+   508→        <div className="w-16 h-16 rounded-2xl iris-gradient flex items-center justify-center mx-auto mb-4">
+   509→          <FileText className="h-8 w-8 text-white" />
+   510→        </div>
+   511→        <h2 className="text-xl font-bold mb-2">Construisez votre mémoire</h2>
+   512→        <p className="text-sm text-muted-foreground mb-6">
+   513→          Créez une première section, ou importez le template académique complet
+   514→          (15 chapitres classiques) que vous pourrez modifier librement.
+   515→        </p>
+   516→        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+   517→          <Button onClick={onNewSection} className="iris-gradient text-white rounded-full">
+   518→            <Plus className="h-4 w-4 mr-1.5" />
+   519→            Créer une section
+   520→          </Button>
+   521→          <Button onClick={onImportTemplate} variant="outline" className="rounded-full">
+   522→            <Library className="h-4 w-4 mr-1.5" />
+   523→            Template académique
+   524→          </Button>
+   525→        </div>
+   526→      </div>
+   527→    </div>
+   528→  )
+   529→}
+   530→
+   531→// ============================================================================
+   532→// AI Panel (sliding right)
+   533→// ============================================================================
+   534→
+   535→function AIPanel({
+   536→  section,
+   537→  project,
+   538→  allSections,
+   539→  onClose,
+   540→  onInsertDraft,
+   541→}: {
+   542→  section: Section
+   543→  project: any
+   544→  allSections: { title: string; content: string }[]
+   545→  onClose: () => void
+   546→  onInsertDraft: (html: string) => void
+   547→}) {
+   548→  const { addMessage, blockedMode, setBlockedMode } = useIrisStore()
+   549→  const [input, setInput] = React.useState('')
+   550→  const [loading, setLoading] = React.useState(false)
+   551→  const [draftLoading, setDraftLoading] = React.useState(false)
+   552→  const [draftHtml, setDraftHtml] = React.useState<string | null>(null)
+   553→  const [draftMode, setDraftMode] = React.useState<'generate' | 'rewrite' | 'expand' | 'structure'>('generate')
+   554→  const [draftInstruction, setDraftInstruction] = React.useState('')
+   555→  const scrollRef = React.useRef<HTMLDivElement>(null)
+   556→
+   557→  React.useEffect(() => {
+   558→    if (scrollRef.current) {
+   559→      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+   560→    }
+   561→  }, [section.messages.length, loading])
+   562→
+   563→  // Reset draft preview when switching sections
+   564→  React.useEffect(() => {
+   565→    setDraftHtml(null)
+   566→    setDraftInstruction('')
+   567→  }, [section.id])
+   568→
+   569→  async function send(text: string) {
+   570→    if (!text.trim() || loading) return
+   571→
+   572→    addMessage(section.id, { role: 'user', content: text.trim() })
+   573→    setInput('')
+   574→    setLoading(true)
+   575→
+   576→    try {
+   577→      const history = section.messages
+   578→        .filter((m) => m.role !== 'system')
+   579→        .slice(-6)
+   580→        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+   581→
+   582→      const res = await fetch('/api/ai/chat', {
+   583→        method: 'POST',
+   584→        headers: { 'Content-Type': 'application/json' },
+   585→        body: JSON.stringify({
+   586→          sectionTitle: section.title,
+   587→          sectionContent: htmlToPlainText(section.content),
+   588→          templateRef: section.templateRef,
+   589→          project,
+   590→          allSections: allSections.map((s) => ({ title: s.title, content: htmlToPlainText(s.content) })),
+   591→          history,
+   592→          userMessage: text.trim(),
+   593→          blockedMode,
+   594→        }),
+   595→      })
+   596→      const data = await res.json()
+   597→
+   598→      addMessage(section.id, {
+   599→        role: 'assistant',
+   600→        content: data.reply || '...',
+   601→        agent: data.agent?.id,
+   602→      })
+   603→
+   604→      if (blockedMode) setBlockedMode(false)
+   605→    } catch {
+   606→      addMessage(section.id, {
+   607→        role: 'assistant',
+   608→        content: "Erreur de communication. Reformulez votre demande.",
+   609→      })
+   610→    } finally {
+   611→      setLoading(false)
+   612→    }
+   613→  }
+   614→
+   615→  async function generateDraft() {
+   616→    if (draftLoading) return
+   617→    setDraftLoading(true)
+   618→    setDraftHtml(null)
+   619→    try {
+   620→      const res = await fetch('/api/ai/draft', {
+   621→        method: 'POST',
+   622→        headers: { 'Content-Type': 'application/json' },
+   623→        body: JSON.stringify({
+   624→          sectionTitle: section.title,
+   625→          sectionContent: htmlToPlainText(section.content),
+   626→          templateRef: section.templateRef,
+   627→          project,
+   628→          allSections: allSections.map((s) => ({
+   629→            title: s.title,
+   630→            content: htmlToPlainText(s.content),
+   631→          })),
+   632→          userInstruction: draftInstruction.trim() || 'Génère un brouillon structuré pour cette section.',
+   633→          mode: draftMode,
+   634→        }),
+   635→      })
+   636→      const data = await res.json()
+   637→      setDraftHtml(data.html || '<p><em>Erreur de génération.</em></p>')
+   638→    } catch {
+   639→      setDraftHtml('<p><em>Erreur réseau. Réessayez.</em></p>')
+   640→    } finally {
+   641→      setDraftLoading(false)
+   642→    }
+   643→  }
+   644→
+   645→  function acceptDraft() {
+   646→    if (!draftHtml) return
+   647→    onInsertDraft(draftHtml)
+   648→    toast.success('Brouillon inséré dans l\'éditeur — modifiez-le librement.')
+   649→    setDraftHtml(null)
+   650→    setDraftInstruction('')
+   651→  }
+   652→
+   653→  function dismissDraft() {
+   654→    setDraftHtml(null)
+   655→  }
+   656→
+   657→  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+   658→    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+   659→      e.preventDefault()
+   660→      send(input)
+   661→    }
+   662→  }
+   663→
+   664→  // Determine agent
+   665→  const agent = React.useMemo(() => {
+   666→    if (section.templateRef) {
+   667→      return getAgentForChapter(section.templateRef)
+   668→    }
+   669→    return AGENTS[0] // Pr. IRIS by default
+   670→  }, [section.templateRef])
+   671→
+   672→  const suggestions = blockedMode
+   673→    ? [
+   674→        "Je ne sais pas par où commencer",
+   675→        "Je n'arrive pas à formuler cette partie",
+   676→        "Aidez-moi à structurer mes idées",
+   677→      ]
+   678→    : [
+   679→        "Relis mon brouillon et donne-moi 3 conseils",
+   680→        "Qu'est-ce qui manque à cette section ?",
+   681→        "Aide-moi à formuler une phrase d'introduction",
+   682→        "Comment améliorer la cohérence avec le reste ?",
+   683→      ]
+   684→
+   685→  return (
+   686→    <motion.aside
+   687→      initial={{ x: '100%' }}
+   688→      animate={{ x: 0 }}
+   689→      exit={{ x: '100%' }}
+   690→      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+   691→      className="w-full sm:w-[28rem] border-l border-border bg-card flex flex-col flex-shrink-0 absolute right-0 top-0 bottom-0 sm:relative z-30"
+   692→    >
+   693→      {/* Header */}
+   694→      <div className="p-3 border-b border-border flex items-center gap-2">
+   695→        <div className="w-8 h-8 rounded-full iris-gradient flex items-center justify-center flex-shrink-0">
+   696→          {blockedMode ? (
+   697→            <Brain className="h-4 w-4 text-white" />
+   698→          ) : (
+   699→            <Sparkles className="h-4 w-4 text-white" />
+   700→          )}
+   701→        </div>
+   702→        <div className="flex-1 min-w-0">
+   703→          <p className="text-sm font-semibold">
+   704→            {blockedMode ? 'Mode débloqué' : agent.name}
+   705→          </p>
+   706→          <p className="text-xs text-muted-foreground truncate">
+   707→            {blockedMode ? 'IRIS vous aide à repartir' : agent.role}
+   708→          </p>
+   709→        </div>
+   710→        {blockedMode && (
+   711→          <Button
+   712→            size="sm"
+   713→            variant="ghost"
+   714→            onClick={() => setBlockedMode(false)}
+   715→            className="text-xs h-7"
+   716→          >
+   717→            Retour normal
+   718→          </Button>
+   719→        )}
+   720→        <button onClick={onClose} className="p-1.5 rounded hover:bg-muted">
+   721→          <X className="h-4 w-4" />
+   722→        </button>
+   723→      </div>
+   724→
+   725→      {/* Context banner */}
+   726→      <div className="px-3 py-2 bg-muted/40 border-b border-border">
+   727→        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">
+   728→          Section en cours
+   729→        </p>
+   730→        <p className="text-xs font-medium truncate">{section.title}</p>
+   731→      </div>
+   732→
+   733→      {/* ==================================================================== */}
+   734→      {/* DRAFT GENERATOR — quick-access panel at the top                      */}
+   735→      {/* ==================================================================== */}
+   736→      {!blockedMode && (
+   737→        <div className="border-b border-border bg-gradient-to-b from-primary/5 to-transparent p-3 space-y-2">
+   738→          <div className="flex items-center gap-1.5">
+   739→            <Wand2 className="h-3.5 w-3.5 text-primary" />
+   740→            <p className="text-xs font-semibold">Générer un brouillon formaté</p>
+   741→          </div>
+   742→          <p className="text-[11px] text-muted-foreground leading-snug">
+   743→            IRIS rédige un brouillon déjà mis en forme (titres, paragraphes, listes). Vous l'insérez
+   744→            dans l'éditeur A4 puis vous le modifiez librement.
+   745→          </p>
+   746→
+   747→          {/* Mode selector */}
+   748→          <div className="grid grid-cols-4 gap-1">
+   749→            <DraftModeButton
+   750→              active={draftMode === 'generate'}
+   751→              onClick={() => setDraftMode('generate')}
+   752→              icon={<FilePlus className="h-3.5 w-3.5" />}
+   753→              label="Générer"
+   754→            />
+   755→            <DraftModeButton
+   756→              active={draftMode === 'rewrite'}
+   757→              onClick={() => setDraftMode('rewrite')}
+   758→              icon={<RefreshCw className="h-3.5 w-3.5" />}
+   759→              label="Réécrire"
+   760→            />
+   761→            <DraftModeButton
+   762→              active={draftMode === 'expand'}
+   763→              onClick={() => setDraftMode('expand')}
+   764→              icon={<Expand className="h-3.5 w-3.5" />}
+   765→              label="Développer"
+   766→            />
+   767→            <DraftModeButton
+   768→              active={draftMode === 'structure'}
+   769→              onClick={() => setDraftMode('structure')}
+   770→              icon={<ListTreeIcon className="h-3.5 w-3.5" />}
+   771→              label="Plan"
+   772→            />
+   773→          </div>
+   774→
+   775→          {/* Optional instruction */}
+   776→          <Textarea
+   777→            value={draftInstruction}
+   778→            onChange={(e) => setDraftInstruction(e.target.value)}
+   779→            placeholder="Instructions optionnelles : « insistez sur la méthodologie quantitative », « ton neutre, 500 mots », etc."
+   780→            className="resize-none min-h-[44px] max-h-24 text-xs"
+   781→            disabled={draftLoading}
+   782→          />
+   783→
+   784→          <div className="flex items-center gap-1.5">
+   785→            <Button
+   786→              onClick={generateDraft}
+   787→              disabled={draftLoading}
+   788→              size="sm"
+   789→              className="rounded-full iris-gradient text-white flex-1"
+   790→            >
+   791→              {draftLoading ? (
+   792→                <>
+   793→                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+   794→                  Génération…
+   795→                </>
+   796→              ) : (
+   797→                <>
+   798→                  <Wand2 className="h-3.5 w-3.5 mr-1" />
+   799→                  Générer le brouillon
+   800→                </>
+   801→              )}
+   802→            </Button>
+   803→          </div>
+   804→
+   805→          {/* Draft preview */}
+   806→          <AnimatePresence>
+   807→            {draftHtml && (
+   808→              <motion.div
+   809→                initial={{ opacity: 0, height: 0 }}
+   810→                animate={{ opacity: 1, height: 'auto' }}
+   811→                exit={{ opacity: 0, height: 0 }}
+   812→                className="space-y-2 overflow-hidden"
+   813→              >
+   814→                <div className="rounded-lg border border-primary/30 overflow-hidden">
+   815→                  <div className="px-2 py-1 bg-primary/5 border-b border-primary/20 flex items-center justify-between">
+   816→                    <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+   817→                      Aperçu du brouillon
+   818→                    </span>
+   819→                    <span className="text-[10px] text-muted-foreground">
+   820→                      {draftMode === 'structure' ? 'Plan' : 'HTML formaté'}
+   821→                    </span>
+   822→                  </div>
+   823→                  <div
+   824→                    className="a4-page prose-iris max-h-72 overflow-y-auto text-black"
+   825→                    style={{
+   826→                      width: 'auto',
+   827→                      minHeight: 'auto',
+   828→                      padding: '12pt 14pt',
+   829→                      boxShadow: 'none',
+   830→                      borderRadius: '0 0 8px 8px',
+   831→                      fontSize: '10pt',
+   832→                      background: '#fff',
+   833→                    }}
+   834→                    dangerouslySetInnerHTML={{ __html: draftHtml }}
+   835→                  />
+   836→                </div>
+   837→                <div className="flex gap-1.5">
+   838→                  <Button
+   839→                    onClick={acceptDraft}
+   840→                    size="sm"
+   841→                    className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex-1"
+   842→                  >
+   843→                    <Check className="h-3.5 w-3.5 mr-1" />
+   844→                    Insérer dans l'éditeur
+   845→                  </Button>
+   846→                  <Button
+   847→                    onClick={dismissDraft}
+   848→                    size="sm"
+   849→                    variant="outline"
+   850→                    className="rounded-full"
+   851→                  >
+   852→                    Ignorer
+   853→                  </Button>
+   854→                </div>
+   855→              </motion.div>
+   856→            )}
+   857→          </AnimatePresence>
+   858→        </div>
+   859→      )}
+   860→
+   861→      {/* Messages */}
+   862→      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
+   863→        {section.messages.length === 0 ? (
+   864→          <div className="text-center py-6">
+   865→            <p className="text-sm text-muted-foreground mb-4">
+   866→              {blockedMode
+   867→                ? "Décrivez votre blocage, ou choisissez une suggestion."
+   868→                : `Posez votre question à ${agent.name}, ou choisissez une suggestion.`}
+   869→            </p>
+   870→            <div className="space-y-1.5">
+   871→              {suggestions.map((s, idx) => (
+   872→                <button
+   873→                  key={idx}
+   874→                  onClick={() => send(s)}
+   875→                  className="w-full text-left text-xs p-2.5 rounded-lg border border-border bg-background hover:border-primary/40 hover:bg-primary/5 transition-colors"
+   876→                >
+   877→                  <span className="text-primary mr-1.5">→</span>
+   878→                  {s}
+   879→                </button>
+   880→              ))}
+   881→            </div>
+   882→          </div>
+   883→        ) : (
+   884→          section.messages.map((msg) => {
+   885→            const isUser = msg.role === 'user'
+   886→            const msgAgent = msg.agent ? AGENTS.find((a) => a.id === msg.agent) : null
+   887→            return (
+   888→              <motion.div
+   889→                key={msg.id}
+   890→                initial={{ opacity: 0, y: 5 }}
+   891→                animate={{ opacity: 1, y: 0 }}
+   892→                className={cn('flex flex-col gap-1', isUser ? 'items-end' : 'items-start')}
+   893→              >
+   894→                {msgAgent && !isUser && (
+   895→                  <span className="text-[10px] font-semibold text-primary px-1">
+   896→                    {msgAgent.name}
+   897→                  </span>
+   898→                )}
+   899→                <div
+   900→                  className={cn(
+   901→                    'rounded-2xl p-3 text-sm max-w-[90%]',
+   902→                    isUser
+   903→                      ? 'bg-primary text-primary-foreground rounded-tr-sm'
+   904→                      : 'bg-muted rounded-tl-sm'
+   905→                  )}
+   906→                >
+   907→                  <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+   908→                </div>
+   909→              </motion.div>
+   910→            )
+   911→          })
+   912→        )}
+   913→
+   914→        {loading && (
+   915→          <div className="flex items-start gap-2">
+   916→            <div className="w-7 h-7 rounded-full iris-gradient flex items-center justify-center flex-shrink-0">
+   917→              <Sparkles className="h-3.5 w-3.5 text-white" />
+   918→            </div>
+   919→            <div className="bg-muted rounded-2xl rounded-tl-sm p-3">
+   920→              <div className="flex items-center gap-1">
+   921→                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+   922→                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+   923→                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+   924→              </div>
+   925→            </div>
+   926→          </div>
+   927→        )}
+   928→      </div>
+   929→
+   930→      {/* Input */}
+   931→      <div className="border-t border-border p-3 space-y-2">
+   932→        <Textarea
+   933→          value={input}
+   934→          onChange={(e) => setInput(e.target.value)}
+   935→          onKeyDown={handleKeyDown}
+   936→          placeholder={blockedMode ? "Décrivez votre blocage..." : "Votre question..."}
+   937→          className="resize-none min-h-16 max-h-32 text-sm"
+   938→          disabled={loading}
+   939→        />
+   940→        <div className="flex items-center justify-between">
+   941→          <span className="text-[10px] text-muted-foreground">Cmd/Ctrl+Entrée</span>
+   942→          <Button
+   943→            onClick={() => send(input)}
+   944→            disabled={!input.trim() || loading}
+   945→            size="sm"
+   946→            className="rounded-full iris-gradient text-white"
+   947→          >
+   948→            {loading ? (
+   949→              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+   950→            ) : (
+   951→              <>
+   952→                <Send className="h-3.5 w-3.5 mr-1" />
+   953→                Envoyer
+   954→              </>
+   955→            )}
+   956→          </Button>
+   957→        </div>
+   958→      </div>
+   959→    </motion.aside>
+   960→  )
+   961→}
+   962→
+   963→// ============================================================================
+   964→// DraftModeButton — small selectable button for the draft mode
+   965→// ============================================================================
+   966→
+   967→function DraftModeButton({
+   968→  active,
+   969→  onClick,
+   970→  icon,
+   971→  label,
+   972→}: {
+   973→  active: boolean
+   974→  onClick: () => void
+   975→  icon: React.ReactNode
+   976→  label: string
+   977→}) {
+   978→  return (
+   979→    <button
+   980→      onClick={onClick}
+   981→      className={cn(
+   982→        'flex flex-col items-center gap-1 px-1 py-1.5 rounded-md border text-[10px] font-medium transition-all',
+   983→        active
+   984→          ? 'border-primary bg-primary/10 text-primary'
+   985→          : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary/5'
+   986→      )}
+   987→    >
+   988→      {icon}
+   989→      <span>{label}</span>
+   990→    </button>
+   991→  )
+   992→}
+   993→
+   994→// ============================================================================
+   995→// Utils
+   996→// ============================================================================
+   997→
+   998→function timeAgo(ts: number): string {
+   999→  const diff = Date.now() - ts
+  1000→  if (diff < 60_000) return 'à l\'instant'
+  1001→  if (diff < 3_600_000) return `il y a ${Math.floor(diff / 60_000)} min`
+  1002→  if (diff < 86_400_000) return `il y a ${Math.floor(diff / 3_600_000)} h`
+  1003→  return `il y a ${Math.floor(diff / 86_400_000)} j`
+  1004→}
+  1005→
