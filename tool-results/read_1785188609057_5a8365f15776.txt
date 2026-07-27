@@ -1,0 +1,783 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import * as React from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  Plus,
+     7→     7→  Trash2,
+     8→     8→  Copy,
+     9→     9→  ChevronUp,
+    10→    10→  ChevronDown,
+    11→    11→  CheckCircle2,
+    12→    12→  Circle,
+    13→    13→  Edit3,
+    14→    14→  MoreVertical,
+    15→    15→  GripVertical,
+    16→    16→  FileText,
+    17→    17→  Library,
+    18→    18→  Sparkles,
+    19→    19→  X,
+    20→    20→  Send,
+    21→    21→  Loader2,
+    22→    22→  Brain,
+    23→    23→  HelpCircle,
+    24→    24→  ArrowLeft,
+    25→    25→  ListTree,
+    26→    26→  PenLine,
+    27→    27→} from 'lucide-react'
+    28→    28→import { useIrisStore, type Section, type SectionStatus } from '@/store/iris-store'
+    29→    29→import { AGENTS, getAgentForChapter } from '@/lib/iris/agents'
+    30→    30→import { Button } from '@/components/ui/button'
+    31→    31→import { Input } from '@/components/ui/input'
+    32→    32→import { Textarea } from '@/components/ui/textarea'
+    33→    33→import { Badge } from '@/components/ui/badge'
+    34→    34→import { Card } from '@/components/ui/card'
+    35→    35→import {
+    36→    36→  DropdownMenu,
+    37→    37→  DropdownMenuContent,
+    38→    38→  DropdownMenuItem,
+    39→    39→  DropdownMenuSeparator,
+    40→    40→  DropdownMenuTrigger,
+    41→    41→} from '@/components/ui/dropdown-menu'
+    42→    42→import { cn } from '@/lib/utils'
+    43→    43→import { toast } from 'sonner'
+    44→    44→
+    45→    45→const STATUS_CONFIG: Record<SectionStatus, { label: string; color: string; dot: string }> = {
+    46→    46→  not_started: { label: 'Vide', color: 'text-muted-foreground', dot: 'bg-muted-foreground/30' },
+    47→    47→  in_progress: { label: 'En cours', color: 'text-amber-500', dot: 'bg-amber-500' },
+    48→    48→  draft: { label: 'Brouillon', color: 'text-blue-500', dot: 'bg-blue-500' },
+    49→    49→  completed: { label: 'Terminé', color: 'text-emerald-500', dot: 'bg-emerald-500' },
+    50→    50→}
+    51→    51→
+    52→    52→export function Workspace() {
+    53→    53→  const {
+    54→    54→    project,
+    55→    55→    sections,
+    56→    56→    activeSectionId,
+    57→    57→    setActiveSection,
+    58→    58→    addSection,
+    59→    59→    renameSection,
+    60→    60→    deleteSection,
+    61→    61→    duplicateSection,
+    62→    62→    moveSection,
+    63→    63→    updateSectionContent,
+    64→    64→    setSectionStatus,
+    65→    65→    importTemplate,
+    66→    66→    aiPanelOpen,
+    67→    67→    setAIPanel,
+    68→    68→    setBlockedMode,
+    69→    69→    setView,
+    70→    70→  } = useIrisStore()
+    71→    71→
+    72→    72→  const activeSection = sections.find((s) => s.id === activeSectionId) || sections[0] || null
+    73→    73→
+    74→    74→  const totalWords = sections.reduce((sum, s) => sum + s.wordCount, 0)
+    75→    75→  const completedCount = sections.filter((s) => s.status === 'completed').length
+    76→    76→
+    77→    77→  return (
+    78→    78→    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+    79→    79→      {/* Sidebar with sections */}
+    80→    80→      <aside className="w-72 border-r border-border bg-muted/20 flex flex-col flex-shrink-0">
+    81→    81→        <div className="p-3 border-b border-border space-y-2">
+    82→    82→          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
+    83→    83→            Mon mémoire
+    84→    84→          </p>
+    85→    85→          <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
+    86→    86→            <span>{sections.length} sections</span>
+    87→    87→            <span>·</span>
+    88→    88→            <span>{totalWords} mots</span>
+    89→    89→            <span>·</span>
+    90→    90→            <span className="text-emerald-500">{completedCount} terminées</span>
+    91→    91→          </div>
+    92→    92→        </div>
+    93→    93→
+    94→    94→        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+    95→    95→          <AnimatePresence>
+    96→    96→            {sections.map((section, idx) => (
+    97→    97→              <SectionItem
+    98→    98→                key={section.id}
+    99→    99→                section={section}
+   100→   100→                index={idx}
+   101→   101→                total={sections.length}
+   102→   102→                active={section.id === activeSection?.id}
+   103→   103→                onSelect={() => setActiveSection(section.id)}
+   104→   104→                onRename={(title) => renameSection(section.id, title)}
+   105→   105→                onDelete={() => {
+   106→   106→                  if (sections.length === 1) {
+   107→   107→                    toast.error("Vous devez garder au moins une section.")
+   108→   108→                    return
+   109→   109→                  }
+   110→   110→                  deleteSection(section.id)
+   111→   111→                  toast.success("Section supprimée")
+   112→   112→                }}
+   113→   113→                onDuplicate={() => {
+   114→   114→                  duplicateSection(section.id)
+   115→   115→                  toast.success("Section dupliquée")
+   116→   116→                }}
+   117→   117→                onMoveUp={() => moveSection(section.id, 'up')}
+   118→   118→                onMoveDown={() => moveSection(section.id, 'down')}
+   119→   119→                onMarkCompleted={() =>
+   120→   120→                  setSectionStatus(
+   121→   121→                    section.id,
+   122→   122→                    section.status === 'completed' ? 'draft' : 'completed'
+   123→   123→                  )
+   124→   124→                }
+   125→   125→              />
+   126→   126→            ))}
+   127→   127→          </AnimatePresence>
+   128→   128→
+   129→   129→          {sections.length === 0 && (
+   130→   130→            <div className="text-center py-8 px-4">
+   131→   131→              <p className="text-sm text-muted-foreground mb-3">
+   132→   132→                Aucune section pour le moment.
+   133→   133→              </p>
+   134→   134→            </div>
+   135→   135→          )}
+   136→   136→        </div>
+   137→   137→
+   138→   138→        {/* Bottom actions */}
+   139→   139→        <div className="p-2 border-t border-border space-y-1.5">
+   140→   140→          <Button
+   141→   141→            onClick={() => addSection()}
+   142→   142→            variant="outline"
+   143→   143→            size="sm"
+   144→   144→            className="w-full justify-start rounded-lg"
+   145→   145→          >
+   146→   146→            <Plus className="h-4 w-4 mr-1.5" />
+   147→   147→            Nouvelle section
+   148→   148→          </Button>
+   149→   149→          <Button
+   150→   150→            onClick={() => {
+   151→   151→              importTemplate()
+   152→   152→              toast.success('Template académique (15 chapitres) importé')
+   153→   153→            }}
+   154→   154→            variant="ghost"
+   155→   155→            size="sm"
+   156→   156→            className="w-full justify-start rounded-lg text-muted-foreground"
+   157→   157→          >
+   158→   158→            <Library className="h-4 w-4 mr-1.5" />
+   159→   159→            Importer le template académique
+   160→   160→          </Button>
+   161→   161→        </div>
+   162→   162→      </aside>
+   163→   163→
+   164→   164→      {/* Editor area */}
+   165→   165→      <main className="flex-1 flex flex-col min-w-0">
+   166→   166→        {activeSection ? (
+   167→   167→          <EditorView
+   168→   168→            section={activeSection}
+   169→   169→            project={project}
+   170→   170→            onUpdateContent={(c) => updateSectionContent(activeSection.id, c)}
+   171→   171→            onOpenAI={() => setAIPanel(true)}
+   172→   172→            onOpenBlocked={() => {
+   173→   173→              setBlockedMode(true)
+   174→   174→              setAIPanel(true)
+   175→   175→            }}
+   176→   176→          />
+   177→   177→        ) : (
+   178→   178→          <EmptyState
+   179→   179→            onNewSection={() => addSection()}
+   180→   180→            onImportTemplate={() => {
+   181→   181→              importTemplate()
+   182→   182→              toast.success('Template académique importé')
+   183→   183→            }}
+   184→   184→          />
+   185→   185→        )}
+   186→   186→      </main>
+   187→   187→
+   188→   188→      {/* AI Panel */}
+   189→   189→      <AnimatePresence>
+   190→   190→        {aiPanelOpen && activeSection && (
+   191→   191→          <AIPanel
+   192→   192→            section={activeSection}
+   193→   193→            project={project}
+   194→   194→            allSections={sections.map((s) => ({ title: s.title, content: s.content }))}
+   195→   195→            onClose={() => {
+   196→   196→              setAIPanel(false)
+   197→   197→              setBlockedMode(false)
+   198→   198→            }}
+   199→   199→          />
+   200→   200→        )}
+   201→   201→      </AnimatePresence>
+   202→   202→    </div>
+   203→   203→  )
+   204→   204→}
+   205→   205→
+   206→   206→// ============================================================================
+   207→   207→// Section item in sidebar
+   208→   208→// ============================================================================
+   209→   209→
+   210→   210→function SectionItem({
+   211→   211→  section,
+   212→   212→  index,
+   213→   213→  total,
+   214→   214→  active,
+   215→   215→  onSelect,
+   216→   216→  onRename,
+   217→   217→  onDelete,
+   218→   218→  onDuplicate,
+   219→   219→  onMoveUp,
+   220→   220→  onMoveDown,
+   221→   221→  onMarkCompleted,
+   222→   222→}: {
+   223→   223→  section: Section
+   224→   224→  index: number
+   225→   225→  total: number
+   226→   226→  active: boolean
+   227→   227→  onSelect: () => void
+   228→   228→  onRename: (title: string) => void
+   229→   229→  onDelete: () => void
+   230→   230→  onDuplicate: () => void
+   231→   231→  onMoveUp: () => void
+   232→   232→  onMoveDown: () => void
+   233→   233→  onMarkCompleted: () => void
+   234→   234→}) {
+   235→   235→  const [editing, setEditing] = React.useState(false)
+   236→   236→  const [draftTitle, setDraftTitle] = React.useState(section.title)
+   237→   237→  const status = STATUS_CONFIG[section.status]
+   238→   238→
+   239→   239→  React.useEffect(() => {
+   240→   240→    setDraftTitle(section.title)
+   241→   241→  }, [section.title])
+   242→   242→
+   243→   243→  function commitRename() {
+   244→   244→    const t = draftTitle.trim()
+   245→   245→    if (t && t !== section.title) {
+   246→   246→      onRename(t)
+   247→   247→    } else {
+   248→   248→      setDraftTitle(section.title)
+   249→   249→    }
+   250→   250→    setEditing(false)
+   251→   251→  }
+   252→   252→
+   253→   253→  return (
+   254→   254→    <motion.div
+   255→   255→      layout
+   256→   256→      initial={{ opacity: 0, x: -10 }}
+   257→   257→      animate={{ opacity: 1, x: 0 }}
+   258→   258→      exit={{ opacity: 0, x: -10 }}
+   259→   259→      className={cn(
+   260→   260→        'group relative rounded-lg transition-all',
+   261→   261→        active ? 'bg-card shadow-sm border border-primary/30' : 'hover:bg-card/60 border border-transparent'
+   262→   262→      )}
+   263→   263→    >
+   264→   264→      <div
+   265→   265→        onClick={onSelect}
+   266→   266→        className="w-full text-left p-2.5 flex items-start gap-2 cursor-pointer"
+   267→   267→      >
+   268→   268→        <div className="flex flex-col items-center gap-1 pt-0.5">
+   269→   269→          <span className="text-[10px] font-mono text-muted-foreground">{index + 1}</span>
+   270→   270→          <span className={cn('w-1.5 h-1.5 rounded-full', status.dot)} />
+   271→   271→        </div>
+   272→   272→        <div className="flex-1 min-w-0">
+   273→   273→          {editing ? (
+   274→   274→            <input
+   275→   275→              autoFocus
+   276→   276→              value={draftTitle}
+   277→   277→              onChange={(e) => setDraftTitle(e.target.value)}
+   278→   278→              onBlur={commitRename}
+   279→   279→              onKeyDown={(e) => {
+   280→   280→                if (e.key === 'Enter') commitRename()
+   281→   281→                if (e.key === 'Escape') {
+   282→   282→                  setDraftTitle(section.title)
+   283→   283→                  setEditing(false)
+   284→   284→                }
+   285→   285→              }}
+   286→   286→              onClick={(e) => e.stopPropagation()}
+   287→   287→              className="w-full text-sm font-medium bg-transparent border-b border-primary outline-none"
+   288→   288→            />
+   289→   289→          ) : (
+   290→   290→            <p className="text-sm font-medium truncate">{section.title}</p>
+   291→   291→          )}
+   292→   292→          <div className="flex items-center gap-2 mt-0.5">
+   293→   293→            <span className={cn('text-[10px]', status.color)}>{status.label}</span>
+   294→   294→            {section.wordCount > 0 && (
+   295→   295→              <span className="text-[10px] text-muted-foreground">{section.wordCount} mots</span>
+   296→   296→            )}
+   297→   297→          </div>
+   298→   298→        </div>
+   299→   299→
+   300→   300→        <DropdownMenu>
+   301→   301→          <DropdownMenuTrigger asChild>
+   302→   302→            <button
+   303→   303→              onClick={(e) => e.stopPropagation()}
+   304→   304→              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
+   305→   305→            >
+   306→   306→              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+   307→   307→            </button>
+   308→   308→          </DropdownMenuTrigger>
+   309→   309→          <DropdownMenuContent align="end" className="w-44">
+   310→   310→            <DropdownMenuItem onClick={() => setEditing(true)}>
+   311→   311→              <Edit3 className="h-3.5 w-3.5 mr-2" />
+   312→   312→              Renommer
+   313→   313→            </DropdownMenuItem>
+   314→   314→            <DropdownMenuItem onClick={onDuplicate}>
+   315→   315→              <Copy className="h-3.5 w-3.5 mr-2" />
+   316→   316→              Dupliquer
+   317→   317→            </DropdownMenuItem>
+   318→   318→            <DropdownMenuItem onClick={onMarkCompleted}>
+   319→   319→              <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
+   320→   320→              {section.status === 'completed' ? 'Marquer brouillon' : 'Marquer terminé'}
+   321→   321→            </DropdownMenuItem>
+   322→   322→            <DropdownMenuSeparator />
+   323→   323→            <DropdownMenuItem
+   324→   324→              onClick={onMoveUp}
+   325→   325→              disabled={index === 0}
+   326→   326→            >
+   327→   327→              <ChevronUp className="h-3.5 w-3.5 mr-2" />
+   328→   328→              Monter
+   329→   329→            </DropdownMenuItem>
+   330→   330→            <DropdownMenuItem
+   331→   331→              onClick={onMoveDown}
+   332→   332→              disabled={index === total - 1}
+   333→   333→            >
+   334→   334→              <ChevronDown className="h-3.5 w-3.5 mr-2" />
+   335→   335→              Descendre
+   336→   336→            </DropdownMenuItem>
+   337→   337→            <DropdownMenuSeparator />
+   338→   338→            <DropdownMenuItem onClick={onDelete} className="text-red-500">
+   339→   339→              <Trash2 className="h-3.5 w-3.5 mr-2" />
+   340→   340→              Supprimer
+   341→   341→            </DropdownMenuItem>
+   342→   342→          </DropdownMenuContent>
+   343→   343→        </DropdownMenu>
+   344→   344→      </div>
+   345→   345→    </motion.div>
+   346→   346→  )
+   347→   347→}
+   348→   348→
+   349→   349→// ============================================================================
+   350→   350→// Editor view
+   351→   351→// ============================================================================
+   352→   352→
+   353→   353→function EditorView({
+   354→   354→  section,
+   355→   355→  project,
+   356→   356→  onUpdateContent,
+   357→   357→  onOpenAI,
+   358→   358→  onOpenBlocked,
+   359→   359→}: {
+   360→   360→  section: Section
+   361→   361→  project: any
+   362→   362→  onUpdateContent: (content: string) => void
+   363→   363→  onOpenAI: () => void
+   364→   364→  onOpenBlocked: () => void
+   365→   365→}) {
+   366→   366→  const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+   367→   367→  const [showAIHint, setShowAIHint] = React.useState(false)
+   368→   368→
+   369→   369→  // Show AI hint after some writing
+   370→   370→  React.useEffect(() => {
+   371→   371→    if (section.wordCount > 50 && section.wordCount < 200 && !section.messages.length) {
+   372→   372→      setShowAIHint(true)
+   373→   373→    } else {
+   374→   374→      setShowAIHint(false)
+   375→   375→    }
+   376→   376→  }, [section.wordCount, section.messages.length])
+   377→   377→
+   378→   378→  return (
+   379→   379→    <div className="flex-1 flex flex-col min-w-0">
+   380→   380→      {/* Section header */}
+   381→   381→      <div className="border-b border-border bg-background/80 backdrop-blur-sm px-6 py-4">
+   382→   382→        <div className="max-w-3xl mx-auto">
+   383→   383→          <div className="flex items-center justify-between gap-3 flex-wrap">
+   384→   384→            <div className="flex items-center gap-2">
+   385→   385→              <Badge variant="outline" className={STATUS_CONFIG[section.status].color}>
+   386→   386→                <span className={cn('w-1.5 h-1.5 rounded-full mr-1', STATUS_CONFIG[section.status].dot)} />
+   387→   387→                {STATUS_CONFIG[section.status].label}
+   388→   388→              </Badge>
+   389→   389→              <span className="text-xs text-muted-foreground">
+   390→   390→                {section.wordCount} mots
+   391→   391→                {section.lastEdited && ` · modifié ${timeAgo(section.lastEdited)}`}
+   392→   392→              </span>
+   393→   393→            </div>
+   394→   394→            <div className="flex items-center gap-1.5">
+   395→   395→              <Button
+   396→   396→                size="sm"
+   397→   397→                variant="outline"
+   398→   398→                onClick={onOpenBlocked}
+   399→   399→                className="rounded-full border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+   400→   400→              >
+   401→   401→                <HelpCircle className="h-3.5 w-3.5 mr-1" />
+   402→   402→                Je suis bloqué
+   403→   403→              </Button>
+   404→   404→              <Button
+   405→   405→                size="sm"
+   406→   406→                onClick={onOpenAI}
+   407→   407→                className="rounded-full iris-gradient text-white"
+   408→   408→              >
+   409→   409→                <Sparkles className="h-3.5 w-3.5 mr-1" />
+   410→   410→                Demander à IRIS
+   411→   411→              </Button>
+   412→   412→            </div>
+   413→   413→          </div>
+   414→   414→        </div>
+   415→   415→      </div>
+   416→   416→
+   417→   417→      {/* Editor */}
+   418→   418→      <div className="flex-1 overflow-y-auto">
+   419→   419→        <div className="max-w-3xl mx-auto px-6 py-8">
+   420→   420→          <input
+   421→   421→            value={section.title}
+   422→   422→            onChange={(e) => {
+   423→   423→              // Title editing directly in the editor
+   424→   424→              const store = useIrisStore.getState()
+   425→   425→              store.renameSection(section.id, e.target.value)
+   426→   426→            }}
+   427→   427→            className="w-full text-3xl font-bold bg-transparent outline-none mb-6 placeholder:text-muted-foreground/40"
+   428→   428→            placeholder="Titre de la section"
+   429→   429→          />
+   430→   430→
+   431→   431→          <Textarea
+   432→   432→            ref={textareaRef}
+   433→   433→            value={section.content}
+   434→   434→            onChange={(e) => onUpdateContent(e.target.value)}
+   435→   435→            placeholder="Commencez à écrire ici... IRIS est à votre droite quand vous avez besoin d'aide."
+   436→   436→            className="min-h-[60vh] resize-none border-0 focus-visible:ring-0 text-base leading-relaxed font-serif"
+   437→   437→          />
+   438→   438→
+   439→   439→          {/* AI hint */}
+   440→   440→          <AnimatePresence>
+   441→   441→            {showAIHint && (
+   442→   442→              <motion.div
+   443→   443→                initial={{ opacity: 0, y: 10 }}
+   444→   444→                animate={{ opacity: 1, y: 0 }}
+   445→   445→                exit={{ opacity: 0, y: 10 }}
+   446→   446→                className="mt-6 p-4 rounded-xl border border-primary/30 bg-primary/5"
+   447→   447→              >
+   448→   448→                <div className="flex items-start gap-3">
+   449→   449→                  <div className="w-9 h-9 rounded-full iris-gradient flex items-center justify-center flex-shrink-0">
+   450→   450→                    <Sparkles className="h-4 w-4 text-white" />
+   451→   451→                  </div>
+   452→   452→                  <div className="flex-1">
+   453→   453→                    <p className="text-sm font-medium mb-1">
+   454→   454→                      Vous avez commencé à écrire. Voulez-vous un retour ?
+   455→   455→                    </p>
+   456→   456→                    <p className="text-xs text-muted-foreground mb-2">
+   457→   457→                      IRIS peut relire votre brouillon et vous proposer des améliorations.
+   458→   458→                    </p>
+   459→   459→                    <Button size="sm" variant="outline" onClick={onOpenAI}>
+   460→   460→                      Demander un retour
+   461→   461→                    </Button>
+   462→   462→                  </div>
+   463→   463→                </div>
+   464→   464→              </motion.div>
+   465→   465→            )}
+   466→   466→          </AnimatePresence>
+   467→   467→
+   468→   468→          {section.messages.length > 0 && (
+   469→   469→            <div className="mt-8 pt-6 border-t">
+   470→   470→              <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+   471→   471→                Vos échanges avec IRIS sur cette section
+   472→   472→              </p>
+   473→   473→              <Button size="sm" variant="ghost" onClick={onOpenAI}>
+   474→   474→                <PenLine className="h-3.5 w-3.5 mr-1" />
+   475→   475→                Ouvrir la conversation ({section.messages.length})
+   476→   476→              </Button>
+   477→   477→            </div>
+   478→   478→          )}
+   479→   479→        </div>
+   480→   480→      </div>
+   481→   481→    </div>
+   482→   482→  )
+   483→   483→}
+   484→   484→
+   485→   485→// ============================================================================
+   486→   486→// Empty state
+   487→   487→// ============================================================================
+   488→   488→
+   489→   489→function EmptyState({
+   490→   490→  onNewSection,
+   491→   491→  onImportTemplate,
+   492→   492→}: {
+   493→   493→  onNewSection: () => void
+   494→   494→  onImportTemplate: () => void
+   495→   495→}) {
+   496→   496→  return (
+   497→   497→    <div className="flex-1 flex items-center justify-center p-8">
+   498→   498→      <div className="text-center max-w-md">
+   499→   499→        <div className="w-16 h-16 rounded-2xl iris-gradient flex items-center justify-center mx-auto mb-4">
+   500→   500→          <FileText className="h-8 w-8 text-white" />
+   501→   501→        </div>
+   502→   502→        <h2 className="text-xl font-bold mb-2">Construisez votre mémoire</h2>
+   503→   503→        <p className="text-sm text-muted-foreground mb-6">
+   504→   504→          Créez une première section, ou importez le template académique complet
+   505→   505→          (15 chapitres classiques) que vous pourrez modifier librement.
+   506→   506→        </p>
+   507→   507→        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+   508→   508→          <Button onClick={onNewSection} className="iris-gradient text-white rounded-full">
+   509→   509→            <Plus className="h-4 w-4 mr-1.5" />
+   510→   510→            Créer une section
+   511→   511→          </Button>
+   512→   512→          <Button onClick={onImportTemplate} variant="outline" className="rounded-full">
+   513→   513→            <Library className="h-4 w-4 mr-1.5" />
+   514→   514→            Template académique
+   515→   515→          </Button>
+   516→   516→        </div>
+   517→   517→      </div>
+   518→   518→    </div>
+   519→   519→  )
+   520→   520→}
+   521→   521→
+   522→   522→// ============================================================================
+   523→   523→// AI Panel (sliding right)
+   524→   524→// ============================================================================
+   525→   525→
+   526→   526→function AIPanel({
+   527→   527→  section,
+   528→   528→  project,
+   529→   529→  allSections,
+   530→   530→  onClose,
+   531→   531→}: {
+   532→   532→  section: Section
+   533→   533→  project: any
+   534→   534→  allSections: { title: string; content: string }[]
+   535→   535→  onClose: () => void
+   536→   536→}) {
+   537→   537→  const { addMessage, blockedMode, setBlockedMode } = useIrisStore()
+   538→   538→  const [input, setInput] = React.useState('')
+   539→   539→  const [loading, setLoading] = React.useState(false)
+   540→   540→  const scrollRef = React.useRef<HTMLDivElement>(null)
+   541→   541→
+   542→   542→  React.useEffect(() => {
+   543→   543→    if (scrollRef.current) {
+   544→   544→      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+   545→   545→    }
+   546→   546→  }, [section.messages.length, loading])
+   547→   547→
+   548→   548→  async function send(text: string) {
+   549→   549→    if (!text.trim() || loading) return
+   550→   550→
+   551→   551→    addMessage(section.id, { role: 'user', content: text.trim() })
+   552→   552→    setInput('')
+   553→   553→    setLoading(true)
+   554→   554→
+   555→   555→    try {
+   556→   556→      const history = section.messages
+   557→   557→        .filter((m) => m.role !== 'system')
+   558→   558→        .slice(-6)
+   559→   559→        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+   560→   560→
+   561→   561→      const res = await fetch('/api/ai/chat', {
+   562→   562→        method: 'POST',
+   563→   563→        headers: { 'Content-Type': 'application/json' },
+   564→   564→        body: JSON.stringify({
+   565→   565→          sectionTitle: section.title,
+   566→   566→          sectionContent: section.content,
+   567→   567→          templateRef: section.templateRef,
+   568→   568→          project,
+   569→   569→          allSections,
+   570→   570→          history,
+   571→   571→          userMessage: text.trim(),
+   572→   572→          blockedMode,
+   573→   573→        }),
+   574→   574→      })
+   575→   575→      const data = await res.json()
+   576→   576→
+   577→   577→      addMessage(section.id, {
+   578→   578→        role: 'assistant',
+   579→   579→        content: data.reply || '...',
+   580→   580→        agent: data.agent?.id,
+   581→   581→      })
+   582→   582→
+   583→   583→      if (blockedMode) setBlockedMode(false)
+   584→   584→    } catch {
+   585→   585→      addMessage(section.id, {
+   586→   586→        role: 'assistant',
+   587→   587→        content: "Erreur de communication. Reformulez votre demande.",
+   588→   588→      })
+   589→   589→    } finally {
+   590→   590→      setLoading(false)
+   591→   591→    }
+   592→   592→  }
+   593→   593→
+   594→   594→  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+   595→   595→    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+   596→   596→      e.preventDefault()
+   597→   597→      send(input)
+   598→   598→    }
+   599→   599→  }
+   600→   600→
+   601→   601→  // Determine agent
+   602→   602→  const agent = React.useMemo(() => {
+   603→   603→    if (section.templateRef) {
+   604→   604→      return getAgentForChapter(section.templateRef)
+   605→   605→    }
+   606→   606→    return AGENTS[0] // Pr. IRIS by default
+   607→   607→  }, [section.templateRef])
+   608→   608→
+   609→   609→  const suggestions = blockedMode
+   610→   610→    ? [
+   611→   611→        "Je ne sais pas par où commencer",
+   612→   612→        "Je n'arrive pas à formuler cette partie",
+   613→   613→        "Aidez-moi à structurer mes idées",
+   614→   614→      ]
+   615→   615→    : [
+   616→   616→        "Relis mon brouillon et donne-moi 3 conseils",
+   617→   617→        "Qu'est-ce qui manque à cette section ?",
+   618→   618→        "Aide-moi à formuler une phrase d'introduction",
+   619→   619→        "Comment améliorer la cohérence avec le reste ?",
+   620→   620→      ]
+   621→   621→
+   622→   622→  return (
+   623→   623→    <motion.aside
+   624→   624→      initial={{ x: '100%' }}
+   625→   625→      animate={{ x: 0 }}
+   626→   626→      exit={{ x: '100%' }}
+   627→   627→      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+   628→   628→      className="w-full sm:w-96 border-l border-border bg-card flex flex-col flex-shrink-0 absolute right-0 top-0 bottom-0 sm:relative z-30"
+   629→   629→    >
+   630→   630→      {/* Header */}
+   631→   631→      <div className="p-3 border-b border-border flex items-center gap-2">
+   632→   632→        <div className="w-8 h-8 rounded-full iris-gradient flex items-center justify-center flex-shrink-0">
+   633→   633→          {blockedMode ? (
+   634→   634→            <Brain className="h-4 w-4 text-white" />
+   635→   635→          ) : (
+   636→   636→            <Sparkles className="h-4 w-4 text-white" />
+   637→   637→          )}
+   638→   638→        </div>
+   639→   639→        <div className="flex-1 min-w-0">
+   640→   640→          <p className="text-sm font-semibold">
+   641→   641→            {blockedMode ? 'Mode débloqué' : agent.name}
+   642→   642→          </p>
+   643→   643→          <p className="text-xs text-muted-foreground truncate">
+   644→   644→            {blockedMode ? 'IRIS vous aide à repartir' : agent.role}
+   645→   645→          </p>
+   646→   646→        </div>
+   647→   647→        {blockedMode && (
+   648→   648→          <Button
+   649→   649→            size="sm"
+   650→   650→            variant="ghost"
+   651→   651→            onClick={() => setBlockedMode(false)}
+   652→   652→            className="text-xs h-7"
+   653→   653→          >
+   654→   654→            Retour normal
+   655→   655→          </Button>
+   656→   656→        )}
+   657→   657→        <button onClick={onClose} className="p-1.5 rounded hover:bg-muted">
+   658→   658→          <X className="h-4 w-4" />
+   659→   659→        </button>
+   660→   660→      </div>
+   661→   661→
+   662→   662→      {/* Context banner */}
+   663→   663→      <div className="px-3 py-2 bg-muted/40 border-b border-border">
+   664→   664→        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">
+   665→   665→          Section en cours
+   666→   666→        </p>
+   667→   667→        <p className="text-xs font-medium truncate">{section.title}</p>
+   668→   668→      </div>
+   669→   669→
+   670→   670→      {/* Messages */}
+   671→   671→      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
+   672→   672→        {section.messages.length === 0 ? (
+   673→   673→          <div className="text-center py-6">
+   674→   674→            <p className="text-sm text-muted-foreground mb-4">
+   675→   675→              {blockedMode
+   676→   676→                ? "Décrivez votre blocage, ou choisissez une suggestion."
+   677→   677→                : `Posez votre question à ${agent.name}, ou choisissez une suggestion.`}
+   678→   678→            </p>
+   679→   679→            <div className="space-y-1.5">
+   680→   680→              {suggestions.map((s, idx) => (
+   681→   681→                <button
+   682→   682→                  key={idx}
+   683→   683→                  onClick={() => send(s)}
+   684→   684→                  className="w-full text-left text-xs p-2.5 rounded-lg border border-border bg-background hover:border-primary/40 hover:bg-primary/5 transition-colors"
+   685→   685→                >
+   686→   686→                  <span className="text-primary mr-1.5">→</span>
+   687→   687→                  {s}
+   688→   688→                </button>
+   689→   689→              ))}
+   690→   690→            </div>
+   691→   691→          </div>
+   692→   692→        ) : (
+   693→   693→          section.messages.map((msg) => {
+   694→   694→            const isUser = msg.role === 'user'
+   695→   695→            const msgAgent = msg.agent ? AGENTS.find((a) => a.id === msg.agent) : null
+   696→   696→            return (
+   697→   697→              <motion.div
+   698→   698→                key={msg.id}
+   699→   699→                initial={{ opacity: 0, y: 5 }}
+   700→   700→                animate={{ opacity: 1, y: 0 }}
+   701→   701→                className={cn('flex flex-col gap-1', isUser ? 'items-end' : 'items-start')}
+   702→   702→              >
+   703→   703→                {msgAgent && !isUser && (
+   704→   704→                  <span className="text-[10px] font-semibold text-primary px-1">
+   705→   705→                    {msgAgent.name}
+   706→   706→                  </span>
+   707→   707→                )}
+   708→   708→                <div
+   709→   709→                  className={cn(
+   710→   710→                    'rounded-2xl p-3 text-sm max-w-[90%]',
+   711→   711→                    isUser
+   712→   712→                      ? 'bg-primary text-primary-foreground rounded-tr-sm'
+   713→   713→                      : 'bg-muted rounded-tl-sm'
+   714→   714→                  )}
+   715→   715→                >
+   716→   716→                  <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+   717→   717→                </div>
+   718→   718→              </motion.div>
+   719→   719→            )
+   720→   720→          })
+   721→   721→        )}
+   722→   722→
+   723→   723→        {loading && (
+   724→   724→          <div className="flex items-start gap-2">
+   725→   725→            <div className="w-7 h-7 rounded-full iris-gradient flex items-center justify-center flex-shrink-0">
+   726→   726→              <Sparkles className="h-3.5 w-3.5 text-white" />
+   727→   727→            </div>
+   728→   728→            <div className="bg-muted rounded-2xl rounded-tl-sm p-3">
+   729→   729→              <div className="flex items-center gap-1">
+   730→   730→                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+   731→   731→                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+   732→   732→                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+   733→   733→              </div>
+   734→   734→            </div>
+   735→   735→          </div>
+   736→   736→        )}
+   737→   737→      </div>
+   738→   738→
+   739→   739→      {/* Input */}
+   740→   740→      <div className="border-t border-border p-3 space-y-2">
+   741→   741→        <Textarea
+   742→   742→          value={input}
+   743→   743→          onChange={(e) => setInput(e.target.value)}
+   744→   744→          onKeyDown={handleKeyDown}
+   745→   745→          placeholder={blockedMode ? "Décrivez votre blocage..." : "Votre question..."}
+   746→   746→          className="resize-none min-h-16 max-h-32 text-sm"
+   747→   747→          disabled={loading}
+   748→   748→        />
+   749→   749→        <div className="flex items-center justify-between">
+   750→   750→          <span className="text-[10px] text-muted-foreground">Cmd/Ctrl+Entrée</span>
+   751→   751→          <Button
+   752→   752→            onClick={() => send(input)}
+   753→   753→            disabled={!input.trim() || loading}
+   754→   754→            size="sm"
+   755→   755→            className="rounded-full iris-gradient text-white"
+   756→   756→          >
+   757→   757→            {loading ? (
+   758→   758→              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+   759→   759→            ) : (
+   760→   760→              <>
+   761→   761→                <Send className="h-3.5 w-3.5 mr-1" />
+   762→   762→                Envoyer
+   763→   763→              </>
+   764→   764→            )}
+   765→   765→          </Button>
+   766→   766→        </div>
+   767→   767→      </div>
+   768→   768→    </motion.aside>
+   769→   769→  )
+   770→   770→}
+   771→   771→
+   772→   772→// ============================================================================
+   773→   773→// Utils
+   774→   774→// ============================================================================
+   775→   775→
+   776→   776→function timeAgo(ts: number): string {
+   777→   777→  const diff = Date.now() - ts
+   778→   778→  if (diff < 60_000) return 'à l\'instant'
+   779→   779→  if (diff < 3_600_000) return `il y a ${Math.floor(diff / 60_000)} min`
+   780→   780→  if (diff < 86_400_000) return `il y a ${Math.floor(diff / 3_600_000)} h`
+   781→   781→  return `il y a ${Math.floor(diff / 86_400_000)} j`
+   782→   782→}
+   783→   783→

@@ -271,9 +271,15 @@ export const useIrisStore = create<IrisState>()(
         set((state) => ({
           sections: state.sections.map((s) => {
             if (s.id !== id) return s
-            const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0
+            // Content may be HTML (from the A4 editor) or plain text — strip tags for word count
+            const plainText = content
+              .replace(/<[^>]+>/g, ' ')
+              .replace(/&nbsp;/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+            const wordCount = plainText ? plainText.split(/\s+/).length : 0
             const newStatus: SectionStatus =
-              content.trim().length > 100
+              plainText.length > 100
                 ? s.status === 'not_started' || s.status === 'in_progress'
                   ? 'draft'
                   : s.status
@@ -384,4 +390,30 @@ export function selectTotalWords(state: IrisState) {
 
 export function selectCompletedCount(state: IrisState) {
   return state.sections.filter((s) => s.status === 'completed').length
+}
+
+// Convert plain text to a basic HTML paragraph structure (used when seeding or importing)
+export function plainTextToHtml(text: string): string {
+  if (!text || !text.trim()) return ''
+  // Already HTML? leave alone
+  if (/<(p|h[1-6]|ul|ol|div|blockquote)/i.test(text)) return text
+  return text
+    .split(/\n\s*\n/)
+    .map((p) => `<p>${p.trim().replace(/\n/g, '<br/>')}</p>`)
+    .join('')
+}
+
+// Strip HTML tags for plain text display (preview, export, AI context)
+export function htmlToPlainText(html: string): string {
+  if (!html) return ''
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|li|blockquote)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }

@@ -24,9 +24,17 @@ import {
   ArrowLeft,
   ListTree,
   PenLine,
+  Wand2,
+  FilePlus,
+  RefreshCw,
+  Expand,
+  ListTree as ListTreeIcon,
+  Check,
+  Printer,
 } from 'lucide-react'
-import { useIrisStore, type Section, type SectionStatus } from '@/store/iris-store'
+import { useIrisStore, type Section, type SectionStatus, htmlToPlainText } from '@/store/iris-store'
 import { AGENTS, getAgentForChapter } from '@/lib/iris/agents'
+import { A4Editor, type A4EditorHandle } from '@/components/iris/a4-editor'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -69,10 +77,16 @@ export function Workspace() {
     setView,
   } = useIrisStore()
 
+  const editorRef = React.useRef<A4EditorHandle>(null)
   const activeSection = sections.find((s) => s.id === activeSectionId) || sections[0] || null
 
   const totalWords = sections.reduce((sum, s) => sum + s.wordCount, 0)
   const completedCount = sections.filter((s) => s.status === 'completed').length
+
+  // Bridge: AIPanel -> A4Editor (insert AI-generated draft HTML at cursor)
+  const handleInsertDraft = React.useCallback((html: string) => {
+    editorRef.current?.insertHtml(html)
+  }, [])
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
@@ -167,6 +181,7 @@ export function Workspace() {
           <EditorView
             section={activeSection}
             project={project}
+            editorRef={editorRef}
             onUpdateContent={(c) => updateSectionContent(activeSection.id, c)}
             onOpenAI={() => setAIPanel(true)}
             onOpenBlocked={() => {
@@ -196,6 +211,7 @@ export function Workspace() {
               setAIPanel(false)
               setBlockedMode(false)
             }}
+            onInsertDraft={handleInsertDraft}
           />
         )}
       </AnimatePresence>
@@ -353,17 +369,18 @@ function SectionItem({
 function EditorView({
   section,
   project,
+  editorRef,
   onUpdateContent,
   onOpenAI,
   onOpenBlocked,
 }: {
   section: Section
   project: any
+  editorRef: React.RefObject<A4EditorHandle | null>
   onUpdateContent: (content: string) => void
   onOpenAI: () => void
   onOpenBlocked: () => void
 }) {
-  const textareaRef = React.useRef<HTMLTextAreaElement>(null)
   const [showAIHint, setShowAIHint] = React.useState(false)
 
   // Show AI hint after some writing
@@ -375,109 +392,101 @@ function EditorView({
     }
   }, [section.wordCount, section.messages.length])
 
+  // Compute "page count" (A4 = ~500 words/page)
+  const pageCount = Math.max(1, Math.ceil(section.wordCount / 500))
+
+  function handlePrint() {
+    window.print()
+  }
+
   return (
-    <div className="flex-1 flex flex-col min-w-0">
-      {/* Section header */}
-      <div className="border-b border-border bg-background/80 backdrop-blur-sm px-6 py-4">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className={STATUS_CONFIG[section.status].color}>
-                <span className={cn('w-1.5 h-1.5 rounded-full mr-1', STATUS_CONFIG[section.status].dot)} />
-                {STATUS_CONFIG[section.status].label}
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                {section.wordCount} mots
-                {section.lastEdited && ` · modifié ${timeAgo(section.lastEdited)}`}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onOpenBlocked}
-                className="rounded-full border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
-              >
-                <HelpCircle className="h-3.5 w-3.5 mr-1" />
-                Je suis bloqué
-              </Button>
-              <Button
-                size="sm"
-                onClick={onOpenAI}
-                className="rounded-full iris-gradient text-white"
-              >
-                <Sparkles className="h-3.5 w-3.5 mr-1" />
-                Demander à IRIS
-              </Button>
-            </div>
-          </div>
+    <div className="flex-1 flex flex-col min-w-0 relative">
+      {/* Section header — toolbar above the A4 page */}
+      <div className="border-b border-border bg-background/80 backdrop-blur-sm px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <Badge variant="outline" className={STATUS_CONFIG[section.status].color}>
+            <span className={cn('w-1.5 h-1.5 rounded-full mr-1', STATUS_CONFIG[section.status].dot)} />
+            {STATUS_CONFIG[section.status].label}
+          </Badge>
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {section.wordCount} mots · {pageCount} page{pageCount > 1 ? 's' : ''} A4
+            {section.lastEdited && ` · modifié ${timeAgo(section.lastEdited)}`}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handlePrint}
+            className="rounded-full text-muted-foreground"
+            title="Imprimer / Exporter en PDF"
+          >
+            <Printer className="h-3.5 w-3.5 mr-1" />
+            <span className="hidden sm:inline">Imprimer</span>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onOpenBlocked}
+            className="rounded-full border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+          >
+            <HelpCircle className="h-3.5 w-3.5 mr-1" />
+            <span className="hidden sm:inline">Bloqué ?</span>
+          </Button>
+          <Button
+            size="sm"
+            onClick={onOpenAI}
+            className="rounded-full iris-gradient text-white"
+          >
+            <Sparkles className="h-3.5 w-3.5 mr-1" />
+            IRIS
+          </Button>
         </div>
       </div>
 
-      {/* Editor */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-6 py-8">
-          <input
-            value={section.title}
-            onChange={(e) => {
-              // Title editing directly in the editor
-              const store = useIrisStore.getState()
-              store.renameSection(section.id, e.target.value)
-            }}
-            className="w-full text-3xl font-bold bg-transparent outline-none mb-6 placeholder:text-muted-foreground/40"
-            placeholder="Titre de la section"
-          />
+      {/* A4 Editor — the white page */}
+      <A4Editor
+        ref={editorRef}
+        value={section.content}
+        onChange={onUpdateContent}
+      />
 
-          <Textarea
-            ref={textareaRef}
-            value={section.content}
-            onChange={(e) => onUpdateContent(e.target.value)}
-            placeholder="Commencez à écrire ici... IRIS est à votre droite quand vous avez besoin d'aide."
-            className="min-h-[60vh] resize-none border-0 focus-visible:ring-0 text-base leading-relaxed font-serif"
-          />
-
-          {/* AI hint */}
-          <AnimatePresence>
-            {showAIHint && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="mt-6 p-4 rounded-xl border border-primary/30 bg-primary/5"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-full iris-gradient flex items-center justify-center flex-shrink-0">
-                    <Sparkles className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium mb-1">
-                      Vous avez commencé à écrire. Voulez-vous un retour ?
-                    </p>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      IRIS peut relire votre brouillon et vous proposer des améliorations.
-                    </p>
-                    <Button size="sm" variant="outline" onClick={onOpenAI}>
-                      Demander un retour
-                    </Button>
-                  </div>
+      {/* AI hint as a floating bottom-right toast */}
+      <AnimatePresence>
+        {showAIHint && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="absolute bottom-4 right-4 max-w-xs p-3 rounded-xl border border-primary/30 bg-background shadow-lg z-20"
+          >
+            <div className="flex items-start gap-2">
+              <div className="w-8 h-8 rounded-full iris-gradient flex items-center justify-center flex-shrink-0">
+                <Sparkles className="h-3.5 w-3.5 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-medium mb-1">Envie d'un retour ?</p>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  IRIS peut relire votre brouillon et proposer des améliorations.
+                </p>
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="outline" onClick={onOpenAI} className="h-7 text-xs">
+                    Demander un retour
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowAIHint(false)}
+                    className="h-7 text-xs"
+                  >
+                    Plus tard
+                  </Button>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {section.messages.length > 0 && (
-            <div className="mt-8 pt-6 border-t">
-              <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                Vos échanges avec IRIS sur cette section
-              </p>
-              <Button size="sm" variant="ghost" onClick={onOpenAI}>
-                <PenLine className="h-3.5 w-3.5 mr-1" />
-                Ouvrir la conversation ({section.messages.length})
-              </Button>
+              </div>
             </div>
-          )}
-        </div>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -528,15 +537,21 @@ function AIPanel({
   project,
   allSections,
   onClose,
+  onInsertDraft,
 }: {
   section: Section
   project: any
   allSections: { title: string; content: string }[]
   onClose: () => void
+  onInsertDraft: (html: string) => void
 }) {
   const { addMessage, blockedMode, setBlockedMode } = useIrisStore()
   const [input, setInput] = React.useState('')
   const [loading, setLoading] = React.useState(false)
+  const [draftLoading, setDraftLoading] = React.useState(false)
+  const [draftHtml, setDraftHtml] = React.useState<string | null>(null)
+  const [draftMode, setDraftMode] = React.useState<'generate' | 'rewrite' | 'expand' | 'structure'>('generate')
+  const [draftInstruction, setDraftInstruction] = React.useState('')
   const scrollRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
@@ -544,6 +559,12 @@ function AIPanel({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [section.messages.length, loading])
+
+  // Reset draft preview when switching sections
+  React.useEffect(() => {
+    setDraftHtml(null)
+    setDraftInstruction('')
+  }, [section.id])
 
   async function send(text: string) {
     if (!text.trim() || loading) return
@@ -563,10 +584,10 @@ function AIPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sectionTitle: section.title,
-          sectionContent: section.content,
+          sectionContent: htmlToPlainText(section.content),
           templateRef: section.templateRef,
           project,
-          allSections,
+          allSections: allSections.map((s) => ({ title: s.title, content: htmlToPlainText(s.content) })),
           history,
           userMessage: text.trim(),
           blockedMode,
@@ -589,6 +610,48 @@ function AIPanel({
     } finally {
       setLoading(false)
     }
+  }
+
+  async function generateDraft() {
+    if (draftLoading) return
+    setDraftLoading(true)
+    setDraftHtml(null)
+    try {
+      const res = await fetch('/api/ai/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sectionTitle: section.title,
+          sectionContent: htmlToPlainText(section.content),
+          templateRef: section.templateRef,
+          project,
+          allSections: allSections.map((s) => ({
+            title: s.title,
+            content: htmlToPlainText(s.content),
+          })),
+          userInstruction: draftInstruction.trim() || 'Génère un brouillon structuré pour cette section.',
+          mode: draftMode,
+        }),
+      })
+      const data = await res.json()
+      setDraftHtml(data.html || '<p><em>Erreur de génération.</em></p>')
+    } catch {
+      setDraftHtml('<p><em>Erreur réseau. Réessayez.</em></p>')
+    } finally {
+      setDraftLoading(false)
+    }
+  }
+
+  function acceptDraft() {
+    if (!draftHtml) return
+    onInsertDraft(draftHtml)
+    toast.success('Brouillon inséré dans l\'éditeur — modifiez-le librement.')
+    setDraftHtml(null)
+    setDraftInstruction('')
+  }
+
+  function dismissDraft() {
+    setDraftHtml(null)
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -625,7 +688,7 @@ function AIPanel({
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className="w-full sm:w-96 border-l border-border bg-card flex flex-col flex-shrink-0 absolute right-0 top-0 bottom-0 sm:relative z-30"
+      className="w-full sm:w-[28rem] border-l border-border bg-card flex flex-col flex-shrink-0 absolute right-0 top-0 bottom-0 sm:relative z-30"
     >
       {/* Header */}
       <div className="p-3 border-b border-border flex items-center gap-2">
@@ -666,6 +729,134 @@ function AIPanel({
         </p>
         <p className="text-xs font-medium truncate">{section.title}</p>
       </div>
+
+      {/* ==================================================================== */}
+      {/* DRAFT GENERATOR — quick-access panel at the top                      */}
+      {/* ==================================================================== */}
+      {!blockedMode && (
+        <div className="border-b border-border bg-gradient-to-b from-primary/5 to-transparent p-3 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <Wand2 className="h-3.5 w-3.5 text-primary" />
+            <p className="text-xs font-semibold">Générer un brouillon formaté</p>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            IRIS rédige un brouillon déjà mis en forme (titres, paragraphes, listes). Vous l'insérez
+            dans l'éditeur A4 puis vous le modifiez librement.
+          </p>
+
+          {/* Mode selector */}
+          <div className="grid grid-cols-4 gap-1">
+            <DraftModeButton
+              active={draftMode === 'generate'}
+              onClick={() => setDraftMode('generate')}
+              icon={<FilePlus className="h-3.5 w-3.5" />}
+              label="Générer"
+            />
+            <DraftModeButton
+              active={draftMode === 'rewrite'}
+              onClick={() => setDraftMode('rewrite')}
+              icon={<RefreshCw className="h-3.5 w-3.5" />}
+              label="Réécrire"
+            />
+            <DraftModeButton
+              active={draftMode === 'expand'}
+              onClick={() => setDraftMode('expand')}
+              icon={<Expand className="h-3.5 w-3.5" />}
+              label="Développer"
+            />
+            <DraftModeButton
+              active={draftMode === 'structure'}
+              onClick={() => setDraftMode('structure')}
+              icon={<ListTreeIcon className="h-3.5 w-3.5" />}
+              label="Plan"
+            />
+          </div>
+
+          {/* Optional instruction */}
+          <Textarea
+            value={draftInstruction}
+            onChange={(e) => setDraftInstruction(e.target.value)}
+            placeholder="Instructions optionnelles : « insistez sur la méthodologie quantitative », « ton neutre, 500 mots », etc."
+            className="resize-none min-h-[44px] max-h-24 text-xs"
+            disabled={draftLoading}
+          />
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              onClick={generateDraft}
+              disabled={draftLoading}
+              size="sm"
+              className="rounded-full iris-gradient text-white flex-1"
+            >
+              {draftLoading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  Génération…
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-3.5 w-3.5 mr-1" />
+                  Générer le brouillon
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Draft preview */}
+          <AnimatePresence>
+            {draftHtml && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-2 overflow-hidden"
+              >
+                <div className="rounded-lg border border-primary/30 overflow-hidden">
+                  <div className="px-2 py-1 bg-primary/5 border-b border-primary/20 flex items-center justify-between">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+                      Aperçu du brouillon
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {draftMode === 'structure' ? 'Plan' : 'HTML formaté'}
+                    </span>
+                  </div>
+                  <div
+                    className="a4-page prose-iris max-h-72 overflow-y-auto text-black"
+                    style={{
+                      width: 'auto',
+                      minHeight: 'auto',
+                      padding: '12pt 14pt',
+                      boxShadow: 'none',
+                      borderRadius: '0 0 8px 8px',
+                      fontSize: '10pt',
+                      background: '#fff',
+                    }}
+                    dangerouslySetInnerHTML={{ __html: draftHtml }}
+                  />
+                </div>
+                <div className="flex gap-1.5">
+                  <Button
+                    onClick={acceptDraft}
+                    size="sm"
+                    className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex-1"
+                  >
+                    <Check className="h-3.5 w-3.5 mr-1" />
+                    Insérer dans l'éditeur
+                  </Button>
+                  <Button
+                    onClick={dismissDraft}
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full"
+                  >
+                    Ignorer
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
@@ -766,6 +957,37 @@ function AIPanel({
         </div>
       </div>
     </motion.aside>
+  )
+}
+
+// ============================================================================
+// DraftModeButton — small selectable button for the draft mode
+// ============================================================================
+
+function DraftModeButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  label: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex flex-col items-center gap-1 px-1 py-1.5 rounded-md border text-[10px] font-medium transition-all',
+        active
+          ? 'border-primary bg-primary/10 text-primary'
+          : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary/5'
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
   )
 }
 

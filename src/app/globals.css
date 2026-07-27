@@ -192,3 +192,202 @@
 .pulse-glow {
   animation: pulse-glow 2s infinite;
 }
+
+/* ====================================================================== */
+/* A4 EDITOR — page blanche format A4 avec marges académiques 25 mm        */
+/* ====================================================================== */
+
+.a4-page {
+  font-family: 'Times New Roman', 'Liberation Serif', 'Noto Serif', Georgia, serif;
+  font-size: 12pt;
+  line-height: 1.6;
+  color: #111;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 10px 30px -10px rgba(0, 0, 0, 0.15);
+  transition: box-shadow 0.2s ease;
+}
+.a4-page:hover {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 14px 40px -10px rgba(0, 0, 0, 0.22);
+}
+.a4-page:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px oklch(0.42 0.18 285 / 0.5), 0 14px 40px -10px rgba(0, 0, 0, 0.22);
+}
+
+/* Placeholder when empty */
+.a4-page:empty::before,
+.a4-page[data-empty="true"]::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* ====================================================================== */
+/* prose-iris — typographie académique à l'intérieur de la page A4         */
+/* ====================================================================== */
+
+.prose-iris {
+  color: #111;
+}
+.prose-iris:focus {
+  outline: none;
+}
+
+/* Headings — sans-serif, hiérarchie académique claire */
+.prose-iris h1 {
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 22pt;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 18pt 0;
+  color: #1a1a2e;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  page-break-after: avoid;
+}
+.prose-iris h2 {
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16pt;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 24pt 0 12pt 0;
+  color: #1a1a2e;
+  page-break-after: avoid;
+}
+.prose-iris h3 {
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 13pt;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 18pt 0 8pt 0;
+  color: #2a2a3e;
+  page-break-after: avoid;
+}
+.prose-iris h4 {
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12pt;
+  font-weight: 600;
+  margin: 14pt 0 6pt 0;
+  color: #2a2a3e;
+  page-break-after: avoid;
+}
+
+/* Paragraphs — justifiés, indentés selon la norme académique */
+.prose-iris p {
+  margin: 0 0 10pt 0;
+  text-align: justify;
+  text-indent: 0;
+  orphans: 2;
+  widows: 2;
+  hyphens: auto;
+}
+
+/* First paragraph after a heading: no indent */
+.prose-iris h1 + p,
+.prose-iris h2 + p,
+.prose-iris h3 + p,
+.prose-iris h4 + p {
+  text-indent: 0;
+}
+
+/* Lists */
+.prose-iris ul,
+.prose-iris ol {
+  margin: 0 0 10pt 0;
+  padding-left: 20mm;
+  text-align: justify;
+}
+.prose-iris ul { list-style: disc; }
+.prose-iris ol { list-style: decimal; }
+.prose-iris li {
+  margin-bottom: 4pt;
+  line-height: 1.6;
+}
+.prose-iris li::marker {
+  color: #6b21a8;
+  font-weight: 600;
+}
+
+/* Blockquote — citation académique avec barre à gauche */
+.prose-iris blockquote {
+  margin: 12pt 0;
+  padding: 8pt 16pt;
+  border-left: 3px solid oklch(0.42 0.18 285);
+  background: #faf8ff;
+  color: #444;
+  font-style: italic;
+  text-align: justify;
+}
+.prose-iris blockquote p {
+  margin: 0;
+  text-align: justify;
+}
+
+/* Inline styles */
+.prose-iris strong, .prose-iris b { font-weight: 700; color: #1a1a2e; }
+.prose-iris em, .prose-iris i { font-style: italic; }
+.prose-iris u { text-decoration: underline; text-underline-offset: 2px; }
+.prose-iris a {
+  color: oklch(0.42 0.18 285);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Tables (in case the AI includes them) */
+.prose-iris table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12pt 0;
+  font-size: 11pt;
+}
+.prose-iris th,
+.prose-iris td {
+  border: 1px solid #cbd5e1;
+  padding: 6pt 8pt;
+  text-align: left;
+  vertical-align: top;
+}
+.prose-iris th {
+  background: #f1f5f9;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+.prose-iris tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+/* Caption-like paragraphs (e.g. Figure/Table legends) */
+.prose-iris .caption {
+  font-family: 'Inter', sans-serif;
+  font-size: 10pt;
+  text-align: center;
+  color: #555;
+  margin-top: 4pt;
+  font-style: italic;
+}
+
+/* Citation inline — (Auteur, année) */
+.prose-iris .citation {
+  color: oklch(0.42 0.18 285);
+  font-weight: 500;
+}
+
+/* Print — pagination A4 réelle */
+@media print {
+  @page {
+    size: A4;
+    margin: 25mm;
+  }
+  body { background: white !important; }
+  .a4-page {
+    box-shadow: none !important;
+    width: auto !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+}
