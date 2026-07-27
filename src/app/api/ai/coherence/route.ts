@@ -1,25 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
-import { CHAPTERS } from '@/lib/iris/chapters'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
 interface CoherenceRequest {
   project: Record<string, any>
-  chapters: Record<string, { content: string; status: string }>
+  sections: { title: string; content: string }[]
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as CoherenceRequest
-    const { project, chapters } = body
+    const { project, sections } = body
 
-    // Construire un résumé des contenus rédigés
-    const drafted = CHAPTERS.filter((c) => (chapters[c.id]?.content || '').trim().length > 100)
-      .map((c) => {
-        const content = (chapters[c.id]?.content || '').trim()
-        return `### ${c.title}\n${content.slice(0, 1500)}${content.length > 1500 ? '...' : ''}`
+    const drafted = sections
+      .filter((s) => s.content.trim().length > 100)
+      .map((s) => {
+        const c = s.content.trim()
+        return `### ${s.title}\n${c.slice(0, 1500)}${c.length > 1500 ? '...' : ''}`
       })
       .join('\n\n---\n\n')
 
@@ -28,50 +27,47 @@ export async function POST(req: NextRequest) {
         issues: [
           {
             id: 'no-content',
-            severity: 'low',
-            chapter: 'global',
-            message: "Aucun chapitre n'a encore été rédigé substantiellement.",
-            suggestion: "Commencez par le chapitre 'Choix du sujet' ou 'Introduction'.",
+            severity: 'low' as const,
+            sectionTitle: 'global',
+            message: "Aucune section n'a encore été rédigée substantiellement.",
+            suggestion: "Commencez par rédiger une première section.",
           },
         ],
       })
     }
 
-    const systemPrompt = `Tu es Dr. Qualité, expert en contrôle qualité académique. Tu vas analyser la cohérence globale du mémoire de l'étudiant et identifier les problèmes.
+    const systemPrompt = `Tu es Dr. Qualité, expert en contrôle qualité académique. Analyse la cohérence du mémoire de l'étudiant.
 
 CONTEXTE :
 - Niveau : ${project.level || 'Master'}
 - Filière : ${project.filiere || 'non précisée'}
-- Titre du mémoire : ${project.title || 'à définir'}
-- Thème : ${project.theme || 'non précisé'}
+- Titre : ${project.title || 'à définir'}
 
-CONTENU DES CHAPITRES RÉDIGÉS :
+CONTENU DES SECTIONS RÉDIGÉES :
 ${drafted}
 
-ANALYSE À EFFECTUER :
-1. Le titre reflète-t-il bien la problématique et le contenu ?
-2. La problématique est-elle cohérente avec les questions de recherche ?
-3. Les objectifs sont-ils alignés avec la problématique ?
-4. Les hypothèses répondent-elles aux questions de recherche ?
-5. La méthodologie permet-elle de tester les hypothèses ?
-6. Les résultats répondent-ils aux questions de recherche ?
-7. La conclusion apporte-t-elle une réponse explicite à la problématique ?
-8. Y a-t-il des contradictions internes entre chapitres ?
+ANALYSE :
+1. Le titre reflète-t-il le contenu ?
+2. Y a-t-il une problématique claire ?
+3. Les objectifs / hypothèses sont-ils cohérents avec la problématique ?
+4. La méthodologie permet-elle de répondre aux questions ?
+5. Les résultats répondent-ils aux questions ?
+6. La conclusion apporte-t-elle une réponse explicite ?
+7. Y a-t-il des contradictions entre sections ?
 
-RÉPONDS UNIQUEMENT AU FORMAT JSON SUIVANT (aucun texte avant ou après) :
+RÉPONDS UNIQUEMENT AU FORMAT JSON :
 {
   "issues": [
     {
       "severity": "high" | "medium" | "low",
-      "chapter": "id du chapitre concerné (sujet, introduction, contexte, problematique, questions, objectifs, hypotheses, justification, literature, cadre, methodologie, resultats, discussion, conclusion, recommandations, ou 'global')",
-      "message": "description précise du problème de cohérence",
+      "sectionTitle": "titre de la section concernée (ou 'global')",
+      "message": "description précise du problème",
       "suggestion": "correction proposée, concrète et applicable"
     }
   ]
 }
 
-Si aucune incohérence n'est détectée, retourne {"issues": []}.
-Maximum 8 problèmes. Priorise les problèmes de haute gravité.`
+Si aucune incohérence, retourne {"issues": []}. Maximum 8 problèmes.`
 
     const zai = await ZAI.create()
     const completion = await zai.chat.completions.create({
@@ -86,7 +82,6 @@ Maximum 8 problèmes. Priorise les problèmes de haute gravité.`
 
     const raw = completion.choices[0]?.message?.content || '{}'
 
-    // Extraire le JSON
     let issues = []
     try {
       const jsonMatch = raw.match(/\{[\s\S]*\}/)
@@ -96,14 +91,13 @@ Maximum 8 problèmes. Priorise les problèmes de haute gravité.`
       issues = [
         {
           severity: 'low',
-          chapter: 'global',
-          message: 'Analyse terminée mais format de réponse inattendu.',
-          suggestion: 'Relancez la vérification de cohérence.',
+          sectionTitle: 'global',
+          message: 'Analyse terminée mais format inattendu.',
+          suggestion: 'Relancez la vérification.',
         },
       ]
     }
 
-    // Ajouter IDs
     const issuesWithIds = issues.map((iss: any, idx: number) => ({
       id: `issue-${Date.now()}-${idx}`,
       ...iss,
@@ -119,8 +113,8 @@ Maximum 8 problèmes. Priorise les problèmes de haute gravité.`
           {
             id: 'error',
             severity: 'low',
-            chapter: 'global',
-            message: "La vérification automatique n'a pas pu aboutir.",
+            sectionTitle: 'global',
+            message: "La vérification n'a pas pu aboutir.",
             suggestion: 'Réessayez dans un instant.',
           },
         ],

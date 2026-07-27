@@ -3,42 +3,41 @@
 import * as React from 'react'
 import { useIrisStore } from '@/store/iris-store'
 import { WelcomeScreen } from '@/components/iris/welcome-screen'
-import { OnboardingWizard } from '@/components/iris/onboarding-wizard'
+import { QuickStart } from '@/components/iris/quick-start'
 import { Sidebar } from '@/components/iris/sidebar'
 import { Header } from '@/components/iris/header'
-import { Dashboard } from '@/components/iris/dashboard'
-import { ChapterWorkspace } from '@/components/iris/chapter-workspace'
+import { Workspace } from '@/components/iris/workspace'
 import { CoherenceView } from '@/components/iris/coherence-view'
 import { SoutenanceView } from '@/components/iris/soutenance-view'
 import { ExportView } from '@/components/iris/export-view'
 import { AgentsView } from '@/components/iris/agents-view'
-import { BlockedModal } from '@/components/iris/blocked-modal'
 
 export default function Home() {
-  const { view, projectInitialized } = useIrisStore()
+  const { view, projectInitialized, sections } = useIrisStore()
+  const [quickStartOpen, setQuickStartOpen] = React.useState(false)
 
-  // Welcome & onboarding are full-screen flows (no app shell)
+  // Welcome is full-screen
   if (view === 'welcome' || !projectInitialized) {
-    if (view === 'onboarding') return <OnboardingWizard />
+    if (quickStartOpen) {
+      return <QuickStart open={quickStartOpen} onOpenChange={setQuickStartOpen} />
+    }
     return <WelcomeScreen />
   }
 
-  // App shell with sidebar + header
+  // App shell
   return (
     <div className="min-h-screen flex bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
         <main className="flex-1">
-          {view === 'dashboard' && <Dashboard />}
-          {view === 'chapter' && <ChapterWorkspace />}
+          {view === 'workspace' && <Workspace />}
           {view === 'coherence' && <CoherenceView />}
           {view === 'soutenance' && <SoutenanceView />}
           {view === 'export' && <ExportView />}
           {view === 'agents' && <AgentsView />}
         </main>
       </div>
-      <BlockedModal />
     </div>
   )
 }

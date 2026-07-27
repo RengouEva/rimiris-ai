@@ -12,7 +12,6 @@ import {
   Printer,
 } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
-import { CHAPTERS } from '@/lib/iris/chapters'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,30 +26,28 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 
 export function ExportView() {
-  const { project, chapters } = useIrisStore()
+  const { project, sections } = useIrisStore()
   const [exporting, setExporting] = React.useState<string | null>(null)
   const [previewOpen, setPreviewOpen] = React.useState(false)
 
-  const totalWords = Object.values(chapters).reduce((sum, c) => sum + c.wordCount, 0)
-  const draftedCount = Object.values(chapters).filter((c) => c.wordCount > 100).length
+  const totalWords = sections.reduce((sum, s) => sum + s.wordCount, 0)
+  const draftedCount = sections.filter((s) => s.wordCount > 100).length
 
   function exportFormat(format: 'docx' | 'pdf' | 'odt') {
     setExporting(format)
     setTimeout(() => {
-      // Generate a downloadable file (text-based fallback for demo)
       let content = `${project.title || 'Mémoire sans titre'}\n`
       content += `${project.university || ''} - ${project.faculty || ''}\n`
       content += `${project.level || ''} · ${project.filiere || ''}\n`
       content += `Norme : ${project.norme || 'APA'}\n`
       content += `\n${'='.repeat(60)}\n\n`
 
-      for (const chapter of CHAPTERS) {
-        const c = chapters[chapter.id]
-        if (c.content.trim()) {
-          content += `\n${chapter.order}. ${chapter.title.toUpperCase()}\n\n`
-          content += `${c.content}\n\n`
+      sections.forEach((s, idx) => {
+        if (s.content.trim()) {
+          content += `\n${idx + 1}. ${s.title.toUpperCase()}\n\n`
+          content += `${s.content}\n\n`
         }
-      }
+      })
 
       const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
       const url = URL.createObjectURL(blob)
@@ -78,8 +75,7 @@ export function ExportView() {
   ]
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Header */}
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       <div>
         <div className="flex items-center gap-2 mb-1">
           <Download className="h-5 w-5 text-primary" />
@@ -91,17 +87,15 @@ export function ExportView() {
         </p>
       </div>
 
-      {/* Stats */}
       <Card>
         <CardContent className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Stat label="Mots rédigés" value={totalWords} />
-          <Stat label="Chapitres rédigés" value={`${draftedCount}/${CHAPTERS.length}`} />
+          <Stat label="Sections rédigées" value={`${draftedCount}/${sections.length}`} />
           <Stat label="Niveau" value={project.level || '—'} />
           <Stat label="Norme" value={project.norme || 'APA'} />
         </CardContent>
       </Card>
 
-      {/* Export formats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {formats.map((f) => {
           const Icon = f.icon
@@ -126,7 +120,7 @@ export function ExportView() {
                 <p className="text-xs text-muted-foreground mb-3">{f.desc}</p>
                 <Button
                   onClick={() => exportFormat(f.id)}
-                  disabled={exporting === f.id}
+                  disabled={exporting === f.id || draftedCount === 0}
                   className="w-full"
                   size="sm"
                 >
@@ -148,7 +142,6 @@ export function ExportView() {
         })}
       </div>
 
-      {/* Preview */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -173,7 +166,7 @@ export function ExportView() {
                     <DialogTitle>{project.title || 'Mémoire sans titre'}</DialogTitle>
                   </DialogHeader>
                   <ScrollArea className="h-[75vh] px-6 py-4">
-                    <PreviewContent project={project} chapters={chapters} />
+                    <PreviewContent project={project} sections={sections} />
                   </ScrollArea>
                 </DialogContent>
               </Dialog>
@@ -182,37 +175,42 @@ export function ExportView() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {CHAPTERS.map((c) => {
-              const ch = chapters[c.id]
-              const hasContent = ch.content.trim().length > 0
-              return (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between p-3 rounded-lg border border-border bg-card"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-semibold ${
-                        hasContent
-                          ? 'bg-emerald-500/15 text-emerald-600'
-                          : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      {hasContent ? <CheckCircle2 className="h-4 w-4" /> : c.order}
+            {sections.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                Aucune section pour le moment.
+              </p>
+            ) : (
+              sections.map((s, idx) => {
+                const hasContent = s.content.trim().length > 0
+                return (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between p-3 rounded-lg border border-border bg-card"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-semibold ${
+                          hasContent
+                            ? 'bg-emerald-500/15 text-emerald-600'
+                            : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {hasContent ? <CheckCircle2 className="h-4 w-4" /> : idx + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{s.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {s.wordCount > 0 ? `${s.wordCount} mots` : 'Vide'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{c.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {ch.wordCount > 0 ? `${ch.wordCount} mots` : 'Vide'}
-                      </p>
-                    </div>
+                    <Badge variant={hasContent ? 'default' : 'outline'} className="ml-2">
+                      {hasContent ? 'Prêt' : 'Vide'}
+                    </Badge>
                   </div>
-                  <Badge variant={hasContent ? 'default' : 'outline'} className="ml-2">
-                    {hasContent ? 'Prêt' : 'Vide'}
-                  </Badge>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
         </CardContent>
       </Card>
@@ -229,7 +227,7 @@ function Stat({ label, value }: { label: string; value: any }) {
   )
 }
 
-function PreviewContent({ project, chapters }: { project: any; chapters: any }) {
+function PreviewContent({ project, sections }: { project: any; sections: any[] }) {
   return (
     <div className="prose prose-sm max-w-none">
       <div className="text-center mb-8 pb-6 border-b">
@@ -245,15 +243,14 @@ function PreviewContent({ project, chapters }: { project: any; chapters: any }) 
         </p>
       </div>
 
-      {CHAPTERS.map((c) => {
-        const ch = chapters[c.id]
-        if (!ch.content.trim()) return null
+      {sections.map((s, idx) => {
+        if (!s.content.trim()) return null
         return (
-          <div key={c.id} className="mb-6">
+          <div key={s.id} className="mb-6">
             <h2 className="text-lg font-bold mb-2">
-              {c.order}. {c.title}
+              {idx + 1}. {s.title}
             </h2>
-            <div className="text-sm whitespace-pre-wrap leading-relaxed">{ch.content}</div>
+            <div className="text-sm whitespace-pre-wrap leading-relaxed">{s.content}</div>
           </div>
         )
       })}

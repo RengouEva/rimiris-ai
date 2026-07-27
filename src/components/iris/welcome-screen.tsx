@@ -5,36 +5,43 @@ import { motion } from 'framer-motion'
 import {
   GraduationCap,
   Sparkles,
-  BookOpen,
-  Target,
-  Lightbulb,
-  ShieldCheck,
   ArrowRight,
-  Brain,
-  MessagesSquare,
-  FileText,
+  PenLine,
+  Library,
+  ShieldCheck,
   Presentation,
+  Lightbulb,
+  Layers,
+  Bot,
+  FileText,
 } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from './theme-toggle'
+import { QuickStart } from './quick-start'
 
 export function WelcomeScreen() {
-  const setView = useIrisStore((s) => s.setView)
-  const projectInitialized = useIrisStore((s) => s.projectInitialized)
+  const { setView, projectInitialized, project } = useIrisStore()
+  const [quickStartOpen, setQuickStartOpen] = React.useState(false)
+
+  function handleStart() {
+    if (projectInitialized) {
+      setView('workspace')
+    } else {
+      setQuickStartOpen(true)
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden">
-      {/* Background decoration */}
+      {/* Background */}
       <div className="absolute inset-0 -z-10 pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-primary/15 blur-3xl" />
         <div className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full bg-accent/20 blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-primary/5 blur-3xl" />
       </div>
 
-      {/* Header */}
       <header className="border-b border-border/40 backdrop-blur-sm bg-background/60 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl iris-gradient flex items-center justify-center iris-glow">
               <GraduationCap className="h-5 w-5 text-white" />
@@ -48,12 +55,12 @@ export function WelcomeScreen() {
             <ThemeToggle />
             {projectInitialized && (
               <Button
-                onClick={() => setView('dashboard')}
+                onClick={() => setView('workspace')}
                 variant="outline"
                 size="sm"
                 className="rounded-full"
               >
-                Reprendre mon mémoire
+                Reprendre
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             )}
@@ -61,77 +68,63 @@ export function WelcomeScreen() {
         </div>
       </header>
 
-      {/* Hero */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-12 sm:py-20">
+      <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-12 sm:py-20">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center mb-16"
+          className="text-center mb-12"
         >
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary text-xs font-medium mb-6">
             <Sparkles className="h-3.5 w-3.5" />
             Votre directeur de mémoire virtuel
           </div>
-          <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold tracking-tight mb-6">
-            De l'idée de recherche
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-5">
+            Écrivez votre mémoire.
             <br />
-            <span className="iris-gradient-text">jusqu'à la soutenance.</span>
+            <span className="iris-gradient-text">Pas à ma place, avec moi.</span>
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed">
-            IRIS Thesis AI vous accompagne à chaque étape de votre mémoire : choix du sujet,
-            problématique, méthodologie, rédaction, vérification de cohérence et préparation à la
-            soutenance. Vous ne serez jamais bloqué.
+            IRIS vous laisse créer votre propre structure. Pas de chapitres imposés.
+            Écrivez comme vous pensez, demandez de l'aide quand vous bloquez.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
             <Button
               size="lg"
-              onClick={() => setView('onboarding')}
-              className="rounded-full px-8 h-12 text-base iris-gradient text-white hover:opacity-90 transition-opacity"
+              onClick={handleStart}
+              className="rounded-full px-8 h-12 text-base iris-gradient text-white hover:opacity-90"
             >
-              {projectInitialized ? 'Démarrer un nouveau mémoire' : 'Commencer mon mémoire'}
+              {projectInitialized ? 'Reprendre mon mémoire' : 'Commencer à écrire'}
               <ArrowRight className="h-5 w-5 ml-2" />
             </Button>
-            {projectInitialized && (
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => setView('dashboard')}
-                className="rounded-full px-8 h-12 text-base"
-              >
-                Reprendre où j'en étais
-              </Button>
-            )}
+            <span className="text-xs text-muted-foreground">
+              {projectInitialized && project.title ? `« ${project.title} »` : 'Aucune inscription. Gratuit.'}
+            </span>
           </div>
         </motion.div>
 
-        {/* Key features */}
+        {/* Key principles */}
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-16"
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12"
         >
           {[
             {
-              icon: Brain,
-              title: '10 agents IA spécialisés',
-              desc: 'Directeur, méthodologie, rédaction, bibliographie, citations, statistiques, correction, mise en forme, soutenance, qualité.',
+              icon: PenLine,
+              title: 'Vous créez votre structure',
+              desc: "Ajoutez, renommez, réordonnez vos sections comme vous voulez. Le template académique est disponible si vous le souhaitez, mais jamais imposé.",
             },
             {
-              icon: MessagesSquare,
-              title: 'Dialogue intelligent',
-              desc: "L'IA pose les bonnes questions, propose des formulations adaptées et construit chaque chapitre AVEC vous.",
+              icon: Lightbulb,
+              title: 'Aide contextuelle sur demande',
+              desc: "Un bouton « Demander à IRIS » ou « Je suis bloqué » à portée de clic. L'IA connaît votre titre, votre niveau et ce que vous avez déjà écrit.",
             },
             {
               icon: ShieldCheck,
-              title: 'Cohérence garantie',
-              desc: "Aucune contradiction entre titre, problématique, objectifs, hypothèses, méthodologie et conclusion.",
-            },
-            {
-              icon: Presentation,
-              title: 'Soutenance préparée',
-              desc: "Résumé, plan de présentation, questions probables du jury et simulation orale générés automatiquement.",
+              title: 'Cohérence et soutenance',
+              desc: "Quand vous êtes prêt, IRIS vérifie la cohérence globale et génère votre kit de soutenance : résumé, plan, questions du jury.",
             },
           ].map((feat, idx) => (
             <motion.div
@@ -150,33 +143,30 @@ export function WelcomeScreen() {
           ))}
         </motion.div>
 
-        {/* Chapters preview */}
+        {/* How it works */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="rounded-3xl border border-border bg-card p-6 sm:p-10"
+          className="rounded-3xl border border-border bg-card p-6 sm:p-8"
         >
-          <h2 className="text-2xl sm:text-3xl font-bold text-center mb-2">
-            15 chapitres accompagnés
+          <h2 className="text-xl sm:text-2xl font-bold text-center mb-6">
+            Comment ça marche
           </h2>
-          <p className="text-center text-muted-foreground mb-8">
-            Chaque partie du mémoire a son propre expert IA
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             {[
-              { icon: Lightbulb, label: 'Sujet' },
-              { icon: BookOpen, label: 'Introduction' },
-              { icon: Target, label: 'Problématique' },
-              { icon: FileText, label: 'Méthodologie' },
-              { icon: Presentation, label: 'Soutenance' },
-            ].map((item) => (
+              { icon: FileText, label: '1. Donnez un titre', desc: 'Une seule question' },
+              { icon: Layers, label: '2. Créez vos sections', desc: 'Ou importez le template' },
+              { icon: PenLine, label: '3. Écrivez', desc: 'IRIS à côté quand besoin' },
+              { icon: Presentation, label: '4. Préparez la soutenance', desc: 'Résumé, jury, PPT' },
+            ].map((step, idx) => (
               <div
-                key={item.label}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl bg-muted/40 hover:bg-primary/5 hover:text-primary transition-colors"
+                key={idx}
+                className="flex flex-col items-center text-center gap-2 p-4 rounded-xl bg-muted/30"
               >
-                <item.icon className="h-6 w-6" />
-                <span className="text-xs font-medium">{item.label}</span>
+                <step.icon className="h-6 w-6 text-primary" />
+                <p className="text-sm font-semibold">{step.label}</p>
+                <p className="text-xs text-muted-foreground">{step.desc}</p>
               </div>
             ))}
           </div>
@@ -187,21 +177,21 @@ export function WelcomeScreen() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.7 }}
-          className="mt-12 text-center"
+          className="mt-10 text-center"
         >
           <p className="text-base text-muted-foreground italic max-w-3xl mx-auto">
             « L'IA ne fait jamais le travail à la place de l'étudiant. Elle travaille AVEC lui. »
           </p>
-          <p className="text-xs text-muted-foreground mt-2">— Philosophie IRIS Thesis AI</p>
         </motion.div>
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-border/40 py-6">
-        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-muted-foreground">
+        <div className="max-w-6xl mx-auto px-4 text-center text-xs text-muted-foreground">
           IRIS Thesis AI — Plateforme d'accompagnement à la rédaction académique
         </div>
       </footer>
+
+      <QuickStart open={quickStartOpen} onOpenChange={setQuickStartOpen} />
     </div>
   )
 }

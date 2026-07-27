@@ -15,12 +15,11 @@ import {
   ShieldCheck,
   Bot,
   Sparkles,
-  ArrowRight,
 } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { AGENTS } from '@/lib/iris/agents'
+import { CHAPTERS } from '@/lib/iris/chapters'
 import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
@@ -51,41 +50,64 @@ const COLOR_MAP: Record<string, string> = {
   red: 'from-red-500 to-rose-600',
 }
 
-export function AgentsView() {
-  const { chapters, setActiveChapter, activeAgentId, setActiveAgent } = useIrisStore()
+const CHAPTERS_MAP: Record<string, string> = Object.fromEntries(
+  CHAPTERS.map((c) => [c.id, c.shortTitle])
+)
 
+export function AgentsView() {
+  const { sections, setView, setActiveSection, setAIPanel } = useIrisStore()
+
+  // An agent is "active" if at least one section uses its templateRef
   const agentActivity = React.useMemo(() => {
     const map: Record<string, boolean> = {}
     AGENTS.forEach((a) => {
-      map[a.id] = a.triggerChapters.some((cid) => {
-        const c = chapters[cid]
-        return c && (c.status === 'in_progress' || c.status === 'draft')
+      map[a.id] = sections.some((s) => {
+        if (!s.templateRef) return false
+        const chapter = CHAPTERS.find((c) => c.id === s.templateRef)
+        return chapter && chapter.agent === a.id && (s.status === 'in_progress' || s.status === 'draft')
       })
     })
     return map
-  }, [chapters])
+  }, [sections])
+
+  function selectAgent(agentId: string) {
+    // Find a section that uses this agent
+    const agent = AGENTS.find((a) => a.id === agentId)
+    if (!agent) return
+    const matchingSection = sections.find((s) => {
+      if (!s.templateRef) return agentId === 'directeur'
+      const chapter = CHAPTERS.find((c) => c.id === s.templateRef)
+      return chapter && chapter.agent === agentId
+    })
+    if (matchingSection) {
+      setActiveSection(matchingSection.id)
+      setView('workspace')
+      setAIPanel(true)
+    } else {
+      // No matching section, go to workspace and open AI panel
+      setView('workspace')
+      setAIPanel(true)
+    }
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Header */}
       <div>
         <div className="flex items-center gap-2 mb-1">
           <Bot className="h-5 w-5 text-primary" />
           <span className="text-sm font-medium text-primary">Équipe IA</span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Vos 10 agents spécialisés</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">10 agents IA à votre service</h1>
         <p className="text-muted-foreground text-sm mt-1 max-w-2xl">
-          Chaque agent a une expertise propre et intervient au moment pertinent. Ils travaillent en
-          coordination sous la supervision du directeur de mémoire virtuel.
+          IRIS choisit automatiquement le bon agent selon votre section. Vous pouvez aussi
+          solliciter un agent spécifique via le panneau IA.
         </p>
       </div>
 
-      {/* Agents grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {AGENTS.map((agent, idx) => {
           const Icon = ICON_MAP[agent.icon] || Bot
           const active = agentActivity[agent.id]
-          const selected = activeAgentId === agent.id
 
           return (
             <motion.div
@@ -95,12 +117,8 @@ export function AgentsView() {
               transition={{ delay: idx * 0.05 }}
             >
               <Card
-                className={cn(
-                  'h-full hover:border-primary/40 transition-all cursor-pointer group',
-                  selected && 'border-primary iris-glow',
-                  active && 'border-emerald-500/30'
-                )}
-                onClick={() => setActiveAgent(selected ? null : agent.id)}
+                className="h-full hover:border-primary/40 transition-all cursor-pointer group"
+                onClick={() => selectAgent(agent.id)}
               >
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between mb-3">
@@ -128,45 +146,20 @@ export function AgentsView() {
 
                   {agent.triggerChapters.length > 0 ? (
                     <div className="flex items-center gap-1 flex-wrap">
-                      <span className="text-xs text-muted-foreground">Intervient sur :</span>
-                      {agent.triggerChapters.slice(0, 2).map((cid) => {
-                        const ch = CHAPTERS_MAP[cid]
-                        return ch ? (
-                          <span
-                            key={cid}
-                            className="text-xs px-1.5 py-0.5 rounded bg-muted text-foreground"
-                          >
-                            {ch}
-                          </span>
-                        ) : null
-                      })}
-                      {agent.triggerChapters.length > 2 && (
-                        <span className="text-xs text-muted-foreground">
-                          +{agent.triggerChapters.length - 2}
+                      <span className="text-xs text-muted-foreground">Spécialiste :</span>
+                      {agent.triggerChapters.slice(0, 3).map((cid) => (
+                        <span
+                          key={cid}
+                          className="text-xs px-1.5 py-0.5 rounded bg-muted text-foreground"
+                        >
+                          {CHAPTERS_MAP[cid] || cid}
                         </span>
-                      )}
+                      ))}
                     </div>
                   ) : (
                     <p className="text-xs text-muted-foreground italic">
                       Disponible sur demande
                     </p>
-                  )}
-
-                  {selected && (
-                    <Button
-                      size="sm"
-                      className="w-full mt-3 iris-gradient text-white"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (agent.triggerChapters[0]) {
-                          setActiveChapter(agent.triggerChapters[0])
-                        }
-                      }}
-                    >
-                      <Sparkles className="h-3.5 w-3.5 mr-1" />
-                      Travailler avec cet agent
-                      <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                    </Button>
                   )}
                 </CardContent>
               </Card>
@@ -175,38 +168,20 @@ export function AgentsView() {
         })}
       </div>
 
-      {/* Info banner */}
       <Card className="bg-muted/30">
         <CardContent className="p-5 flex items-start gap-3">
           <Sparkles className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
           <div className="text-sm">
             <p className="font-semibold mb-1">Comment ça marche ?</p>
             <p className="text-muted-foreground">
-              Lorsque vous travaillez sur un chapitre, IRIS active automatiquement l'agent le plus
-              pertinent. Vous pouvez aussi solliciter un autre agent via le mode « Je suis bloqué »
-              pour obtenir une expertise spécifique (méthodologie, statistiques, citations, etc.).
+              Quand vous écrivez dans une section importée du template académique, IRIS active
+              automatiquement l'agent correspondant (méthodologie, bibliographie, etc.). Pour les
+              sections que vous créez librement, c'est Pr. IRIS (directeur de mémoire) qui vous
+              accompagne par défaut.
             </p>
           </div>
         </CardContent>
       </Card>
     </div>
   )
-}
-
-const CHAPTERS_MAP: Record<string, string> = {
-  sujet: 'Sujet',
-  introduction: 'Introduction',
-  contexte: 'Contexte',
-  problematique: 'Problématique',
-  questions: 'Questions',
-  objectifs: 'Objectifs',
-  hypotheses: 'Hypothèses',
-  justification: 'Justification',
-  literature: 'Littérature',
-  cadre: 'Cadre théorique',
-  methodologie: 'Méthodologie',
-  resultats: 'Résultats',
-  discussion: 'Discussion',
-  conclusion: 'Conclusion',
-  recommandations: 'Recommandations',
 }

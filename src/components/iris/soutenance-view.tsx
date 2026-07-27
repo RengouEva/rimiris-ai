@@ -23,29 +23,27 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 
 export function SoutenanceView() {
-  const { soutenanceData, setSoutenanceData, project, chapters } = useIrisStore()
+  const { soutenanceData, setSoutenanceData, project, sections } = useIrisStore()
   const [loading, setLoading] = React.useState(false)
   const [tab, setTab] = React.useState('summary')
+
+  const draftedCount = sections.filter((s) => s.content.trim().length > 100).length
 
   async function generate() {
     setLoading(true)
     try {
-      const chaptersData: Record<string, { content: string }> = {}
-      Object.entries(chapters).forEach(([id, c]) => {
-        chaptersData[id] = { content: c.content }
-      })
-
+      const sectionsData = sections.map((s) => ({ title: s.title, content: s.content }))
       const res = await fetch('/api/ai/soutenance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project, chapters: chaptersData }),
+        body: JSON.stringify({ project, sections: sectionsData }),
       })
       const data = await res.json()
       if (data.data) {
         setSoutenanceData(data.data)
         toast.success('Kit de soutenance généré avec succès')
       } else {
-        toast.error("Erreur lors de la génération. Avez-vous suffisamment rédigé votre mémoire ?")
+        toast.error("Avez-vous suffisamment rédigé votre mémoire ?")
       }
     } catch {
       toast.error('Erreur réseau')
@@ -63,9 +61,9 @@ export function SoutenanceView() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">Préparation à la soutenance</h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            Quand votre mémoire est prêt, IRIS génère automatiquement : un résumé structuré, un plan
-            de présentation PowerPoint, les questions probables du jury avec réponses suggérées, et
-            les points faibles à renforcer.
+            Quand votre mémoire est prêt, IRIS génère automatiquement : un résumé, un plan de
+            présentation, les questions probables du jury avec réponses suggérées, et les points
+            faibles à renforcer.
           </p>
         </div>
 
@@ -93,25 +91,28 @@ export function SoutenanceView() {
 
             <Button
               onClick={generate}
-              disabled={loading}
+              disabled={loading || draftedCount === 0}
               className="w-full mt-6 iris-gradient text-white rounded-xl h-12"
             >
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Génération du kit de soutenance...
+                  Génération...
                 </>
               ) : (
                 <>
                   <Sparkles className="h-4 w-4 mr-2" />
-                  Générer mon kit de soutenance
+                  {draftedCount === 0
+                    ? 'Rédigez au moins une section pour commencer'
+                    : 'Générer mon kit de soutenance'}
                 </>
               )}
             </Button>
-            <p className="text-xs text-muted-foreground text-center mt-3">
-              Pour un résultat optimal, ayez rédigé au moins quelques chapitres clés (problématique,
-              méthodologie, résultats, conclusion).
-            </p>
+            {draftedCount > 0 && (
+              <p className="text-xs text-muted-foreground text-center mt-3">
+                Basé sur {draftedCount} section{draftedCount > 1 ? 's' : ''} rédigée{draftedCount > 1 ? 's' : ''}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -121,8 +122,7 @@ export function SoutenanceView() {
   const data = soutenanceData
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Header */}
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -134,12 +134,7 @@ export function SoutenanceView() {
             {project.title || 'Mémoire sans titre'} · {project.level || 'Master'}
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={generate}
-          disabled={loading}
-          className="rounded-full"
-        >
+        <Button variant="outline" onClick={generate} disabled={loading} className="rounded-full">
           {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
           Régénérer
         </Button>
@@ -165,7 +160,6 @@ export function SoutenanceView() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Summary */}
         <TabsContent value="summary">
           <Card>
             <CardHeader>
@@ -193,7 +187,6 @@ export function SoutenanceView() {
           </Card>
         </TabsContent>
 
-        {/* Slides */}
         <TabsContent value="slides">
           <div className="space-y-3">
             {data.presentationOutline?.map((slide, idx) => (
@@ -228,7 +221,6 @@ export function SoutenanceView() {
           </div>
         </TabsContent>
 
-        {/* Jury questions */}
         <TabsContent value="questions">
           <div className="space-y-3">
             {data.juryQuestions?.map((q, idx) => (
@@ -276,7 +268,6 @@ export function SoutenanceView() {
           </div>
         </TabsContent>
 
-        {/* Weak points */}
         <TabsContent value="weak">
           <Card className="border-amber-500/30">
             <CardHeader>
@@ -303,8 +294,7 @@ export function SoutenanceView() {
               <div className="mt-4 pt-4 border-t flex items-start gap-2">
                 <Lightbulb className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-muted-foreground">
-                  Pour chaque point faible, retournez dans le chapitre concerné et demandez à l'agent
-                  IRIS de vous aider à le renforcer avant la soutenance.
+                  Retournez dans votre mémoire et demandez à IRIS de vous aider à renforcer ces points.
                 </p>
               </div>
             </CardContent>
@@ -312,7 +302,6 @@ export function SoutenanceView() {
         </TabsContent>
       </Tabs>
 
-      {/* Simulation banner */}
       <Card className="bg-primary/5 border-primary/20">
         <CardContent className="p-6 flex items-center gap-4 flex-wrap">
           <div className="w-12 h-12 rounded-xl bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0">

@@ -1,10 +1,10 @@
-// Store global IRIS Thesis AI
-// Gère : projet, chapitres, messages, progression, cohérence
-// Persistance : localStorage (sauvegarde automatique)
+// Store global IRIS Thesis AI — V2
+// L'étudiant crée SA propre structure de mémoire.
+// Le template académique (15 chapitres) est une suggestion optionnelle.
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { CHAPTERS, type ChapterStatus } from '@/lib/iris/chapters'
+import { CHAPTERS } from '@/lib/iris/chapters'
 
 export interface ChatMessage {
   id: string
@@ -14,13 +14,18 @@ export interface ChatMessage {
   timestamp: number
 }
 
-export interface Chapter {
+export type SectionStatus = 'not_started' | 'in_progress' | 'draft' | 'completed'
+
+export interface Section {
   id: string
-  status: ChapterStatus
-  content: string // texte rédigé pour ce chapitre
+  title: string
+  content: string
   messages: ChatMessage[]
   wordCount: number
   lastEdited: number | null
+  status: SectionStatus
+  // If imported from a chapter template, keep the reference (for AI context)
+  templateRef?: string
 }
 
 export interface ProjectInfo {
@@ -35,23 +40,15 @@ export interface ProjectInfo {
   entreprise: string
   directeur: string
   norme: 'APA' | 'Vancouver' | 'IEEE' | 'ISO 690' | 'Harvard' | ''
-  title: string // titre du mémoire
+  title: string
 }
 
-export type ViewMode =
-  | 'welcome'
-  | 'onboarding'
-  | 'dashboard'
-  | 'chapter'
-  | 'coherence'
-  | 'soutenance'
-  | 'export'
-  | 'agents'
+export type ViewMode = 'welcome' | 'workspace' | 'coherence' | 'soutenance' | 'export' | 'agents'
 
 export interface CoherenceIssue {
   id: string
   severity: 'high' | 'medium' | 'low'
-  chapter: string
+  sectionTitle: string
   message: string
   suggestion: string
 }
@@ -59,15 +56,14 @@ export interface CoherenceIssue {
 interface IrisState {
   // Navigation
   view: ViewMode
-  activeChapterId: string | null
-  activeAgentId: string | null
+  activeSectionId: string | null
 
   // Projet
   project: ProjectInfo
   projectInitialized: boolean
 
-  // Chapitres
-  chapters: Record<string, Chapter>
+  // Sections libres (créées par l'étudiant)
+  sections: Section[]
 
   // Cohérence
   coherenceIssues: CoherenceIssue[]
@@ -82,41 +78,36 @@ interface IrisState {
   } | null
 
   // UI
-  blockedModalOpen: boolean
+  aiPanelOpen: boolean
+  blockedMode: boolean
   sidebarCollapsed: boolean
 
-  // Actions
+  // Actions — Navigation
   setView: (view: ViewMode) => void
-  setActiveChapter: (id: string | null) => void
-  setActiveAgent: (id: string | null) => void
-  updateProject: (data: Partial<ProjectInfo>) => void
-  completeOnboarding: () => void
-  resetProject: () => void
-
-  addMessage: (chapterId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>) => void
-  updateChapterContent: (chapterId: string, content: string) => void
-  setChapterStatus: (chapterId: string, status: ChapterStatus) => void
-
-  setBlockedModal: (open: boolean) => void
+  setActiveSection: (id: string | null) => void
+  setAIPanel: (open: boolean) => void
+  setBlockedMode: (on: boolean) => void
   toggleSidebar: () => void
 
+  // Actions — Project
+  updateProject: (data: Partial<ProjectInfo>) => void
+  completeQuickStart: (title: string, level?: ProjectInfo['level']) => void
+  resetProject: () => void
+
+  // Actions — Sections
+  addSection: (title?: string, templateRef?: string) => string
+  renameSection: (id: string, title: string) => void
+  deleteSection: (id: string) => void
+  duplicateSection: (id: string) => void
+  moveSection: (id: string, direction: 'up' | 'down') => void
+  updateSectionContent: (id: string, content: string) => void
+  setSectionStatus: (id: string, status: SectionStatus) => void
+  addMessage: (sectionId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>) => void
+  importTemplate: () => void
+
+  // Actions — Coherence & Soutenance
   setCoherenceIssues: (issues: CoherenceIssue[]) => void
   setSoutenanceData: (data: IrisState['soutenanceData']) => void
-}
-
-function buildInitialChapters(): Record<string, Chapter> {
-  const map: Record<string, Chapter> = {}
-  for (const c of CHAPTERS) {
-    map[c.id] = {
-      id: c.id,
-      status: 'not_started',
-      content: '',
-      messages: [],
-      wordCount: 0,
-      lastEdited: null,
-    }
-  }
-  return map
 }
 
 const defaultProject: ProjectInfo = {
@@ -134,104 +125,216 @@ const defaultProject: ProjectInfo = {
   title: '',
 }
 
+function makeId() {
+  return `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 export const useIrisStore = create<IrisState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       view: 'welcome',
-      activeChapterId: null,
-      activeAgentId: null,
+      activeSectionId: null,
 
       project: defaultProject,
       projectInitialized: false,
 
-      chapters: buildInitialChapters(),
+      sections: [],
 
       coherenceIssues: [],
       lastCoherenceCheck: null,
 
       soutenanceData: null,
 
-      blockedModalOpen: false,
+      aiPanelOpen: false,
+      blockedMode: false,
       sidebarCollapsed: false,
 
       setView: (view) => set({ view }),
-      setActiveChapter: (id) => set({ activeChapterId: id, view: id ? 'chapter' : 'dashboard' }),
-      setActiveAgent: (id) => set({ activeAgentId: id }),
+      setActiveSection: (id) => set({ activeSectionId: id }),
+      setAIPanel: (open) => set({ aiPanelOpen: open }),
+      setBlockedMode: (on) => set({ blockedMode: on, aiPanelOpen: on ? true : get().aiPanelOpen }),
+      toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
       updateProject: (data) =>
         set((state) => ({ project: { ...state.project, ...data } })),
 
-      completeOnboarding: () => set({ projectInitialized: true, view: 'dashboard' }),
+      completeQuickStart: (title, level) =>
+        set((state) => ({
+          project: {
+            ...state.project,
+            title: title.trim(),
+            level: level || state.project.level || 'Master',
+            theme: state.project.theme || title.trim(),
+          },
+          projectInitialized: true,
+          view: 'workspace',
+          // Create a first empty section so the student can start writing immediately
+          sections:
+            state.sections.length === 0
+              ? [
+                  {
+                    id: makeId(),
+                    title: 'Introduction',
+                    content: '',
+                    messages: [],
+                    wordCount: 0,
+                    lastEdited: null,
+                    status: 'not_started',
+                  },
+                ]
+              : state.sections,
+          activeSectionId:
+            state.activeSectionId || (state.sections.length === 0 ? null : state.sections[0]?.id),
+        })),
 
       resetProject: () =>
         set({
           view: 'welcome',
           project: defaultProject,
           projectInitialized: false,
-          chapters: buildInitialChapters(),
+          sections: [],
           coherenceIssues: [],
           lastCoherenceCheck: null,
           soutenanceData: null,
-          activeChapterId: null,
-          activeAgentId: null,
+          activeSectionId: null,
+          aiPanelOpen: false,
+          blockedMode: false,
         }),
 
-      addMessage: (chapterId, message) =>
-        set((state) => {
-          const chapter = state.chapters[chapterId]
-          if (!chapter) return state
-          const newMessage: ChatMessage = {
-            ...message,
-            id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            timestamp: Date.now(),
-          }
-          const updatedChapter: Chapter = {
-            ...chapter,
-            messages: [...chapter.messages, newMessage],
-            lastEdited: Date.now(),
-            status: chapter.status === 'not_started' ? 'in_progress' : chapter.status,
-          }
-          return {
-            chapters: { ...state.chapters, [chapterId]: updatedChapter },
-          }
-        }),
-
-      updateChapterContent: (chapterId, content) =>
-        set((state) => {
-          const chapter = state.chapters[chapterId]
-          if (!chapter) return state
-          const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0
-          const newStatus: ChapterStatus =
-            content.trim().length > 100
-              ? chapter.status === 'not_started' || chapter.status === 'in_progress'
-                ? 'draft'
-                : chapter.status
-              : chapter.status
-          return {
-            chapters: {
-              ...state.chapters,
-              [chapterId]: {
-                ...chapter,
-                content,
-                wordCount,
-                lastEdited: Date.now(),
-                status: newStatus,
-              },
+      addSection: (title, templateRef) => {
+        const id = makeId()
+        set((state) => ({
+          sections: [
+            ...state.sections,
+            {
+              id,
+              title: title?.trim() || 'Nouvelle section',
+              content: '',
+              messages: [],
+              wordCount: 0,
+              lastEdited: null,
+              status: 'not_started',
+              templateRef,
             },
-          }
-        }),
+          ],
+          activeSectionId: id,
+        }))
+        return id
+      },
 
-      setChapterStatus: (chapterId, status) =>
+      renameSection: (id, title) =>
+        set((state) => ({
+          sections: state.sections.map((s) => (s.id === id ? { ...s, title } : s)),
+        })),
+
+      deleteSection: (id) =>
         set((state) => {
-          const chapter = state.chapters[chapterId]
-          if (!chapter) return state
+          const newSections = state.sections.filter((s) => s.id !== id)
           return {
-            chapters: { ...state.chapters, [chapterId]: { ...chapter, status } },
+            sections: newSections,
+            activeSectionId:
+              state.activeSectionId === id ? newSections[0]?.id || null : state.activeSectionId,
           }
         }),
 
-      setBlockedModal: (open) => set({ blockedModalOpen: open }),
-      toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      duplicateSection: (id) =>
+        set((state) => {
+          const src = state.sections.find((s) => s.id === id)
+          if (!src) return state
+          const newId = makeId()
+          const copy: Section = {
+            ...src,
+            id: newId,
+            title: `${src.title} (copie)`,
+            messages: [],
+            lastEdited: null,
+          }
+          const idx = state.sections.findIndex((s) => s.id === id)
+          const newSections = [...state.sections]
+          newSections.splice(idx + 1, 0, copy)
+          return { sections: newSections, activeSectionId: newId }
+        }),
+
+      moveSection: (id, direction) =>
+        set((state) => {
+          const idx = state.sections.findIndex((s) => s.id === id)
+          if (idx === -1) return state
+          const newIdx = direction === 'up' ? idx - 1 : idx + 1
+          if (newIdx < 0 || newIdx >= state.sections.length) return state
+          const newSections = [...state.sections]
+          const [moved] = newSections.splice(idx, 1)
+          newSections.splice(newIdx, 0, moved)
+          return { sections: newSections }
+        }),
+
+      updateSectionContent: (id, content) =>
+        set((state) => ({
+          sections: state.sections.map((s) => {
+            if (s.id !== id) return s
+            const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0
+            const newStatus: SectionStatus =
+              content.trim().length > 100
+                ? s.status === 'not_started' || s.status === 'in_progress'
+                  ? 'draft'
+                  : s.status
+                : s.status
+            return {
+              ...s,
+              content,
+              wordCount,
+              lastEdited: Date.now(),
+              status: newStatus,
+            }
+          }),
+        })),
+
+      setSectionStatus: (id, status) =>
+        set((state) => ({
+          sections: state.sections.map((s) => (s.id === id ? { ...s, status } : s)),
+        })),
+
+      addMessage: (sectionId, message) =>
+        set((state) => ({
+          sections: state.sections.map((s) => {
+            if (s.id !== sectionId) return s
+            const newMessage: ChatMessage = {
+              ...message,
+              id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              timestamp: Date.now(),
+            }
+            return {
+              ...s,
+              messages: [...s.messages, newMessage],
+              lastEdited: Date.now(),
+              status: s.status === 'not_started' ? 'in_progress' : s.status,
+            }
+          }),
+        })),
+
+      importTemplate: () =>
+        set((state) => {
+          // Merge template chapters into existing sections (skip duplicates by templateRef)
+          const existingRefs = new Set(
+            state.sections.map((s) => s.templateRef).filter(Boolean) as string[]
+          )
+          const newSections: Section[] = CHAPTERS.filter((c) => !existingRefs.has(c.id)).map(
+            (c) => ({
+              id: makeId(),
+              title: c.title,
+              content: '',
+              messages: [],
+              wordCount: 0,
+              lastEdited: null,
+              status: 'not_started' as SectionStatus,
+              templateRef: c.id,
+            })
+          )
+          const allSections = [...state.sections, ...newSections]
+          return {
+            sections: allSections,
+            activeSectionId: state.activeSectionId || allSections[0]?.id || null,
+          }
+        }),
 
       setCoherenceIssues: (issues) =>
         set({ coherenceIssues: issues, lastCoherenceCheck: Date.now() }),
@@ -239,65 +342,46 @@ export const useIrisStore = create<IrisState>()(
       setSoutenanceData: (data) => set({ soutenanceData: data }),
     }),
     {
-      name: 'iris-thesis-ai',
+      name: 'iris-thesis-ai-v2',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         project: state.project,
         projectInitialized: state.projectInitialized,
-        chapters: state.chapters,
+        sections: state.sections,
         coherenceIssues: state.coherenceIssues,
         lastCoherenceCheck: state.lastCoherenceCheck,
         soutenanceData: state.soutenanceData,
       }),
+      // Migrate from v1 if present
+      version: 2,
+      migrate: (persisted: any, version: number) => {
+        if (!persisted) return persisted
+        if (version < 2 && persisted.chapters) {
+          // Convert old chapters to sections
+          const sections: Section[] = Object.values(persisted.chapters).map((c: any) => ({
+            id: makeId(),
+            title:
+              CHAPTERS.find((ch) => ch.id === c.id)?.title || 'Section importée',
+            content: c.content || '',
+            messages: c.messages || [],
+            wordCount: c.wordCount || 0,
+            lastEdited: c.lastEdited || null,
+            status: c.status || 'not_started',
+            templateRef: c.id,
+          }))
+          return { ...persisted, sections, chapters: undefined }
+        }
+        return persisted
+      },
     }
   )
 )
 
-// Selecteurs utilitaires
-export function selectProgress(state: IrisState) {
-  const chapters = Object.values(state.chapters)
-  const total = chapters.length
-  const completed = chapters.filter((c) => c.status === 'completed' || c.status === 'validated').length
-  const inProgress = chapters.filter((c) => c.status === 'in_progress' || c.status === 'draft').length
-  return {
-    total,
-    completed,
-    inProgress,
-    notStarted: total - completed - inProgress,
-    percent: Math.round((completed / total) * 100),
-  }
+// Helpers
+export function selectTotalWords(state: IrisState) {
+  return state.sections.reduce((sum, s) => sum + s.wordCount, 0)
 }
 
-export function selectQualityScores(state: IrisState) {
-  const chapters = Object.values(state.chapters)
-  const totalWords = chapters.reduce((sum, c) => sum + c.wordCount, 0)
-  const draftedCount = chapters.filter((c) => c.wordCount > 100).length
-  const validatedCount = chapters.filter((c) => c.status === 'validated').length
-  const highSeverityIssues = state.coherenceIssues.filter((i) => i.severity === 'high').length
-
-  // Scores (0-100)
-  const progression = Math.round((draftedCount / chapters.length) * 100)
-  const redaction = Math.min(100, Math.round(totalWords / 50)) // 5000 mots = 100
-  const methodologique = Math.min(
-    100,
-    Math.round(
-      ((state.chapters['methodologie']?.wordCount || 0) / 30) +
-        ((state.chapters['cadre']?.wordCount || 0) / 30) +
-        ((state.chapters['hypotheses']?.wordCount || 0) / 30)
-    )
-  )
-  const coherence = Math.max(0, 100 - highSeverityIssues * 20)
-  const global = Math.round(
-    (progression + redaction + methodologique + coherence) / 4
-  )
-
-  return {
-    progression,
-    redaction,
-    methodologique,
-    coherence,
-    global,
-    totalWords,
-    validatedCount,
-  }
+export function selectCompletedCount(state: IrisState) {
+  return state.sections.filter((s) => s.status === 'completed').length
 }

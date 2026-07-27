@@ -12,7 +12,6 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useIrisStore, type CoherenceIssue } from '@/store/iris-store'
-import { CHAPTERS } from '@/lib/iris/chapters'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,22 +19,18 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
 export function CoherenceView() {
-  const { coherenceIssues, lastCoherenceCheck, setCoherenceIssues, project, chapters, setActiveChapter } =
+  const { coherenceIssues, lastCoherenceCheck, setCoherenceIssues, project, sections, setActiveSection, setView } =
     useIrisStore()
   const [loading, setLoading] = React.useState(false)
 
   async function runCheck() {
     setLoading(true)
     try {
-      const chaptersData: Record<string, { content: string; status: string }> = {}
-      Object.entries(chapters).forEach(([id, c]) => {
-        chaptersData[id] = { content: c.content, status: c.status }
-      })
-
+      const sectionsData = sections.map((s) => ({ title: s.title, content: s.content }))
       const res = await fetch('/api/ai/coherence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project, chapters: chaptersData }),
+        body: JSON.stringify({ project, sections: sectionsData }),
       })
       const data = await res.json()
       setCoherenceIssues(data.issues || [])
@@ -52,8 +47,7 @@ export function CoherenceView() {
   const lowCount = coherenceIssues.filter((i) => i.severity === 'low').length
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Header */}
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -62,28 +56,36 @@ export function CoherenceView() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold">Cohérence globale</h1>
           <p className="text-muted-foreground text-sm mt-1 max-w-2xl">
-            IRIS vérifie que votre titre, problématique, objectifs, hypothèses, méthodologie,
-            résultats et conclusion sont parfaitement alignés.
+            IRIS vérifie que toutes vos sections s'enchaînent logiquement et qu'il n'y a pas de
+            contradiction entre vos objectifs, votre méthodologie et vos conclusions.
           </p>
         </div>
         <Button
           onClick={runCheck}
-          disabled={loading}
+          disabled={loading || sections.filter((s) => s.content.trim().length > 100).length === 0}
           className="rounded-full iris-gradient text-white"
         >
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Analyse en cours...
+              Analyse...
             </>
           ) : (
             <>
               <RefreshCw className="h-4 w-4 mr-2" />
-              Lancer la vérification
+              Vérifier
             </>
           )}
         </Button>
       </div>
+
+      {sections.filter((s) => s.content.trim().length > 100).length === 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardContent className="p-4 text-sm text-amber-700 dark:text-amber-300">
+            Rédigez au moins une section (plus de 100 mots) avant de lancer la vérification.
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
@@ -116,14 +118,12 @@ export function CoherenceView() {
         </Card>
       </div>
 
-      {/* Last check */}
       {lastCoherenceCheck && (
         <p className="text-xs text-muted-foreground text-center">
           Dernière vérification : {new Date(lastCoherenceCheck).toLocaleString('fr-FR')}
         </p>
       )}
 
-      {/* Issues list */}
       {coherenceIssues.length === 0 ? (
         <Card className="border-emerald-500/30 bg-emerald-500/5">
           <CardContent className="p-8 text-center">
@@ -131,7 +131,7 @@ export function CoherenceView() {
             <h3 className="font-semibold text-lg mb-1">Tout est cohérent !</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
               {lastCoherenceCheck
-                ? "Aucune incohérence détectée lors de la dernière analyse. Continuez votre rédaction en toute confiance."
+                ? "Aucune incohérence détectée. Continuez votre rédaction en toute confiance."
                 : "Lancez la vérification pour analyser la cohérence de votre mémoire."}
             </p>
           </CardContent>
@@ -139,12 +139,23 @@ export function CoherenceView() {
       ) : (
         <div className="space-y-3">
           {coherenceIssues.map((issue, idx) => (
-            <IssueCard key={issue.id || idx} issue={issue} onGoToChapter={setActiveChapter} />
+            <IssueCard
+              key={issue.id || idx}
+              issue={issue}
+              onGoToSection={() => {
+                const target = sections.find(
+                  (s) => s.title.toLowerCase() === issue.sectionTitle.toLowerCase()
+                )
+                if (target) {
+                  setActiveSection(target.id)
+                  setView('workspace')
+                }
+              }}
+            />
           ))}
         </div>
       )}
 
-      {/* Coherence checklist info */}
       <Card className="bg-muted/30">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -154,14 +165,14 @@ export function CoherenceView() {
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           {[
-            "Le titre reflète la problématique",
-            "La problématique est cohérente avec les questions de recherche",
+            "Le titre reflète le contenu global",
+            "Une problématique claire est identifiable",
             "Les objectifs sont alignés avec la problématique",
-            "Les hypothèses répondent aux questions",
-            "La méthodologie permet de tester les hypothèses",
-            "Les résultats répondent aux questions de recherche",
+            "La méthodologie permet de répondre aux questions",
+            "Les résultats répondent aux questions posées",
             "La conclusion apporte une réponse explicite",
-            "Aucune contradiction interne entre chapitres",
+            "Aucune contradiction entre sections",
+            "Progression logique d'une section à l'autre",
           ].map((item, idx) => (
             <div key={idx} className="flex items-start gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
@@ -176,10 +187,10 @@ export function CoherenceView() {
 
 function IssueCard({
   issue,
-  onGoToChapter,
+  onGoToSection,
 }: {
   issue: CoherenceIssue
-  onGoToChapter: (id: string) => void
+  onGoToSection: () => void
 }) {
   const config = {
     high: { color: 'red', label: 'Grave', border: 'border-red-500/30 bg-red-500/5' },
@@ -187,7 +198,6 @@ function IssueCard({
     low: { color: 'blue', label: 'Mineur', border: 'border-blue-500/30 bg-blue-500/5' },
   }
   const c = config[issue.severity]
-  const chapterDef = CHAPTERS.find((ch) => ch.id === issue.chapter)
 
   return (
     <motion.div
@@ -208,20 +218,15 @@ function IssueCard({
           >
             {c.label}
           </Badge>
-          {chapterDef && (
+          {issue.sectionTitle && issue.sectionTitle !== 'global' && (
             <Badge variant="secondary" className="text-xs">
-              {chapterDef.shortTitle}
+              {issue.sectionTitle}
             </Badge>
           )}
         </div>
-        {chapterDef && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => onGoToChapter(chapterDef.id)}
-            className="text-xs"
-          >
-            Aller au chapitre
+        {issue.sectionTitle && issue.sectionTitle !== 'global' && (
+          <Button size="sm" variant="ghost" onClick={onGoToSection} className="text-xs">
+            Aller à la section
             <ArrowRight className="h-3 w-3 ml-1" />
           </Button>
         )}

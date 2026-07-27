@@ -1,27 +1,36 @@
 'use client'
 
 import * as React from 'react'
-import { GraduationCap, Menu, HelpCircle } from 'lucide-react'
+import { GraduationCap, Menu, HelpCircle, Sparkles, Moon, Sun, ChevronLeft } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ThemeToggle } from './theme-toggle'
 import {
   Sheet,
   SheetContent,
   SheetTrigger,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { Sidebar } from './sidebar'
-import { CHAPTERS } from '@/lib/iris/chapters'
+import { ThemeToggle } from './theme-toggle'
+import { useTheme } from 'next-themes'
+import { NAV_ITEMS } from './sidebar'
 
 export function Header() {
-  const { project, setBlockedModal, view, setActiveChapter, setView, chapters } = useIrisStore()
+  const {
+    project,
+    sections,
+    setBlockedMode,
+    setAIPanel,
+    view,
+    setView,
+  } = useIrisStore()
   const [mobileOpen, setMobileOpen] = React.useState(false)
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
+  React.useEffect(() => setMounted(true), [])
 
-  const completed = Object.values(chapters).filter(
-    (c) => c.status === 'completed' || c.status === 'validated'
-  ).length
+  const totalWords = sections.reduce((sum, s) => sum + s.wordCount, 0)
+  const completed = sections.filter((s) => s.status === 'completed').length
 
   return (
     <header className="h-14 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-20">
@@ -36,7 +45,7 @@ export function Header() {
             </SheetTrigger>
             <SheetContent side="left" className="p-0 w-64">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <Sidebar />
+              <MobileNav onNavigate={() => setMobileOpen(false)} />
             </SheetContent>
           </Sheet>
           <div className="flex items-center gap-2">
@@ -47,33 +56,101 @@ export function Header() {
           </div>
         </div>
 
-        {/* Project title */}
+        {/* Project title (center on desktop) */}
         <div className="hidden lg:flex flex-col min-w-0 flex-1">
           <p className="text-xs text-muted-foreground leading-none">
-            {project.level || 'Mémoire'} · {project.filiere || 'Filière non précisée'}
+            {project.level || 'Mémoire'}{project.filiere ? ` · ${project.filiere}` : ''}
           </p>
-          <p className="text-sm font-semibold truncate leading-tight mt-0.5">
-            {project.title || project.theme || 'Mémoire sans titre'}
-          </p>
+          <button
+            onClick={() => setView('workspace')}
+            className="text-sm font-semibold truncate leading-tight mt-0.5 hover:text-primary transition-colors text-left"
+          >
+            {project.title || 'Mémoire sans titre'}
+          </button>
+        </div>
+
+        {/* Stats */}
+        <div className="hidden md:flex items-center gap-3 text-xs text-muted-foreground">
+          <span>{sections.length} sections</span>
+          <span>·</span>
+          <span>{totalWords} mots</span>
+          {completed > 0 && (
+            <>
+              <span>·</span>
+              <span className="text-emerald-500">{completed} terminées</span>
+            </>
+          )}
         </div>
 
         {/* Right actions */}
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="hidden sm:inline-flex">
-            {completed}/{CHAPTERS.length} chapitres
-          </Badge>
-          <Button
-            onClick={() => setBlockedModal(true)}
-            className="bg-amber-500 hover:bg-amber-600 text-white rounded-full"
-            size="sm"
-          >
-            <HelpCircle className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Je suis bloqué</span>
-            <span className="sm:hidden">Bloqué</span>
-          </Button>
+        <div className="flex items-center gap-1.5">
+          {view !== 'workspace' && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setView('workspace')}
+              className="rounded-full"
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">Mémoire</span>
+            </Button>
+          )}
+          {view === 'workspace' && (
+            <>
+              <Button
+                onClick={() => {
+                  setBlockedMode(true)
+                  setAIPanel(true)
+                }}
+                size="sm"
+                variant="outline"
+                className="rounded-full border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+              >
+                <HelpCircle className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1">Bloqué</span>
+              </Button>
+              <Button
+                onClick={() => setAIPanel(true)}
+                size="sm"
+                className="rounded-full iris-gradient text-white"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1">IRIS</span>
+              </Button>
+            </>
+          )}
           <ThemeToggle />
         </div>
       </div>
     </header>
+  )
+}
+
+function MobileNav({ onNavigate }: { onNavigate: () => void }) {
+  const { view, setView } = useIrisStore()
+  return (
+    <div className="p-3 space-y-1">
+      {NAV_ITEMS.map((item) => {
+        const Icon = item.icon
+        const active = view === item.id
+        return (
+          <button
+            key={item.id}
+            onClick={() => {
+              setView(item.id)
+              onNavigate()
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              active
+                ? 'bg-primary text-primary-foreground'
+                : 'hover:bg-muted'
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {item.label}
+          </button>
+        )
+      })}
+    </div>
   )
 }
