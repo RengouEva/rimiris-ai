@@ -3,7 +3,8 @@
 import * as React from 'react'
 import { useIrisStore } from '@/store/iris-store'
 import { WelcomeScreen } from '@/components/iris/welcome-screen'
-import { QuickStart } from '@/components/iris/quick-start'
+import { OnboardingInterview } from '@/components/iris/onboarding-interview'
+import { PlanReview } from '@/components/iris/plan-review'
 import { Sidebar } from '@/components/iris/sidebar'
 import { Header } from '@/components/iris/header'
 import { Workspace } from '@/components/iris/workspace'
@@ -14,17 +15,19 @@ import { AgentsView } from '@/components/iris/agents-view'
 
 export default function Home() {
   const { view, projectInitialized, sections } = useIrisStore()
-  const [quickStartOpen, setQuickStartOpen] = React.useState(false)
 
-  // Welcome is full-screen
-  if (view === 'welcome' || !projectInitialized) {
-    if (quickStartOpen) {
-      return <QuickStart open={quickStartOpen} onOpenChange={setQuickStartOpen} />
-    }
+  // Full-screen views (no app shell)
+  if (view === 'welcome' || (!projectInitialized && view !== 'interview' && view !== 'plan_review')) {
     return <WelcomeScreen />
   }
+  if (view === 'interview') {
+    return <OnboardingInterview />
+  }
+  if (view === 'plan_review') {
+    return <PlanReview />
+  }
 
-  // App shell
+  // App shell (workspace + nav views)
   return (
     <div className="min-h-screen flex bg-background">
       <Sidebar />

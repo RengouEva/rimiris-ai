@@ -14,22 +14,28 @@ import {
   Layers,
   Bot,
   FileText,
+  MessageCircle,
 } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from './theme-toggle'
-import { QuickStart } from './quick-start'
 
 export function WelcomeScreen() {
-  const { setView, projectInitialized, project } = useIrisStore()
-  const [quickStartOpen, setQuickStartOpen] = React.useState(false)
+  const { setView, projectInitialized, project, sections, interviewAnswers } = useIrisStore()
 
   function handleStart() {
-    if (projectInitialized) {
+    // If the student already has a project set up, jump straight to the workspace.
+    if (projectInitialized && sections.length > 0) {
       setView('workspace')
-    } else {
-      setQuickStartOpen(true)
+      return
     }
+    // If they started the interview but never finished, resume it.
+    if (interviewAnswers.length > 0) {
+      setView('interview')
+      return
+    }
+    // Otherwise, start the guided interview.
+    setView('interview')
   }
 
   return (
@@ -80,13 +86,14 @@ export function WelcomeScreen() {
             Votre directeur de mémoire virtuel
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-5">
-            Écrivez votre mémoire.
+            IRIS vous pose les bonnes questions.
             <br />
-            <span className="iris-gradient-text">Pas à ma place, avec moi.</span>
+            <span className="iris-gradient-text">Vous rédigez votre mémoire.</span>
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed">
-            IRIS vous laisse créer votre propre structure. Pas de chapitres imposés.
-            Écrivez comme vous pensez, demandez de l'aide quand vous bloquez.
+            Pas de page blanche. IRIS vous guide par un entretien court,
+            propose un plan structuré, puis rédige chaque section avec vous — déjà mise en forme.
+            Vous gardez le contrôle à chaque étape.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
             <Button
@@ -94,12 +101,69 @@ export function WelcomeScreen() {
               onClick={handleStart}
               className="rounded-full px-8 h-12 text-base iris-gradient text-white hover:opacity-90"
             >
-              {projectInitialized ? 'Reprendre mon mémoire' : 'Commencer à écrire'}
+              <MessageCircle className="h-5 w-5 mr-2" />
+              {projectInitialized
+                ? 'Reprendre mon mémoire'
+                : interviewAnswers.length > 0
+                ? 'Reprendre l\'entretien'
+                : 'Démarrer l\'entretien avec IRIS'}
               <ArrowRight className="h-5 w-5 ml-2" />
             </Button>
             <span className="text-xs text-muted-foreground">
-              {projectInitialized && project.title ? `« ${project.title} »` : 'Aucune inscription. Gratuit.'}
+              {projectInitialized && project.title
+                ? `« ${project.title} »`
+                : '5 questions · 3 minutes · sans inscription'}
             </span>
+          </div>
+        </motion.div>
+
+        {/* Workflow visualisation */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="rounded-3xl border border-border bg-card p-6 sm:p-8 mb-12"
+        >
+          <h2 className="text-xl sm:text-2xl font-bold text-center mb-6">
+            Comment ça marche
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            {[
+              {
+                icon: MessageCircle,
+                label: '1. Entretien',
+                desc: 'IRIS vous pose 5 questions sur votre sujet',
+              },
+              {
+                icon: Layers,
+                label: '2. Plan proposé',
+                desc: 'IRIS suggère un plan, vous le modifiez librement',
+              },
+              {
+                icon: PenLine,
+                label: '3. Rédaction guidée',
+                desc: 'Section par section, IRIS rédige avec vous',
+              },
+              {
+                icon: Presentation,
+                label: '4. Soutenance',
+                desc: 'Résumé, plan oral, questions du jury',
+              },
+            ].map((step, idx) => (
+              <div
+                key={idx}
+                className="relative flex flex-col items-center text-center gap-2 p-4 rounded-xl bg-muted/30"
+              >
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <step.icon className="h-5 w-5" />
+                </div>
+                <p className="text-sm font-semibold">{step.label}</p>
+                <p className="text-xs text-muted-foreground">{step.desc}</p>
+                {idx < 3 && (
+                  <ArrowRight className="hidden sm:block absolute -right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
+                )}
+              </div>
+            ))}
           </div>
         </motion.div>
 
@@ -107,19 +171,19 @@ export function WelcomeScreen() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
           className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12"
         >
           {[
             {
-              icon: PenLine,
-              title: 'Vous créez votre structure',
-              desc: "Ajoutez, renommez, réordonnez vos sections comme vous voulez. Le template académique est disponible si vous le souhaitez, mais jamais imposé.",
+              icon: MessageCircle,
+              title: 'IRIS vous interviewe',
+              desc: "Plus de page blanche. IRIS pose les questions, vous répondez, et le plan se construit naturellement. Pas besoin de savoir par où commencer.",
             },
             {
-              icon: Lightbulb,
-              title: 'Aide contextuelle sur demande',
-              desc: "Un bouton « Demander à IRIS » ou « Je suis bloqué » à portée de clic. L'IA connaît votre titre, votre niveau et ce que vous avez déjà écrit.",
+              icon: PenLine,
+              title: 'Rédaction section par section',
+              desc: "Pour chaque section, IRIS rédige un brouillon déjà formaté aux normes académiques. Vous l'éditez directement dans l'éditeur A4.",
             },
             {
               icon: ShieldCheck,
@@ -131,7 +195,7 @@ export function WelcomeScreen() {
               key={feat.title}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 + idx * 0.1 }}
+              transition={{ delay: 0.5 + idx * 0.1 }}
               className="group p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-lg transition-all"
             >
               <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -141,35 +205,6 @@ export function WelcomeScreen() {
               <p className="text-sm text-muted-foreground leading-relaxed">{feat.desc}</p>
             </motion.div>
           ))}
-        </motion.div>
-
-        {/* How it works */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="rounded-3xl border border-border bg-card p-6 sm:p-8"
-        >
-          <h2 className="text-xl sm:text-2xl font-bold text-center mb-6">
-            Comment ça marche
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            {[
-              { icon: FileText, label: '1. Donnez un titre', desc: 'Une seule question' },
-              { icon: Layers, label: '2. Créez vos sections', desc: 'Ou importez le template' },
-              { icon: PenLine, label: '3. Écrivez', desc: 'IRIS à côté quand besoin' },
-              { icon: Presentation, label: '4. Préparez la soutenance', desc: 'Résumé, jury, PPT' },
-            ].map((step, idx) => (
-              <div
-                key={idx}
-                className="flex flex-col items-center text-center gap-2 p-4 rounded-xl bg-muted/30"
-              >
-                <step.icon className="h-6 w-6 text-primary" />
-                <p className="text-sm font-semibold">{step.label}</p>
-                <p className="text-xs text-muted-foreground">{step.desc}</p>
-              </div>
-            ))}
-          </div>
         </motion.div>
 
         {/* Philosophy */}
@@ -190,8 +225,6 @@ export function WelcomeScreen() {
           IRIS Thesis AI — Plateforme d'accompagnement à la rédaction académique
         </div>
       </footer>
-
-      <QuickStart open={quickStartOpen} onOpenChange={setQuickStartOpen} />
     </div>
   )
 }

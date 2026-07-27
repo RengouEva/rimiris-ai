@@ -14,6 +14,12 @@ export interface ChatMessage {
   timestamp: number
 }
 
+export interface InterviewAnswer {
+  questionId: string
+  question: string
+  answer: string
+}
+
 export type SectionStatus = 'not_started' | 'in_progress' | 'draft' | 'completed'
 
 export interface Section {
@@ -43,7 +49,15 @@ export interface ProjectInfo {
   title: string
 }
 
-export type ViewMode = 'welcome' | 'workspace' | 'coherence' | 'soutenance' | 'export' | 'agents'
+export type ViewMode =
+  | 'welcome'
+  | 'interview'
+  | 'plan_review'
+  | 'workspace'
+  | 'coherence'
+  | 'soutenance'
+  | 'export'
+  | 'agents'
 
 export interface CoherenceIssue {
   id: string
@@ -61,6 +75,10 @@ interface IrisState {
   // Projet
   project: ProjectInfo
   projectInitialized: boolean
+
+  // Onboarding interview
+  interviewAnswers: InterviewAnswer[]
+  proposedPlan: { title: string; description: string }[]
 
   // Sections libres (créées par l'étudiant)
   sections: Section[]
@@ -93,6 +111,11 @@ interface IrisState {
   updateProject: (data: Partial<ProjectInfo>) => void
   completeQuickStart: (title: string, level?: ProjectInfo['level']) => void
   resetProject: () => void
+
+  // Actions — Interview
+  addInterviewAnswer: (answer: InterviewAnswer) => void
+  setProposedPlan: (plan: { title: string; description: string }[]) => void
+  acceptPlanAndCreateSections: () => void
 
   // Actions — Sections
   addSection: (title?: string, templateRef?: string) => string
@@ -138,6 +161,9 @@ export const useIrisStore = create<IrisState>()(
       project: defaultProject,
       projectInitialized: false,
 
+      interviewAnswers: [],
+      proposedPlan: [],
+
       sections: [],
 
       coherenceIssues: [],
@@ -168,7 +194,6 @@ export const useIrisStore = create<IrisState>()(
           },
           projectInitialized: true,
           view: 'workspace',
-          // Create a first empty section so the student can start writing immediately
           sections:
             state.sections.length === 0
               ? [
@@ -192,6 +217,8 @@ export const useIrisStore = create<IrisState>()(
           view: 'welcome',
           project: defaultProject,
           projectInitialized: false,
+          interviewAnswers: [],
+          proposedPlan: [],
           sections: [],
           coherenceIssues: [],
           lastCoherenceCheck: null,
@@ -199,6 +226,50 @@ export const useIrisStore = create<IrisState>()(
           activeSectionId: null,
           aiPanelOpen: false,
           blockedMode: false,
+        }),
+
+      addInterviewAnswer: (answer) =>
+        set((state) => ({ interviewAnswers: [...state.interviewAnswers, answer] })),
+
+      setProposedPlan: (plan) => set({ proposedPlan: plan }),
+
+      acceptPlanAndCreateSections: () =>
+        set((state) => {
+          const plan = state.proposedPlan.length
+            ? state.proposedPlan
+            : [
+                { title: 'Introduction générale', description: 'Présentation du sujet.' },
+                { title: 'Conclusion générale', description: 'Synthèse.' },
+              ]
+          // Sync project info from interview answers
+          const answers = state.interviewAnswers
+          const answerMap: Record<string, string> = {}
+          for (const a of answers) answerMap[a.questionId] = a.answer
+          const level = (answerMap['level'] || state.project.level || 'Master') as ProjectInfo['level']
+          const updatedProject: ProjectInfo = {
+            ...state.project,
+            title: answerMap['topic'] || state.project.title,
+            level,
+            filiere: answerMap['field'] || state.project.filiere,
+            theme: answerMap['topic'] || state.project.theme,
+            entreprise: answerMap['terrain'] || state.project.entreprise,
+          }
+          const newSections: Section[] = plan.map((p) => ({
+            id: makeId(),
+            title: p.title,
+            content: '',
+            messages: [],
+            wordCount: 0,
+            lastEdited: null,
+            status: 'not_started',
+          }))
+          return {
+            project: updatedProject,
+            projectInitialized: true,
+            sections: state.sections.length > 0 ? state.sections : newSections,
+            activeSectionId: state.sections.length > 0 ? state.activeSectionId : newSections[0]?.id || null,
+            view: 'workspace',
+          }
         }),
 
       addSection: (title, templateRef) => {
@@ -353,6 +424,8 @@ export const useIrisStore = create<IrisState>()(
       partialize: (state) => ({
         project: state.project,
         projectInitialized: state.projectInitialized,
+        interviewAnswers: state.interviewAnswers,
+        proposedPlan: state.proposedPlan,
         sections: state.sections,
         coherenceIssues: state.coherenceIssues,
         lastCoherenceCheck: state.lastCoherenceCheck,

@@ -383,6 +383,8 @@ function EditorView({
 }) {
   const [showAIHint, setShowAIHint] = React.useState(false)
 
+  const isEmpty = section.wordCount === 0
+
   // Show AI hint after some writing
   React.useEffect(() => {
     if (section.wordCount > 50 && section.wordCount < 200 && !section.messages.length) {
@@ -443,6 +445,54 @@ function EditorView({
           </Button>
         </div>
       </div>
+
+      {/* Empty section CTA — IRIS rédige */}
+      <AnimatePresence>
+        {isEmpty && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="border-b border-border bg-gradient-to-r from-primary/5 via-accent/5 to-primary/5 px-6 py-6">
+              <div className="max-w-2xl mx-auto text-center space-y-3">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-background/80 text-primary text-xs font-medium">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Section vide
+                </div>
+                <h3 className="text-lg sm:text-xl font-bold">
+                  IRIS peut rédiger cette section avec vous
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Cliquez pour lancer la rédaction. IRIS pose une question ciblée pour
+                  clarifier votre intention, puis produit un brouillon structuré et déjà
+                  formaté aux normes académiques. Vous l'éditerez ensuite librement.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 justify-center pt-1">
+                  <Button
+                    size="lg"
+                    onClick={onOpenAI}
+                    className="rounded-full iris-gradient text-white"
+                  >
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    IRIS rédige cette section
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="ghost"
+                    onClick={onOpenBlocked}
+                    className="rounded-full text-muted-foreground"
+                  >
+                    <HelpCircle className="h-4 w-4 mr-1.5" />
+                    Je préfère écrire moi-même
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* A4 Editor — the white page */}
       <A4Editor
