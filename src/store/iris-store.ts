@@ -117,9 +117,62 @@ export type ViewMode =
   | 'plan_review'
   | 'workspace'
   | 'audit'
+  | 'coherence'
   | 'soutenance'
+  | 'simulation'
+  | 'plagiarism'
   | 'export'
   | 'agents'
+
+// ============================================================================
+// Simulation de soutenance — Types
+// ============================================================================
+
+export type JuryRole = 'Président' | 'Rapporteur' | 'Directeur' | 'Examinateur'
+
+export interface SimulationMessage {
+  id: string
+  role: 'jury' | 'student' | 'system'
+  juryRole?: JuryRole // present when role === 'jury'
+  content: string
+  timestamp: number
+  // Optional inline feedback the jury gives after a student answer (short note
+  // before moving on). Stays empty for the initial question.
+  feedback?: string
+}
+
+export interface SimulationDebriefCriterion {
+  criterion: string // e.g. "Clarté de l'expression"
+  score: number // 0-100
+  notes: string
+}
+
+export interface SimulationDebrief {
+  criteria: SimulationDebriefCriterion[]
+  globalScore: number
+  strengths: string[]
+  weaknesses: string[]
+  recommendations: string[]
+  generatedAt: number
+}
+
+export interface PlagiarismFlag {
+  id: string
+  type: 'internal_redundancy' | 'boilerplate' | 'short_section' | 'unsupported_claim'
+  severity: 'high' | 'medium' | 'low'
+  message: string
+  sectionA: string
+  sectionB?: string
+  excerpt?: string
+  suggestion: string
+}
+
+export interface PlagiarismReport {
+  flags: PlagiarismFlag[]
+  globalSimilarity: number // 0-100 (internal)
+  checkedAt: number
+  sectionsChecked: number
+}
 
 export interface CoherenceIssue {
   id: string
@@ -190,6 +243,15 @@ interface IrisState {
     weakPoints: string[]
   } | null
 
+  // Simulation de soutenance (chat temps réel où l'IA joue le jury)
+  simulationMessages: SimulationMessage[]
+  simulationDebrief?: SimulationDebrief
+  simulationActive: boolean // true while a session is in progress
+  simulationStartedAt?: number
+
+  // Anti-plagiat (pré-vérification interne avant audit)
+  plagiarismReport?: PlagiarismReport
+
   // UI
   aiPanelOpen: boolean
   blockedMode: boolean
@@ -238,6 +300,15 @@ interface IrisState {
   // Actions — Coherence & Soutenance
   setCoherenceIssues: (issues: CoherenceIssue[]) => void
   setSoutenanceData: (data: IrisState['soutenanceData']) => void
+
+  // Actions — Simulation
+  addSimulationMessage: (m: Omit<SimulationMessage, 'id' | 'timestamp'>) => string
+  clearSimulation: () => void
+  setSimulationActive: (active: boolean) => void
+  setSimulationDebrief: (d: SimulationDebrief) => void
+
+  // Actions — Plagiarism
+  setPlagiarismReport: (r: PlagiarismReport) => void
 }
 
 // ============================================================================
@@ -290,6 +361,13 @@ export const useIrisStore = create<IrisState>()(
 
       soutenanceData: null,
 
+      simulationMessages: [],
+      simulationDebrief: undefined,
+      simulationActive: false,
+      simulationStartedAt: undefined,
+
+      plagiarismReport: undefined,
+
       aiPanelOpen: false,
       blockedMode: false,
       sidebarCollapsed: false,
@@ -320,6 +398,11 @@ export const useIrisStore = create<IrisState>()(
           lastCoherenceCheck: null,
           auditReport: undefined,
           soutenanceData: null,
+          simulationMessages: [],
+          simulationDebrief: undefined,
+          simulationActive: false,
+          simulationStartedAt: undefined,
+          plagiarismReport: undefined,
           activeSectionId: null,
           aiPanelOpen: false,
           blockedMode: false,
@@ -532,6 +615,32 @@ export const useIrisStore = create<IrisState>()(
         set({ coherenceIssues: issues, lastCoherenceCheck: Date.now() }),
 
       setSoutenanceData: (data) => set({ soutenanceData: data }),
+
+      // ---- Simulation ----
+      addSimulationMessage: (m) => {
+        const id = `sim-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        const msg: SimulationMessage = { ...m, id, timestamp: Date.now() }
+        set((state) => ({
+          simulationMessages: [...state.simulationMessages, msg],
+          simulationStartedAt: state.simulationStartedAt ?? Date.now(),
+        }))
+        return id
+      },
+
+      clearSimulation: () =>
+        set({
+          simulationMessages: [],
+          simulationDebrief: undefined,
+          simulationActive: false,
+          simulationStartedAt: undefined,
+        }),
+
+      setSimulationActive: (active) => set({ simulationActive: active }),
+
+      setSimulationDebrief: (d) => set({ simulationDebrief: d, simulationActive: false }),
+
+      // ---- Plagiarism ----
+      setPlagiarismReport: (r) => set({ plagiarismReport: r }),
     }),
     {
       name: 'iris-thesis-ai-v3',
@@ -548,8 +657,11 @@ export const useIrisStore = create<IrisState>()(
         lastCoherenceCheck: state.lastCoherenceCheck,
         auditReport: state.auditReport,
         soutenanceData: state.soutenanceData,
+        simulationMessages: state.simulationMessages,
+        simulationDebrief: state.simulationDebrief,
+        plagiarismReport: state.plagiarismReport,
       }),
-      version: 4,
+      version: 5,
       migrate: (persisted: any, version: number) => {
         if (!persisted) return persisted
         // v2 → v3 : re-init interviewAnswers on sections
@@ -567,6 +679,14 @@ export const useIrisStore = create<IrisState>()(
             guideText: persisted.project.guideText || '',
             guideUploadedAt: persisted.project.guideUploadedAt || undefined,
           }
+        }
+        // v4 → v5 : add simulation + plagiarism state (no migration needed,
+        // they default to undefined/[] via the store initial values; just ensure
+        // the arrays exist if older persisted state was loaded directly).
+        if (version < 5) {
+          persisted.simulationMessages = persisted.simulationMessages || []
+          if (!('plagiarismReport' in persisted)) persisted.plagiarismReport = undefined
+          if (!('simulationDebrief' in persisted)) persisted.simulationDebrief = undefined
         }
         return persisted
       },

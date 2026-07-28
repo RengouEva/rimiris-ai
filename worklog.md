@@ -67,3 +67,66 @@ Stage Summary:
 - The "IRIS rédige toutes les sections vides" feature is the biggest UX win — a student who completed Phases 0-2 can now produce a 2,790-word structured first draft of their entire mémoire in under 3 minutes, while staying consistent with the methodology (the drafts respect the selected hypothesis, the project context, and the university guide).
 - The PDF guide upload makes IRIS adapt to each university's specific requirements (structure, citation norms, problematic formulation) — this was a critical gap.
 - The soutenance role classification helps students prepare for the different question styles each jury member typically asks.
+
+---
+Task ID: 2
+Agent: main (Super Z)
+Task: Implement 3 next-step features — (1) Interactive defense simulation (real-time chat with AI jury), (2) Anti-plagiarism pre-check (internal redundancy + boilerplate + unsupported claims), (3) Roadmap card for collaborative director↔student mode.
+
+Work Log:
+- Read existing soutenance-view.tsx to locate the "Bientôt disponible" placeholder button.
+- Read iris-store.ts (v4), page.tsx, sidebar.tsx, prompt-context.ts, agents-view.tsx, chat/route.ts, soutenance/route.ts to understand existing patterns (ZAI usage, project context injection, jury role classification).
+
+## Feature 1 — Interactive Defense Simulation (real-time chat with AI jury)
+- Extended `iris-store.ts` with:
+  - New `ViewMode`: `'simulation'` and `'plagiarism'`
+  - New types: `JuryRole`, `SimulationMessage`, `SimulationDebrief`, `SimulationDebriefCriterion`, `PlagiarismFlag`, `PlagiarismReport`
+  - New state: `simulationMessages`, `simulationDebrief`, `simulationActive`, `simulationStartedAt`, `plagiarismReport`
+  - New actions: `addSimulationMessage`, `clearSimulation`, `setSimulationActive`, `setSimulationDebrief`, `setPlagiarismReport`
+  - Persistence version bump v4 → v5 with migration that backfills empty arrays/undefined for older persisted state.
+- Created `src/app/api/ai/simulation/route.ts` — multi-turn jury role-play with 3 actions:
+  - `start`: Président opens the session, introduces jury, asks opening question.
+  - `next`: Given student answer + history, returns `{reply, juryRole, feedback, debriefReady}`. Uses 4 distinct jury briefs (Président/Rapporteur/Directeur/Examinateur) with role-appropriate questioning style. Forces role transition when student clicks "Passer à". Auto-triggers `debriefReady` after 10 jury turns.
+  - `debrief`: Comprehensive evaluation on 5 criteria (Clarté de l'expression, Maîtrise du sujet, Rigueur méthodologique, Esprit critique, Qualité des réponses) + 3 strengths + 2 weaknesses + 3 recommendations.
+- Created `src/components/iris/simulation-view.tsx` — full-screen chat UI with:
+  - Empty state with 4-role jury cards + start button.
+  - Active chat with role-colored bubbles (violet Président / cyan Rapporteur / emerald Directeur / amber Examinateur), inline italic feedback, role switcher chips ("Passer à :"), Enter-to-send textarea, loading states.
+  - Debrief screen with global score banner, 5 criterion score bars (color-coded by score), strengths/weaknesses cards, recommendations list.
+- Wired in `page.tsx` (renders `<SimulationView />` when `view === 'simulation'`) and replaced the "Bientôt disponible" button in `soutenance-view.tsx` with a real "Lancer la simulation" CTA.
+- Added "Simulation" entry to sidebar NAV_ITEMS.
+
+## Feature 2 — Anti-plagiarism pre-check (internal, before audit)
+- Created `src/app/api/ai/plagiarism/route.ts` with 4 detection layers:
+  1. **Internal redundancy**: pairwise Jaccard similarity on word-shingles (k=3). Flags pairs ≥ 25% with severity scaled by score. Extracts the longest shared shingle as evidence.
+  2. **Boilerplate phrases**: regex detection of 14 French academic clichés ("De nos jours", "Il convient de noter que", "Force est de constater que", etc.).
+  3. **Short sections**: flags sections < 80 words as under-developed.
+  4. **Unsupported claims** (AI-powered): ZAI call asks the model to find "De nombreuses études montrent que…"-style claims without sources. Best-effort — falls back gracefully on AI failure.
+  - Computes `globalSimilarity` as weighted blend (60% avg pairwise + 40% max pairwise), capped to 100.
+  - Sorts flags by severity (high → medium → low).
+- Created `src/components/iris/plagiarism-view.tsx` — report UI with:
+  - Empty state explaining the 4 detection types + disclaimer that this is INTERNAL (doesn't replace Turnitin).
+  - Loading spinner.
+  - Report view: global similarity banner (color-coded), 4-type breakdown grid, animated flag cards (each with severity badge, type badge, section reference, excerpt block, recommendation), empty-state CTA to audit when no flags.
+- Added "Anti-plagiat" entry to sidebar NAV_ITEMS.
+
+## Feature 3 — Collaborative director↔student mode (roadmap card)
+- Added a "Sur la roadmap" section at the bottom of `agents-view.tsx` with a dashed-border card describing the collaborative mode:
+  - 3 sub-features listed: share link, in-line annotations, phase validation.
+  - "En conception" badge + clear note that this needs cloud sync backend.
+
+## End-to-end smoke tests
+- POST /api/ai/simulation (action=start) with a real project payload (Master thesis on télétravail) → 200 OK, Président introduced the jury, contextualized the topic, asked a clear opening question. Reply was 110 words, well-formed.
+- POST /api/ai/plagiarism with two intentionally redundant 28-word sections → 200 OK, detected:
+  - 56% internal redundancy between sections (with the exact shingle excerpt quoted)
+  - 2 short-section flags (28 + 29 words)
+  - 4 boilerplate flags ("De nos jours", "Il convient de noter que" ×2, "de nombreuses études montrent que" — would also trigger AI unsupported_claim if sections were longer)
+- GET / → 200 OK, homepage renders cleanly with all 8 nav items.
+- POST /api/ai/simulation (action=unknown) → 400 (expected error path).
+
+Stage Summary:
+- 3 features shipped, all backend-verified.
+- New files: `src/app/api/ai/simulation/route.ts`, `src/app/api/ai/plagiarism/route.ts`, `src/components/iris/simulation-view.tsx`, `src/components/iris/plagiarism-view.tsx`.
+- Modified files: `src/store/iris-store.ts` (v4→v5 + simulation/plagiarism state + actions), `src/app/page.tsx` (renders new views), `src/components/iris/soutenance-view.tsx` (replaced "Bientôt disponible" with real CTA), `src/components/iris/sidebar.tsx` (2 new nav entries), `src/components/iris/agents-view.tsx` (roadmap card for collab mode).
+- The simulation is the headline feature: students can now practice their defense against a 4-role AI jury, get real-time feedback on each answer, and receive a scored debrief at the end. Combined with the existing soutenance kit (jury questions + slides + weak points), this closes the loop from "I wrote my thesis" → "I'm ready to defend it".
+- The plagiarism pre-check fills the gap between "drafting is done" and "audit final" — students catch internal redundancy and boilerplate before the audit judges them.
+- The collaborative mode is acknowledged but parked — it needs a real backend (auth + realtime sync), which is a separate architectural decision the user should make explicitly.

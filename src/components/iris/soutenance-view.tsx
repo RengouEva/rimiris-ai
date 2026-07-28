@@ -37,7 +37,7 @@ const ROLE_COLORS: Record<string, string> = {
 const ROLE_DEFAULT = 'bg-muted text-muted-foreground border-border'
 
 export function SoutenanceView() {
-  const { soutenanceData, setSoutenanceData, project, sections } = useIrisStore()
+  const { soutenanceData, setSoutenanceData, project, sections, setView } = useIrisStore() as any
   const [loading, setLoading] = React.useState(false)
   const [tab, setTab] = React.useState('summary')
   const [roleFilter, setRoleFilter] = React.useState<JuryRole | 'all'>('all')
@@ -437,16 +437,20 @@ export function SoutenanceView() {
             <Award className="h-6 w-6" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold">Simulation de soutenance</h3>
+            <h3 className="font-semibold">Simulation de soutenance interactive</h3>
             <p className="text-sm text-muted-foreground">
-              Entraînez-vous avec un jury IA qui posera des questions en temps réel.
+              Entraînez-vous avec un jury IA qui posera des questions en temps réel. À la fin, le
+              jury délibère et vous attribue une note sur 5 critères.
             </p>
           </div>
           <Button
-            variant="outline"
-            onClick={() => toast.info("Simulation disponible bientôt. Utilisez les questions ci-dessus pour vous préparer.")}
+            onClick={() => setView('simulation')}
+            disabled={draftedCount === 0}
+            className="iris-gradient text-white rounded-xl"
+            title={draftedCount === 0 ? 'Rédigez au moins une section pour lancer la simulation' : 'Lancer la simulation de soutenance'}
           >
-            Bientôt disponible
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Lancer la simulation
           </Button>
         </CardContent>
       </Card>

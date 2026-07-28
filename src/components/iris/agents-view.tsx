@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Bot,
   Sparkles,
+  Users,
 } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { AGENTS } from '@/lib/iris/agents'
@@ -182,6 +183,52 @@ export function AgentsView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Roadmap — coming soon */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-lg font-bold">Sur la roadmap</h2>
+          <Badge variant="outline" className="text-xs text-muted-foreground">Bientôt</Badge>
+        </div>
+        <Card className="border-dashed border-primary/30 bg-primary/5">
+          <CardContent className="p-5">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
+                <Users className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <h3 className="font-semibold">Mode collaboratif directeur ↔ étudiant</h3>
+                  <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/30">
+                    En conception
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Partagez votre projet IRIS avec votre véritable directeur de mémoire. Il pourra
+                  laisser des annotations paragraphe par paragraphe, valider ou invalider les
+                  phases du workflow, et co-rédiger les commentaires méthodologiques.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
+              {[
+                { title: 'Lien de partage', desc: 'Générez un lien sécurisé à envoyer à votre directeur' },
+                { title: 'Annotations in-line', desc: 'Commentaires paragraphe par paragraphe, comme Google Docs' },
+                { title: 'Validation des phases', desc: 'Le directeur valide ou demande des révisions sur chaque phase' },
+              ].map((item) => (
+                <div key={item.title} className="p-2.5 rounded-lg border border-border bg-background">
+                  <p className="text-xs font-medium mb-0.5">{item.title}</p>
+                  <p className="text-[11px] text-muted-foreground leading-snug">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-4 italic">
+              Cette fonctionnalité nécessite une synchronisation cloud (backend temps réel). Elle
+              sera déployée dans une prochaine version d'IRIS Thesis AI.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

@@ -9,12 +9,14 @@ import { Header } from '@/components/iris/header'
 import { Workspace } from '@/components/iris/workspace'
 import { CoherenceView } from '@/components/iris/coherence-view'
 import { SoutenanceView } from '@/components/iris/soutenance-view'
+import { SimulationView } from '@/components/iris/simulation-view'
+import { PlagiarismView } from '@/components/iris/plagiarism-view'
 import { ExportView } from '@/components/iris/export-view'
 import { AgentsView } from '@/components/iris/agents-view'
 import { AuditView } from '@/components/iris/audit-view'
 
 export default function Home() {
-  const { view, projectInitialized, sections } = useIrisStore()
+  const { view, projectInitialized } = useIrisStore()
 
   // Full-screen views (no app shell)
   if (view === 'welcome' || (!projectInitialized && view !== 'onboarding')) {
@@ -35,6 +37,8 @@ export default function Home() {
           {view === 'audit' && <AuditView />}
           {view === 'coherence' && <CoherenceView />}
           {view === 'soutenance' && <SoutenanceView />}
+          {view === 'simulation' && <SimulationView />}
+          {view === 'plagiarism' && <PlagiarismView />}
           {view === 'export' && <ExportView />}
           {view === 'agents' && <AgentsView />}
         </main>
