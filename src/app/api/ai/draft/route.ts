@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 import { AGENTS } from '@/lib/iris/agents'
+import { buildGuideContext, buildProjectContext } from '@/lib/iris/prompt-context'
 
 export const runtime = 'nodejs'
 export const maxDuration = 90
@@ -23,6 +24,8 @@ interface DraftRequestBody {
     directeur?: string
     norme?: string
     title?: string
+    guideFileName?: string
+    guideText?: string
   }
   allSections?: { title: string; content: string }[]
   // NEW: structured interview answers collected during Phase 3
@@ -70,15 +73,8 @@ export async function POST(req: NextRequest) {
       agent = AGENTS.find((a) => a.id === agentId) || agent
     }
 
-    const projectContext = `
-CONTEXTE DU PROJET :
-- Titre : ${project.title || 'à définir'}
-- Niveau : ${project.level || 'Master'}
-- Filière : ${project.filiere || 'non précisée'}
-- Université : ${project.university || 'non précisée'} (${project.country || 'pays non précisé'})
-- Norme de citation : ${project.norme || 'APA'}
-- Terrain : ${project.entreprise || 'non précisé'}
-`.trim()
+    const projectContext = buildProjectContext(project)
+    const guideContext = buildGuideContext(project)
 
     const understandingContext = themeUnderstanding
       ? `\nCOMPRÉHENSION DU THÈME (Phase 1) :\n- Concepts : ${(themeUnderstanding.concepts || []).join(', ')}\n- Domaine : ${themeUnderstanding.domain || 'non précisé'}\n- Résumé : ${themeUnderstanding.summary || ''}`
@@ -124,6 +120,7 @@ ${sectionContent?.trim() ? sectionContent.trim().slice(0, 2500) : '(vide)'}
     const systemPrompt = `Tu es ${agent.name}, ${agent.role}. ${agent.systemPrompt}
 
 ${projectContext}
+${guideContext ? '\n' + guideContext : ''}
 ${understandingContext}
 ${problemContextStr}
 ${interviewContext}
@@ -138,16 +135,17 @@ Demande spécifique de l'étudiant : "${userInstruction}"
 
 RÈGLES CRITIQUES :
 1. N'INVENTE JAMAIS de faits, chiffres ou citations. Si une information n'est pas dans les réponses collectées, demande-la ou laisse un placeholder <em>(à compléter)</em>.
-2. Réponds UNIQUEMENT avec du HTML sémantique valide (pas de markdown, pas de code fences).
-3. Utilise ces balises : <h2>, <h3>, <h4>, <p>, <ul>, <ol>, <li>, <blockquote>, <strong>, <em>.
-4. N'UTILISE PAS <html>, <head>, <body>, <div>, <span> — uniquement des balises sémantiques de contenu.
-5. N'inclus PAS le titre de la section comme <h1> (l'éditeur l'affiche déjà séparément).
-6. Les paragraphes doivent être complets (min. 3-5 phrases chacun), développés, avec exemples concrets tirés des réponses.
-7. Adapte le niveau de langue au niveau d'étude (${project.level || 'Master'}).
-8. Intègre des citations au format ${project.norme || 'APA'} quand pertinent, sous forme <em>(Auteur, année)</em> UNIQUEMENT si elles sont présentes dans les réponses.
-9. Si tu utilises une liste, fais précéder d'une phrase d'introduction dans un <p>.
-10. Pour les citations directes, utilise <blockquote>.
-11. N'ajoute AUCUN commentaire, AUCUNE explication hors HTML. Réponds uniquement avec le HTML à insérer dans l'éditeur.
+${guideContext ? `2. SI LE GUIDE MÉTHODOLOGIQUE DE L'UNIVERSITÉ EST FOURNI, RESPECTE SES EXIGENCES (structure attendue, normes de présentation, plan type, formulation de la problématique, etc.). C'est une contrainte permanente.` : ''}
+3. Réponds UNIQUEMENT avec du HTML sémantique valide (pas de markdown, pas de code fences).
+4. Utilise ces balises : <h2>, <h3>, <h4>, <p>, <ul>, <ol>, <li>, <blockquote>, <strong>, <em>.
+5. N'UTILISE PAS <html>, <head>, <body>, <div>, <span> — uniquement des balises sémantiques de contenu.
+6. N'inclus PAS le titre de la section comme <h1> (l'éditeur l'affiche déjà séparément).
+7. Les paragraphes doivent être complets (min. 3-5 phrases chacun), développés, avec exemples concrets tirés des réponses.
+8. Adapte le niveau de langue au niveau d'étude (${project.level || 'Master'}).
+9. Intègre des citations au format ${project.norme || 'APA'} quand pertinent, sous forme <em>(Auteur, année)</em> UNIQUEMENT si elles sont présentes dans les réponses.
+10. Si tu utilises une liste, fais précéder d'une phrase d'introduction dans un <p>.
+11. Pour les citations directes, utilise <blockquote>.
+12. N'ajoute AUCUN commentaire, AUCUNE explication hors HTML. Réponds uniquement avec le HTML à insérer dans l'éditeur.
 
 EXEMPLE DE FORMAT ATTENDU :
 <h2>Contexte historique</h2>

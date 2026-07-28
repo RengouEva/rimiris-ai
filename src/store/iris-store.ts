@@ -91,6 +91,10 @@ export interface ProjectInfo {
   language: string
   norme: 'APA' | 'Vancouver' | 'IEEE' | 'ISO 690' | 'Harvard' | ''
   guideUrl?: string // optional PDF guide URL
+  // Phase 0 — Methodological guide uploaded by the student (PDF text extracted)
+  guideFileName?: string
+  guideText?: string // raw extracted text, injected in every AI prompt as permanent context
+  guideUploadedAt?: number
   theme: string
   entreprise: string
   directeur: string
@@ -177,7 +181,12 @@ interface IrisState {
   soutenanceData: {
     summary: string
     presentationOutline: { title: string; bullets: string[] }[]
-    juryQuestions: { question: string; suggestedAnswer: string; difficulty: 'facile' | 'moyenne' | 'difficile' }[]
+    juryQuestions: {
+      question: string
+      suggestedAnswer: string
+      difficulty: 'facile' | 'moyenne' | 'difficile'
+      juryRole?: 'Président' | 'Rapporteur' | 'Directeur' | 'Examinateur'
+    }[]
     weakPoints: string[]
   } | null
 
@@ -245,6 +254,9 @@ const defaultProject: ProjectInfo = {
   language: 'Français',
   norme: 'APA',
   guideUrl: '',
+  guideFileName: '',
+  guideText: '',
+  guideUploadedAt: undefined,
   theme: '',
   entreprise: '',
   directeur: '',
@@ -537,7 +549,7 @@ export const useIrisStore = create<IrisState>()(
         auditReport: state.auditReport,
         soutenanceData: state.soutenanceData,
       }),
-      version: 3,
+      version: 4,
       migrate: (persisted: any, version: number) => {
         if (!persisted) return persisted
         // v2 → v3 : re-init interviewAnswers on sections
@@ -546,6 +558,15 @@ export const useIrisStore = create<IrisState>()(
             ...s,
             interviewAnswers: s.interviewAnswers || [],
           }))
+        }
+        // v3 → v4 : ensure project has guideFileName/guideText fields
+        if (version < 4 && persisted.project) {
+          persisted.project = {
+            ...persisted.project,
+            guideFileName: persisted.project.guideFileName || '',
+            guideText: persisted.project.guideText || '',
+            guideUploadedAt: persisted.project.guideUploadedAt || undefined,
+          }
         }
         return persisted
       },

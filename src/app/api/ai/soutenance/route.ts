@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
+import { buildGuideContext } from '@/lib/iris/prompt-context'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
       })
       .join('\n\n')
 
+    const guideContext = buildGuideContext(project)
     const systemPrompt = `Tu es Dr. Soutenance, expert en préparation de soutenance. Génère un kit complet.
 
 CONTEXTE :
@@ -29,7 +31,7 @@ CONTEXTE :
 - Filière : ${project.filiere || 'non précisée'}
 - Titre : ${project.title || 'à définir'}
 - Norme : ${project.norme || 'APA'}
-
+${guideContext ? '\n' + guideContext + '\n' : ''}
 MÉMOIRE RÉDIGÉ :
 ${drafted || "L'étudiant n'a pas encore rédigé significativement."}
 
@@ -40,12 +42,12 @@ GÉNÈRE UNIQUEMENT UN OBJET JSON VALIDE :
     { "title": "Titre diapo", "bullets": ["Point 1", "Point 2", "Point 3"] }
   ],
   "juryQuestions": [
-    { "question": "...", "suggestedAnswer": "...", "difficulty": "facile" | "moyenne" | "difficile" }
+    { "question": "...", "suggestedAnswer": "...", "difficulty": "facile" | "moyenne" | "difficile", "juryRole": "Président" | "Rapporteur" | "Directeur" | "Examinateur" }
   ],
   "weakPoints": ["Point faible 1", "..."]
 }
 
-10-12 diapositives, 8-10 questions jury, 4-6 points faibles. Français académique.`
+10-12 diapositives, 8-10 questions jury (réparties entre Président, Rapporteur, Directeur et Examinateur), 4-6 points faibles. Français académique.`
 
     const zai = await ZAI.create()
     const completion = await zai.chat.completions.create({

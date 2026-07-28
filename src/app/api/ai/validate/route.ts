@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
+import { buildGuideContext } from '@/lib/iris/prompt-context'
 
 export const runtime = 'nodejs'
 export const maxDuration = 90
@@ -19,6 +20,7 @@ interface ValidateRequestBody {
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as ValidateRequestBody
+    const guideContext = buildGuideContext(body.project)
 
     const zai = await ZAI.create()
     const completion = await zai.chat.completions.create({
@@ -31,7 +33,7 @@ SECTION : "${body.sectionTitle}"
 ${body.sectionDescription ? `Description : ${body.sectionDescription}` : ''}
 Niveau : ${body.project?.level || 'Master'}
 Thème : ${body.project?.title || 'non précisé'}
-
+${guideContext ? '\n' + guideContext + '\n' : ''}
 RÉPONSES COLLECTÉES :
 ${body.answers.map((a, i) => `${i + 1}. ${a.question || '(question)'}\n   → ${a.answer}`).join('\n')}
 
@@ -40,6 +42,8 @@ Vérifie 4 dimensions :
 2. Faisabilité : peut-on rédiger une section académique avec ces informations ?
 3. Précision : les réponses sont-elles assez précises ?
 4. Logique : l'enchaînement est-il logique ?
+
+${guideContext ? 'IMPORTANT : vérifie aussi la conformité aux exigences du guide méthodologique de l\'université fourni ci-dessus.' : ''}
 
 Réponds UNIQUEMENT en JSON :
 {

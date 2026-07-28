@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
+import { buildGuideContext } from '@/lib/iris/prompt-context'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -16,7 +17,7 @@ export const maxDuration = 120
 // ============================================================================
 
 interface AuditRequest {
-  project: { title?: string; level?: string; filiere?: string; norme?: string }
+  project: { title?: string; level?: string; filiere?: string; norme?: string; guideFileName?: string; guideText?: string }
   sections: { title: string; content: string }[]
 }
 
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    const guideContext = buildGuideContext(project)
     const systemPrompt = `Tu es le Contrôleur qualité d'IRIS Thesis AI. Réalise l'audit final du mémoire suivant.
 
 PROJET :
@@ -45,7 +47,7 @@ PROJET :
 - Niveau : ${project.level || 'Master'}
 - Filière : ${project.filière || 'non précisée'}
 - Norme : ${project.norme || 'APA'}
-
+${guideContext ? '\n' + guideContext : ''}
 CONTENU :
 ${sectionsStr}
 

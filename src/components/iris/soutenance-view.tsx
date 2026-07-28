@@ -14,6 +14,8 @@ import {
   Lightbulb,
   Award,
   MessageSquare,
+  Filter,
+  Users,
 } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,10 +24,23 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 
+type JuryRole = 'Président' | 'Rapporteur' | 'Directeur' | 'Examinateur' | string
+type Difficulty = 'facile' | 'moyenne' | 'difficile'
+
+const ROLE_COLORS: Record<string, string> = {
+  Président: 'bg-violet-500/15 text-violet-600 border-violet-500/30',
+  Rapporteur: 'bg-cyan-500/15 text-cyan-600 border-cyan-500/30',
+  Directeur: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
+  Examinateur: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
+}
+
+const ROLE_DEFAULT = 'bg-muted text-muted-foreground border-border'
+
 export function SoutenanceView() {
   const { soutenanceData, setSoutenanceData, project, sections } = useIrisStore()
   const [loading, setLoading] = React.useState(false)
   const [tab, setTab] = React.useState('summary')
+  const [roleFilter, setRoleFilter] = React.useState<JuryRole | 'all'>('all')
 
   const draftedCount = sections.filter((s) => s.content.trim().length > 100).length
 
@@ -52,6 +67,50 @@ export function SoutenanceView() {
     }
   }
 
+  function exportAsMarkdown() {
+    if (!soutenanceData) return
+    const d = soutenanceData
+    const lines: string[] = []
+    lines.push(`# Kit de soutenance — ${project.title || 'Mémoire'}`)
+    lines.push(`Niveau : ${project.level || 'Master'} · Filière : ${project.filiere || 'non précisée'}`)
+    lines.push(`Généré le : ${new Date().toLocaleString('fr-FR')}`)
+    lines.push('')
+    lines.push('## Résumé académique')
+    lines.push('')
+    lines.push(d.summary || '')
+    lines.push('')
+    lines.push('## Plan de présentation')
+    lines.push('')
+    ;(d.presentationOutline || []).forEach((slide, i) => {
+      lines.push(`### Diapo ${i + 1} — ${slide.title}`)
+      ;(slide.bullets || []).forEach((b) => lines.push(`- ${b}`))
+      lines.push('')
+    })
+    lines.push('## Questions probables du jury')
+    lines.push('')
+    ;(d.juryQuestions || []).forEach((q, i) => {
+      const role = (q as any).juryRole || 'Jury'
+      const diff = q.difficulty || 'moyenne'
+      lines.push(`### Q${i + 1} [${role} · ${diff}]`)
+      lines.push(`**Q :** ${q.question}`)
+      lines.push('')
+      lines.push(`**Réponse suggérée :** ${q.suggestedAnswer}`)
+      lines.push('')
+    })
+    lines.push('## Points faibles à renforcer')
+    lines.push('')
+    ;(d.weakPoints || []).forEach((wp, i) => lines.push(`${i + 1}. ${wp}`))
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `soutenance-${(project.title || 'memoire').slice(0, 30).replace(/[^a-zA-Z0-9]/g, '-')}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Kit exporté en Markdown')
+  }
+
   if (!soutenanceData) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-12">
@@ -62,8 +121,8 @@ export function SoutenanceView() {
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">Préparation à la soutenance</h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
             Quand votre mémoire est prêt, IRIS génère automatiquement : un résumé, un plan de
-            présentation, les questions probables du jury avec réponses suggérées, et les points
-            faibles à renforcer.
+            présentation, les questions probables du jury (classées par rôle : président,
+            rapporteur, directeur, examinateur), et les points faibles à renforcer.
           </p>
         </div>
 
@@ -74,7 +133,7 @@ export function SoutenanceView() {
               {[
                 { icon: FileText, label: 'Résumé académique', desc: '250-300 mots structurés' },
                 { icon: Presentation, label: 'Plan de présentation', desc: '10-12 diapositives' },
-                { icon: HelpCircle, label: 'Questions du jury', desc: '8-10 questions anticipées' },
+                { icon: HelpCircle, label: 'Questions du jury', desc: 'Classées par rôle (Président, Rapporteur…)' },
                 { icon: AlertTriangle, label: 'Points faibles', desc: 'À renforcer avant la soutenance' },
               ].map((item) => (
                 <div key={item.label} className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card">
@@ -120,6 +179,17 @@ export function SoutenanceView() {
   }
 
   const data = soutenanceData
+  const availableRoles: JuryRole[] = Array.from(
+    new Set(
+      (data.juryQuestions || [])
+        .map((q: any) => q.juryRole as JuryRole)
+        .filter(Boolean)
+    )
+  )
+  const filteredQuestions =
+    roleFilter === 'all'
+      ? data.juryQuestions || []
+      : (data.juryQuestions || []).filter((q: any) => q.juryRole === roleFilter)
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -134,10 +204,21 @@ export function SoutenanceView() {
             {project.title || 'Mémoire sans titre'} · {project.level || 'Master'}
           </p>
         </div>
-        <Button variant="outline" onClick={generate} disabled={loading} className="rounded-full">
-          {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
-          Régénérer
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={exportAsMarkdown}
+            className="rounded-full"
+            title="Télécharger le kit complet en Markdown"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Exporter
+          </Button>
+          <Button variant="outline" onClick={generate} disabled={loading} className="rounded-full">
+            {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+            Régénérer
+          </Button>
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
@@ -222,49 +303,97 @@ export function SoutenanceView() {
         </TabsContent>
 
         <TabsContent value="questions">
-          <div className="space-y-3">
-            {data.juryQuestions?.map((q, idx) => (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.05 }}
+          {/* Role filter chips */}
+          {availableRoles.length > 0 && (
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Filter className="h-3 w-3" />
+                Filtrer par rôle :
+              </span>
+              <button
+                onClick={() => setRoleFilter('all')}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                  roleFilter === 'all'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background border-border hover:border-primary/40'
+                }`}
               >
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 flex items-center justify-center flex-shrink-0">
-                        <MessageSquare className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-medium text-muted-foreground">
-                            Question {idx + 1}
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className={
-                              q.difficulty === 'facile'
-                                ? 'text-emerald-600 border-emerald-500/30'
-                                : q.difficulty === 'difficile'
-                                ? 'text-red-500 border-red-500/30'
-                                : 'text-amber-600 border-amber-500/30'
-                            }
-                          >
-                            {q.difficulty}
-                          </Badge>
+                Toutes
+              </button>
+              {availableRoles.map((role) => (
+                <button
+                  key={role}
+                  onClick={() => setRoleFilter(role)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                    roleFilter === role
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background border-border hover:border-primary/40'
+                  }`}
+                >
+                  <Users className="h-3 w-3 inline mr-1" />
+                  {role}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {filteredQuestions.map((q, idx) => {
+              const role = (q as any).juryRole
+              const roleClass = role ? ROLE_COLORS[role] || ROLE_DEFAULT : ROLE_DEFAULT
+              return (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                >
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 flex items-center justify-center flex-shrink-0">
+                          <MessageSquare className="h-4 w-4" />
                         </div>
-                        <p className="font-medium text-sm">{q.question}</p>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Question {idx + 1}
+                            </span>
+                            {role && (
+                              <Badge variant="outline" className={`text-[10px] ${roleClass}`}>
+                                {role}
+                              </Badge>
+                            )}
+                            <Badge
+                              variant="outline"
+                              className={
+                                q.difficulty === 'facile'
+                                  ? 'text-emerald-600 border-emerald-500/30'
+                                  : q.difficulty === 'difficile'
+                                  ? 'text-red-500 border-red-500/30'
+                                  : 'text-amber-600 border-amber-500/30'
+                              }
+                            >
+                              {q.difficulty}
+                            </Badge>
+                          </div>
+                          <p className="font-medium text-sm">{q.question}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="bg-muted/40 rounded-lg p-3 border border-border">
-                      <p className="text-xs font-semibold text-primary mb-1">Réponse suggérée :</p>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{q.suggestedAnswer}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                      <div className="bg-muted/40 rounded-lg p-3 border border-border">
+                        <p className="text-xs font-semibold text-primary mb-1">Réponse suggérée :</p>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{q.suggestedAnswer}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )
+            })}
+            {filteredQuestions.length === 0 && (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                Aucune question pour ce rôle. Essayez un autre filtre.
+              </div>
+            )}
           </div>
         </TabsContent>
 
