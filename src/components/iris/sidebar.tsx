@@ -26,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { RimirisLogo } from './rimiris-logo'
 import { getCurrentUser } from '@/lib/iris/analytics'
 import { getTier } from '@/lib/iris/tiers'
+import { getCurrentSession, isSuperAdmin } from '@/lib/iris/auth'
 
 export const NAV_ITEMS: { id: ViewMode; label: string; icon: any }[] = [
   { id: 'guide', label: 'Guide méthodo', icon: BookOpen },
@@ -52,6 +53,15 @@ export function Sidebar() {
     return () => clearInterval(i)
   }, [])
   const tier = getTier(currentUser.tier)
+
+  // Admin link only visible to super_admin
+  const [isAdmin, setIsAdmin] = React.useState(false)
+  React.useEffect(() => {
+    const check = () => setIsAdmin(isSuperAdmin(getCurrentSession()))
+    check()
+    const i = setInterval(check, 2000)
+    return () => clearInterval(i)
+  }, [])
 
   const totalWords = sections.reduce((sum: number, s: any) => sum + s.wordCount, 0)
   const completed = sections.filter((s: any) => s.status === 'completed').length
@@ -182,26 +192,28 @@ export function Sidebar() {
           </Tooltip>
         </TooltipProvider>
 
-        {/* Admin link (subtle — accessible but not loud) */}
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setView('admin')}
-                className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
-                  view === 'admin'
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                    : 'text-muted-foreground/70 hover:bg-sidebar-accent hover:text-muted-foreground',
-                )}
-              >
-                <Settings className="h-4 w-4" />
-                {!sidebarCollapsed && <span className="text-xs">Portail Admin</span>}
-              </button>
-            </TooltipTrigger>
-            {sidebarCollapsed && <TooltipContent side="right">Portail Admin</TooltipContent>}
-          </Tooltip>
-        </TooltipProvider>
+        {/* Admin link — hidden unless super_admin */}
+        {isAdmin && (
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setView('admin')}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                    view === 'admin'
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                      : 'text-muted-foreground/70 hover:bg-sidebar-accent hover:text-muted-foreground',
+                  )}
+                >
+                  <Settings className="h-4 w-4" />
+                  {!sidebarCollapsed && <span className="text-xs">Portail Admin</span>}
+                </button>
+              </TooltipTrigger>
+              {sidebarCollapsed && <TooltipContent side="right">Portail Admin</TooltipContent>}
+            </Tooltip>
+          </TooltipProvider>
+        )}
 
         <button
           onClick={toggleSidebar}
