@@ -20,7 +20,6 @@ import {
   Send,
   Loader2,
   Brain,
-  HelpCircle,
   ArrowLeft,
   ListTree,
   PenLine,
@@ -79,7 +78,6 @@ export function Workspace() {
     importTemplate,
     aiPanelOpen,
     setAIPanel,
-    setBlockedMode,
     setView,
     themeUnderstanding,
     problemContext,
@@ -215,10 +213,6 @@ export function Workspace() {
             editorRef={editorRef}
             onUpdateContent={(c) => updateSectionContent(activeSection.id, c)}
             onOpenAI={() => setAIPanel(true)}
-            onOpenBlocked={() => {
-              setBlockedMode(true)
-              setAIPanel(true)
-            }}
             onExport={() => setView('export')}
           />
         ) : (
@@ -239,7 +233,6 @@ export function Workspace() {
             section={activeSection}
             onClose={() => {
               setAIPanel(false)
-              setBlockedMode(false)
             }}
             onInsertDraft={handleInsertDraft}
             onReplaceDraft={handleReplaceDraft}
@@ -424,7 +417,6 @@ function EditorView({
   editorRef,
   onUpdateContent,
   onOpenAI,
-  onOpenBlocked,
   onExport,
 }: {
   section: Section
@@ -432,7 +424,6 @@ function EditorView({
   editorRef: React.RefObject<A4EditorHandle | null>
   onUpdateContent: (content: string) => void
   onOpenAI: () => void
-  onOpenBlocked: () => void
   onExport: () => void
 }) {
   const [showAIHint, setShowAIHint] = React.useState(false)
@@ -465,15 +456,6 @@ function EditorView({
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onOpenBlocked}
-            className="rounded-full border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
-          >
-            <HelpCircle className="h-3.5 w-3.5 mr-1" />
-            <span className="hidden sm:inline">Bloqué ?</span>
-          </Button>
           {/* Exporter — remplace "Imprimer" et le bouton "IRIS".
               Stylé comme le bouton gradient précédent, mène à la page Export. */}
           <Button
@@ -518,15 +500,6 @@ function EditorView({
                   >
                     <Wand2 className="h-4 w-4 mr-2" />
                     IRIS rédige cette section
-                  </Button>
-                  <Button
-                    size="lg"
-                    variant="ghost"
-                    onClick={onOpenBlocked}
-                    className="rounded-full text-muted-foreground"
-                  >
-                    <HelpCircle className="h-4 w-4 mr-1.5" />
-                    Je préfère écrire moi-même
                   </Button>
                 </div>
               </div>

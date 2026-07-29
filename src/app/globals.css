@@ -720,6 +720,60 @@
   .prose-iris .iris-page-break span { display: none !important; }
 }
 
+/* iris-page-break-auto — auto-inserted by the pagination engine.
+   Unlike manual breaks (a slim bar), the auto-break is a transparent
+   "pusher" with a fixed min-height that fills the remaining space
+   until the next A4 page boundary (297mm), so text NEVER enters
+   the bottom margin of the current page. The visible label sits at
+   the BOTTOM of the pusher (right where the next page starts). */
+.prose-iris .iris-page-break.iris-page-break-auto {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 0 0 4pt 0;
+  background:
+    /* Diagonal hatching to mark the unused bottom-margin zone (visual cue). */
+    repeating-linear-gradient(
+      135deg,
+      transparent 0,
+      transparent 6px,
+      rgba(124,58,237,0.05) 6px,
+      rgba(124,58,237,0.05) 12px);
+  border-top: 1px dashed rgba(124,58,237,0.45);
+  border-bottom: none;
+  /* min-height is set inline by the JS pagination engine, computed as
+     (297mm - <offset of the next block within the current page>). */
+}
+.prose-iris .iris-page-break.iris-page-break-auto span {
+  font-family: 'Inter', sans-serif;
+  font-size: 8pt;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #7c3aed;
+  background: #ffffff;
+  padding: 2pt 8pt;
+  border-radius: 10pt;
+  border: 1px solid rgba(124,58,237,0.3);
+  opacity: 0.85;
+}
+@media print {
+  .prose-iris .iris-page-break.iris-page-break-auto {
+    background: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: 0 !important;
+    overflow: hidden;
+    break-after: page;
+    page-break-after: always;
+  }
+  .prose-iris .iris-page-break.iris-page-break-auto span { display: none !important; }
+}
+
 /* iris-fn — footnote marker (superscript) */
 .prose-iris sup.iris-fn {
   font-family: 'Inter', sans-serif;

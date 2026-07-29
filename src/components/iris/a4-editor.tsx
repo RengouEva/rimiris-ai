@@ -106,6 +106,15 @@ interface A4EditorProps {
 
 // 297mm in CSS pixels at 96dpi: 297 * 96 / 25.4 ≈ 1122.52px
 const A4_PAGE_HEIGHT_PX = 1122.52
+// 25mm in CSS pixels ≈ 94.49px (top margin)
+const A4_MARGIN_TOP_PX = (25 * 96) / 25.4
+// 30mm in CSS pixels ≈ 113.39px (bottom margin — text must NEVER enter this zone)
+const A4_MARGIN_BOTTOM_PX = (30 * 96) / 25.4
+// Height of the editable text zone inside one A4 page (297 − 25 − 30 = 242mm ≈ 914.65px)
+const A4_TEXT_ZONE_HEIGHT_PX = A4_PAGE_HEIGHT_PX - A4_MARGIN_TOP_PX - A4_MARGIN_BOTTOM_PX
+// How many ms to wait after the user stops typing before re-running pagination.
+// Long enough to avoid cursor jumps while typing, short enough to feel responsive.
+const PAGINATION_DEBOUNCE_MS = 250
 
 // Font families offered in the toolbar.
 const FONT_FAMILIES: { label: string; value: string; css: string }[] = [
@@ -196,6 +205,14 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
     const lastValueRef = React.useRef<string>(value)
     const lastPageCountRef = React.useRef<number>(1)
     const [pageCountState, setPageCountState] = React.useState<number>(1)
+    // Debounce timer for the auto-pagination pass — we don't want to reflow
+    // pages on every keystroke (would cause cursor jumps), but we DO want
+    // to react quickly when the user pauses or pastes/inserts content.
+    const paginationTimerRef = React.useRef<number | null>(null)
+    // Tracks whether we are currently inside an enforceAutoPagination pass,
+    // to avoid recursion (handleInput calls enforce, which mutates DOM, which
+    // could re-trigger input events).
+    const isPaginatingRef = React.useRef<boolean>(false)
 
     // Active formatting state — refreshed on selectionchange and on input.
     const [activeState, setActiveState] = React.useState({
@@ -251,6 +268,187 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
         setPageCountState(count)
         onPageCountChange?.(count)
       }
+    }
+
+    // ----------------------------------------------------------------------
+    // AUTO-PAGINATION — the core of "le texte ne doit jamais déborder dans la marge".
+    //
+    // Strategy: the contentEditable is a single continuous flow. A4 pages are
+    // purely visual (background-image every 297mm). To PREVENT text from
+    // entering the bottom margin (30mm) of any page, we auto-insert
+    // <div class="iris-page-break iris-page-break-auto" contenteditable="false">
+    // elements BEFORE any block that would otherwise cross into the bottom
+    // margin. The pusher's min-height is computed so that the next block
+    // starts exactly at the top of the next A4 page's text zone.
+    //
+    // Steps:
+    //   1. Remove ALL previously auto-inserted page breaks (data-auto="true").
+    //      This is the "reset" pass — we rebuild the pagination from scratch.
+    //   2. Walk top-level children of the editor (paragraphs, headings, lists,
+    //      tables, footnotes, manual page breaks, …).
+    //   3. For each child, compute its top/bottom position relative to the
+    //      top of the editor (offsetTop + cumulative).
+    //   4. Determine which A4 page the child STARTS on:
+    //        pageIdx = floor(topRelative / 297mm)
+    //      The bottom of that page's text zone is at:
+    //        pageTextZoneBottom = (pageIdx + 1) * 297mm − 30mm
+    //   5. If the child's bottom EXTENDS past pageTextZoneBottom AND the
+    //      child's top is BEFORE pageTextZoneBottom (i.e., it really starts
+    //      on this page, not already pushed to the next), insert an auto
+    //      page-break div BEFORE the child with min-height =
+    //        (pageIdx + 1) * 297mm − childTop
+    //      This pushes the child to start exactly at the next page's top,
+    //      and its text-zone top will be (pageIdx + 1) * 297mm + 25mm
+    //      (the next page's top margin), so it never enters the bottom
+    //      margin of the current page.
+    //   6. After each insertion, positions shift — we re-evaluate from the
+    //      top. Limit to 30 iterations as a safety net (a 30-page document
+    //      is the practical max for in-browser editing).
+    //   7. Special case: if a single block is TALLER than the entire text
+    //      zone (242mm — e.g., a very long table or a heading followed by
+    //      many lines with no <p> split), we cannot split it safely. We
+    //      still push it to a fresh page (so it starts at the top of a new
+    //      page) but we leave it overflowing into the next page's bottom
+    //      margin. This is a known limitation; the user should split long
+    //      blocks manually with Enter.
+    //
+    // The pusher element is non-editable (contenteditable="false") and is
+    // excluded from manual page-break operations. It is silently removed
+    // on every recompute, so it never duplicates or stacks.
+    // ----------------------------------------------------------------------
+    function enforceAutoPagination() {
+      const editor = editorRef.current
+      if (!editor) return
+      if (isPaginatingRef.current) return
+      isPaginatingRef.current = true
+
+      try {
+        // --- Step 1: remove all previously auto-inserted page breaks ---
+        const oldAuto = editor.querySelectorAll('.iris-page-break-auto[data-auto="true"]')
+        oldAuto.forEach((el) => el.remove())
+
+        // --- Step 2-6: walk children, insert pushers where needed ---
+        // We re-evaluate positions after each insertion because inserting a
+        // pusher shifts the positions of all subsequent siblings.
+        const MAX_ITERATIONS = 50
+        for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+          const children = Array.from(editor.children) as HTMLElement[]
+          let inserted = false
+
+          for (let i = 0; i < children.length; i++) {
+            const child = children[i]
+            // Skip our own auto page-breaks (shouldn't exist after reset, but
+            // safety net).
+            if (child.classList.contains('iris-page-break-auto')) continue
+            // Skip the footnotes section — it stays at the very end.
+            if (child.classList.contains('iris-footnotes')) continue
+            // Manual page breaks already force a real break — skip and let
+            // them do their job.
+            if (
+              child.classList.contains('iris-page-break') &&
+              !child.classList.contains('iris-page-break-auto')
+            ) {
+              continue
+            }
+
+            // Position of the child's TOP relative to the editor's content box.
+            // offsetTop is relative to offsetParent; for a contentEditable div
+            // directly containing block children, offsetParent is the editor
+            // itself (or the closest positioned ancestor). We use getBoundingClientRect
+            // + the editor's rect to be robust against any positioning.
+            const editorRect = editor.getBoundingClientRect()
+            const childRect = child.getBoundingClientRect()
+            const childTop = childRect.top - editorRect.top + editor.scrollTop
+            const childBottom = childRect.bottom - editorRect.top + editor.scrollTop
+            const childHeight = childRect.height
+
+            // If the child is collapsed/empty, skip
+            if (childHeight < 1) continue
+
+            // Safety: if a single block is TALLER than the entire text zone
+            // (242mm), it can never fit on a single page — pushing it would
+            // loop forever. We skip it (leave it where it is, even if it
+            // overflows). The user must split long blocks manually.
+            if (childHeight > A4_TEXT_ZONE_HEIGHT_PX - 5) continue
+
+            // Which A4 page does the child's TOP fall on? (0-indexed)
+            const pageIdx = Math.floor(childTop / A4_PAGE_HEIGHT_PX)
+            // The bottom of this page's TEXT ZONE (where text is allowed).
+            const pageTextZoneBottom =
+              (pageIdx + 1) * A4_PAGE_HEIGHT_PX - A4_MARGIN_BOTTOM_PX
+            // The bottom edge of this A4 page (= top edge of the next page).
+            const pageBottom = (pageIdx + 1) * A4_PAGE_HEIGHT_PX
+
+            // The child violates the bottom-margin invariant if EITHER:
+            //   (a) it crosses the text-zone boundary (starts before, ends after), OR
+            //   (b) it starts inside the bottom margin (already past the text zone).
+            const crossesTextZone =
+              childTop < pageTextZoneBottom - 5 && childBottom > pageTextZoneBottom + 5
+            const startsInMargin =
+              childTop >= pageTextZoneBottom - 5 && childTop < pageBottom - 5
+
+            if (crossesTextZone || startsInMargin) {
+              // We need to push this child to the NEXT PAGE'S TEXT ZONE.
+              // The next page's content-box top is `pageBottom`, but the
+              // actual text-zone top of the next page is `pageBottom + 25mm`
+              // (the next page's top margin). The pusher occupies space from
+              // childTop to nextPageTextZoneTop, which includes:
+              //   - the rest of the current page's bottom margin, AND
+              //   - the next page's entire top margin.
+              // After insertion, the child's new TOP = nextPageTextZoneTop,
+              // so the first line of text on the next page sits below the
+              // top margin — exactly where it should be.
+              const nextPageTextZoneTop = pageBottom + A4_MARGIN_TOP_PX
+              const pushHeight = nextPageTextZoneTop - childTop
+
+              // Safety: if pushHeight is invalid or zero, skip
+              if (pushHeight < 1) continue
+
+              // Build the pusher element
+              const pusher = document.createElement('div')
+              pusher.className = 'iris-page-break iris-page-break-auto'
+              pusher.setAttribute('contenteditable', 'false')
+              pusher.setAttribute('data-auto', 'true')
+              pusher.setAttribute('data-iris', 'page-break')
+              pusher.setAttribute('aria-hidden', 'true')
+              pusher.style.minHeight = `${pushHeight}px`
+              pusher.innerHTML = '<span>Page suivante</span>'
+
+              // Insert BEFORE the offending child
+              editor.insertBefore(pusher, child)
+              inserted = true
+              break // restart the loop with fresh positions
+            }
+          }
+
+          if (!inserted) break
+        }
+
+        // --- Final: recompute page count + persist HTML ---
+        recomputePageCount()
+        // Persist the new HTML (with auto page-breaks inserted) to the store
+        // so a subsequent React re-render doesn't wipe out the pushers.
+        const newHtml = editor.innerHTML
+        if (newHtml !== lastValueRef.current) {
+          lastValueRef.current = newHtml
+          onChange(newHtml)
+        }
+      } finally {
+        isPaginatingRef.current = false
+      }
+    }
+
+    // Debounced wrapper — schedules a single pagination pass after the user
+    // stops typing. Cancels any previously-scheduled pass so we don't pile
+    // up work during rapid typing.
+    function scheduleAutoPagination() {
+      if (paginationTimerRef.current !== null) {
+        window.clearTimeout(paginationTimerRef.current)
+      }
+      paginationTimerRef.current = window.setTimeout(() => {
+        paginationTimerRef.current = null
+        enforceAutoPagination()
+      }, PAGINATION_DEBOUNCE_MS)
     }
 
     // ----------------------------------------------------------------------
@@ -335,6 +533,9 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
         const newHtml = el.innerHTML
         lastValueRef.current = newHtml
         onChange(newHtml)
+        // Trigger pagination immediately for AI-inserted content (no debounce
+        // — AI drafts should be paginated before the user sees them).
+        requestAnimationFrame(() => enforceAutoPagination())
       },
       replaceHtml: (html: string) => {
         const el = editorRef.current
@@ -343,7 +544,13 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
         lastValueRef.current = html || ''
         onChange(html || '')
         el.focus()
-        requestAnimationFrame(() => recomputePageCount())
+        // After replacing all content, run the pagination pass immediately so
+        // AI-generated drafts are properly split across pages before the user
+        // sees them. Use a rAF so the browser has time to lay out the new DOM.
+        requestAnimationFrame(() => {
+          recomputePageCount()
+          enforceAutoPagination()
+        })
       },
       focus: () => editorRef.current?.focus(),
       getPageCount: () => lastPageCountRef.current,
@@ -354,10 +561,18 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
     // ----------------------------------------------------------------------
     React.useEffect(() => {
       recomputePageCount()
+      // When the value changes externally (e.g., loaded from localStorage or
+      // AI generation), the auto-pagination pass needs to re-run to keep the
+      // bottom-margin invariant.
+      scheduleAutoPagination()
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [value])
 
     React.useEffect(() => {
-      const onResize = () => recomputePageCount()
+      const onResize = () => {
+        recomputePageCount()
+        scheduleAutoPagination()
+      }
       window.addEventListener('resize', onResize)
       // Listen for selection changes to update active state indicators
       const onSelChange = () => refreshActiveState()
@@ -365,14 +580,25 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
       const el = editorRef.current
       let ro: ResizeObserver | null = null
       if (el && typeof ResizeObserver !== 'undefined') {
-        ro = new ResizeObserver(() => recomputePageCount())
+        ro = new ResizeObserver(() => {
+          recomputePageCount()
+          scheduleAutoPagination()
+        })
         ro.observe(el)
       }
-      requestAnimationFrame(() => recomputePageCount())
+      requestAnimationFrame(() => {
+        recomputePageCount()
+        enforceAutoPagination()
+      })
       return () => {
         window.removeEventListener('resize', onResize)
         document.removeEventListener('selectionchange', onSelChange)
         ro?.disconnect()
+        // Cancel any pending pagination pass on unmount
+        if (paginationTimerRef.current !== null) {
+          window.clearTimeout(paginationTimerRef.current)
+          paginationTimerRef.current = null
+        }
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -384,7 +610,10 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
       if (value !== lastValueRef.current && value !== el.innerHTML) {
         el.innerHTML = value || ''
         lastValueRef.current = value
+        // Run pagination on external content load
+        requestAnimationFrame(() => enforceAutoPagination())
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [value])
 
     // Initialize once
@@ -395,6 +624,9 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
         el.innerHTML = value || ''
         lastValueRef.current = value || ''
       }
+      // Run pagination once on mount so any loaded content is immediately
+      // split across pages without overflowing into margins.
+      requestAnimationFrame(() => enforceAutoPagination())
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
@@ -406,6 +638,10 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
       onChange(html)
       recomputePageCount()
       refreshActiveState()
+      // Schedule a debounced pagination pass. We don't run it synchronously
+      // because the user is actively typing — running it on every keystroke
+      // would cause cursor jumps. The debounce lets us react once they pause.
+      scheduleAutoPagination()
     }
 
     function exec(command: string, val?: string) {
@@ -974,6 +1210,9 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
         .join('')
       document.execCommand('insertHTML', false, html)
       handleInput()
+      // Pasted content can be large — run pagination immediately so the
+      // user doesn't see text overflowing into the bottom margin.
+      requestAnimationFrame(() => enforceAutoPagination())
     }
 
     return (

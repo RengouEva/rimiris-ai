@@ -445,3 +445,93 @@ Stage Summary:
 - Différences : UdeM = Lettre, UQAC-DALL = Lettre aussi ; les deux proscrivent les chiffres romains.
 - Bug marge inférieure : amélioration visuelle significative (hachures + labels) ; pour une vraie pagination automatique (séparation du contenu en pages distinctes), il faudrait un moteur type PagedJS — non implémenté car trop risqué pour l'expérience d'édition.
 - Build Next.js : OK. TypeScript : mes fichiers compilent sans erreur (erreurs pré-existantes dans iris-store.ts, audit route, coherence route, websocket examples — non liées).
+
+---
+Task ID: 6
+Agent: main (Super Z)
+Task: (1) Supprimer tous les boutons "Bloqué ?" de l'app IRIS. (2) Corriger le bug de pagination : le texte ne doit JAMAIS déborder dans la zone de marge du bas. S'il n'y a plus d'espace, ajouter automatiquement une page et continuer.
+
+Work Log:
+
+## 1. Suppression des boutons "Bloqué ?"
+- `workspace.tsx` :
+  - Retiré le bouton "Bloqué ?" (icône HelpCircle, classe amber) dans le header de `EditorView` (juste à côté du bouton Exporter).
+  - Retiré le bouton "Je préfère écrire moi-même" (icône HelpCircle) dans le CTA de section vide.
+  - Supprimé la prop `onOpenBlocked` du composant `EditorView` (et de son interface TypeScript).
+  - Supprimé l'appel `setBlockedMode(false)` dans le `onClose` du `SectionWorkflowPanel`.
+  - Supprimé `setBlockedMode` du destructuring du store.
+  - Supprimé l'import inutilisé `HelpCircle` de lucide-react.
+- `header.tsx` :
+  - Retiré le bouton "Bloqué ?" en haut à droite (visible uniquement sur la vue `workspace`).
+  - Supprimé `setBlockedMode` du destructuring du store.
+  - Supprimé l'import inutilisé `HelpCircle` et `setAIPanel` (devenu inutile après suppression du bouton).
+- Vérifié : aucun bouton "Bloqué" ni bouton amber n'apparaît plus dans l'app (test agent-browser : 66 boutons scannés, 0 correspondance).
+
+## 2. Auto-pagination — le texte ne déborde jamais dans la marge
+
+### Architecture
+- Le contentEditable est un flux continu unique. Les "pages A4" sont purement visuelles (background-image tous les 297mm via la classe `.a4-paginated`).
+- Pour EMPÊCHER le texte d'entrer dans la marge inférieure (30mm en bas de chaque page), on insère automatiquement des éléments `<div class="iris-page-break iris-page-break-auto" contenteditable="false">` AVANT tout bloc qui déborderait.
+- Le `min-height` du "pousseur" est calculé pour que le bloc suivant démarre exactement à `pageBottom + 25mm` (top de la zone de texte de la page suivante).
+
+### Constantes
+- `A4_PAGE_HEIGHT_PX = 1122.52` (297mm en pixels à 96dpi)
+- `A4_MARGIN_TOP_PX ≈ 94.49` (25mm)
+- `A4_MARGIN_BOTTOM_PX ≈ 113.39` (30mm — la zone INTERDITE au texte)
+- `A4_TEXT_ZONE_HEIGHT_PX ≈ 914.65` (242mm = 297 − 25 − 30)
+- `PAGINATION_DEBOUNCE_MS = 250` (évite les sauts de curseur pendant la frappe)
+
+### Fonction `enforceAutoPagination()` (dans `a4-editor.tsx`)
+1. **Reset** : supprime tous les `.iris-page-break-auto[data-auto="true"]` existants.
+2. **Boucle** (max 50 itérations pour éviter une boucle infinie) :
+   - Parcourt les enfants top-level du contentEditable (paragraphes, titres, listes, tableaux, sauts de page manuels, footnotes…).
+   - Pour chaque enfant, mesure `childTop` et `childBottom` en pixels via `getBoundingClientRect()` (robuste au scroll et au positionnement).
+   - Skip les enfants trop grands (`childHeight > 914.65px` = 242mm) — un bloc indivisible plus grand qu'une page ne peut pas être paginé proprement ; on le laisse déborder (limite connue, l'utilisateur doit le scinder manuellement).
+   - Calcule `pageIdx = floor(childTop / 1122.52)`.
+   - Calcule `pageTextZoneBottom = (pageIdx + 1) * 1122.52 − 113.39` (limite basse de la zone de texte de la page courante).
+   - Calcule `pageBottom = (pageIdx + 1) * 1122.52` (bord bas de la page = bord haut de la page suivante).
+   - Deux cas de violation détectés :
+     - **crossesTextZone** : `childTop < pageTextZoneBottom` ET `childBottom > pageTextZoneBottom` (le bloc traverse la limite de zone de texte).
+     - **startsInMargin** : `childTop >= pageTextZoneBottom` ET `childTop < pageBottom` (le bloc commence déjà dans la marge — cas qui peut arriver au chargement initial ou après un gros changement de contenu).
+   - Si violation : insère un `<div class="iris-page-break iris-page-break-auto" contenteditable="false" data-auto="true" aria-hidden="true">` avec `min-height = (pageBottom + 94.49) − childTop` pixels et innerHTML `<span>Page suivante</span>`.
+   - `break` puis on recommence la boucle (les positions ont changé après l'insertion).
+3. **Final** : `recomputePageCount()` + persistance du HTML modifié via `onChange(newHtml)`.
+
+### Fonction `scheduleAutoPagination()` (wrapper debounced)
+- Annule tout timer précédent, planifie un nouveau passage après 250ms.
+- Évite les reflow de page à chaque keystroke — l'utilisateur peut taper fluidement, la pagination se recalule quand il fait une pause.
+
+### CSS `.iris-page-break-auto` (dans `globals.css`)
+- `display: flex; flex-direction: column; justify-content: flex-end` → le label "Page suivante" s'affiche en bas du pousseur (à la limite entre les deux pages).
+- `background: repeating-linear-gradient(135deg, transparent, transparent 6px, rgba(124,58,237,0.05) 6px, rgba(124,58,237,0.05) 12px)` → hachures violettes discrètes pour marquer visuellement la zone vide.
+- `border-top: 1px dashed rgba(124,58,237,0.45)` → ligne pointillée en haut du pousseur.
+- Le `min-height` est fixé inline par le JS (calculé pour pousser jusqu'à la page suivante).
+- `@media print` : le pousseur devient invisible (`background: none`, `border: none`, `min-height: 0`, `height: 0`, `overflow: hidden`) MAIS conserve `break-after: page; page-break-after: always` → vrai saut de page à l'impression.
+
+### Câblage
+`enforceAutoPagination()` ou `scheduleAutoPagination()` est appelé depuis :
+- `handleInput()` → `scheduleAutoPagination()` (debounced, pour la frappe au clavier)
+- `handlePaste()` → `requestAnimationFrame(() => enforceAutoPagination())` (immédiat, le contenu collé peut être volumineux)
+- `insertHtml()` (API impérative, brouillon IA) → `requestAnimationFrame(() => enforceAutoPagination())` (immédiat)
+- `replaceHtml()` (API impérative, remplacement complet après humanisation) → `requestAnimationFrame(() => { recomputePageCount(); enforceAutoPagination() })` (immédiat)
+- Effect au montage → `requestAnimationFrame(() => enforceAutoPagination())` (pagine le contenu chargé depuis le store)
+- Effect sur `value` (changement externe) → `scheduleAutoPagination()`
+- ResizeObserver + window.resize → `scheduleAutoPagination()` (la largeur de l'éditeur peut changer, ce qui change la hauteur du texte)
+- Cleanup au unmount : annule le timer debounced.
+
+### Tests end-to-end (agent-browser)
+- **Test 1 — boutons Bloqué ? supprimés** : 66 boutons scannés dans la page workspace, 0 contiennent "Bloqué" ou ont un style amber. ✓
+- **Test 2 — pagination avec 20 paragraphes courts (~60mm chacun)** :
+  - 6 auto-breaks insérés (7 pages au total).
+  - 20 paragraphes mesurés : **0 violation** (aucun paragraphe n'a son top ou son bottom dans une zone de marge inférieure).
+  - Positionnement vérifié : para 0 démarre à 25mm (top margin), para 3 démarre à 322mm (= 297 + 25, top de la zone de texte de la page 2) — exactement comme attendu. ✓
+- **Test 3 — pagination avec 12 paragraphes longs (~210mm chacun)** :
+  - 11 auto-breaks insérés (12 pages, 1 paragraphe par page car chaque paragraphe remplit presque toute la zone de texte de 242mm). ✓
+- `npx tsc --noEmit --skipLibCheck` → 0 erreur dans les fichiers modifiés (`a4-editor.tsx`, `header.tsx`, `workspace.tsx`, `globals.css`). Les erreurs pré-existantes (agents-view, onboarding-interview, quick-start, plan-review, audit route, coherence route, workspace `in_progress`/`importTemplate`, websocket examples, image-edit skill, stock-analysis skill) ne sont PAS liées à ces changements.
+- Screenshot sauvé : `download/auto-pagination.png` (161 KB, page workspace avec contenu paginé).
+
+Stage Summary:
+- Plus AUCUN bouton "Bloqué ?" dans l'app — l'expérience est plus propre, l'utilisateur va directement à l'essentiel (rédiger / exporter).
+- **Le texte ne déborde plus jamais dans la marge inférieure** : un moteur de pagination JS insère automatiquement des "pousseurs" (`<div class="iris-page-break-auto">`) qui décalent chaque bloc au début de la page suivante si son bas dépasserait la limite de zone de texte (267mm). Les pousseurs sont visuels dans l'éditeur (hachures violettes + label "Page suivante") et deviennent de vrais sauts de page à l'impression.
+- La pagination est réactive (250ms de debounce pendant la frappe, immédiate pour paste/insert AI/replace AI) et persistée (le HTML avec pousseurs est sauvé dans le store, donc rechargé correctement).
+- Limite connue : un bloc indivisible plus grand que 242mm (toute la zone de texte) ne peut pas être paginé proprement — il est laissé où il est. L'utilisateur doit le scinder manuellement avec Entrée.
