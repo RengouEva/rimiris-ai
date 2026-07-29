@@ -6,12 +6,13 @@ import Image from 'next/image'
 /**
  * RimirisLogo — the official Rimiris AI brand mark.
  *
- * Source logo is 1024×1024 (square, ratio = 1:1) with transparent background.
- * All formats (logo.webp, favicon, PWA icons) preserve the alpha channel —
- * no white background is ever added during conversion (see
- * scripts/deploy-transparent-logo.py).
+ * Source logo is 613×553 (non-square, ratio ≈ 1.108). All square formats
+ * (favicon, PWA icons, apple-touch-icon) use fit-contain so the full brand
+ * mark is preserved with transparent padding.
  *
- * Sizes (enlarged per user request):
+ * WebP is 19.5 KB (96% reduction from the 326 KB source PNG).
+ *
+ * Sizes:
  *   - 'sm'  → 32px  (mobile header)
  *   - 'md'  → 40px  (default)
  *   - 'lg'  → 48px  (sidebar / welcome header)
@@ -66,21 +67,23 @@ export function RimirisLogo({
   centered = false,
 }: RimirisLogoProps) {
   const px = SIZE_PX[size]
-  // logo.webp is 512×512 (square, ratio 1:1) with transparent background.
-  // Width = height = px — no crop, no padding, full brand mark visible.
+  // logo.webp is 512×461 (ratio ≈ 1.108). We use width=px and let the
+  // height follow the intrinsic aspect ratio — no crop, no padding.
+  // This keeps the brand mark at full visual integrity.
+  const aspectRatio = 613 / 553 // matches the source PNG
   return (
     <div
       className={`flex items-center gap-2 ${centered ? 'justify-center w-full' : ''} ${className}`}
     >
       <div
         className={`relative ${ROUNDED[size]} overflow-hidden flex-shrink-0 ${glow ? 'iris-glow' : ''}`}
-        style={{ width: px, height: px }}
+        style={{ width: px, height: Math.round(px / aspectRatio) }}
       >
         <Image
           src="/logo.webp"
           alt="Rimiris AI"
           width={px}
-          height={px}
+          height={Math.round(px / aspectRatio)}
           priority={size === 'xl' || size === '2xl'}
           className="w-full h-full object-contain"
         />
