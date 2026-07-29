@@ -65,24 +65,32 @@ function verifyPaymentSignature(
   amountXAF: number,
   timestamp: number,
   sig: string,
-): boolean {
+): { valid: boolean; realPayment: boolean } {
   if (!PAYMENT_SECRET) {
     // Demo mode: no signature required, but only allow 'free' -> 'pro'
     // upgrades from authenticated sessions. Log once at boot.
-    console.warn('[payment] RIMIRIS_PAYMENT_SECRET not set — running in demo mode. Anyone authenticated can upgrade.')
-    return true
+    // CRITICAL: in demo mode NO REVENUE is recorded — the admin panel
+    // must never display fictitious amounts. Revenue is only recorded
+    // when a real payment provider signs the request with the secret.
+    console.warn('[payment] RIMIRIS_PAYMENT_SECRET not set — running in demo mode. Upgrades are free, NO revenue is recorded.')
+    return { valid: true, realPayment: false }
   }
   // Replay protection: timestamp must be within ±5 minutes
   const now = Date.now()
-  if (Math.abs(now - timestamp) > 5 * 60 * 1000) return false
+  if (Math.abs(now - timestamp) > 5 * 60 * 1000) {
+    return { valid: false, realPayment: false }
+  }
   const payload = `${accountId}:${tier}:${amountXAF}:${timestamp}`
   const expected = crypto.createHmac('sha256', PAYMENT_SECRET).update(payload).digest('hex')
   try {
     const a = Buffer.from(sig, 'hex')
     const b = Buffer.from(expected, 'hex')
-    return a.length === b.length && crypto.timingSafeEqual(a, b)
+    return {
+      valid: a.length === b.length && crypto.timingSafeEqual(a, b),
+      realPayment: true,
+    }
   } catch {
-    return false
+    return { valid: false, realPayment: false }
   }
 }
 
@@ -117,7 +125,8 @@ export async function POST(req: NextRequest) {
   // Verify payment signature (skipped in demo mode)
   const sig = String(body?.paymentSignature || '')
   const ts = Number(body?.paymentTimestamp || 0)
-  if (!verifyPaymentSignature(session.accountId, tier, amountXAF, ts, sig)) {
+  const sigCheck = verifyPaymentSignature(session.accountId, tier, amountXAF, ts, sig)
+  if (!sigCheck.valid) {
     return NextResponse.json(
       { error: 'Signature de paiement invalide ou expirée.' },
       { status: 402 },
@@ -134,8 +143,11 @@ export async function POST(req: NextRequest) {
   store.accounts[idx] = applySuperAdminRule(store.accounts[idx])
   writeStore(store)
 
-  // Record revenue (free upgrades + admin auto-pro do not generate revenue)
-  if (amountXAF > 0 && session.email !== ADMIN_EMAIL && tier !== 'free') {
+  // Record revenue ONLY when a real payment signature was verified
+  // (i.e., PAYMENT_SECRET is set AND the signature matched).
+  // In demo mode (no secret), NO revenue is recorded — the admin panel
+  // shows 0 XAF until a real payment provider is wired up.
+  if (sigCheck.realPayment && amountXAF > 0 && session.email !== ADMIN_EMAIL && tier !== 'free') {
     const r = readRevenue()
     r.total += amountXAF
     r.history.push({ ts: Date.now(), amount: amountXAF, tier, accountId: session.accountId })
@@ -155,6 +167,9 @@ export async function POST(req: NextRequest) {
     ok: true,
     session: newSession,
     tier: store.accounts[idx].tier,
+    // Tell the client whether a real payment was recorded. The client MUST NOT
+    // invent a revenue amount if realPayment is false.
+    realPayment: sigCheck.realPayment,
   })
   setSessionCookie(res, newSession)
   return res

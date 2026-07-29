@@ -13,8 +13,8 @@
  * Stored under `rimiris.analytics.*` keys.
  */
 
-import { TIERS, migrateLegacyTier, type TierId } from './tiers'
-import { getCurrentSession, ADMIN_EMAIL } from './auth'
+import { migrateLegacyTier, type TierId } from './tiers'
+import { getCurrentSession } from './auth'
 
 // ============================================================================
 // Types
@@ -298,12 +298,15 @@ export function track(type: EventType, meta?: Record<string, string | number | b
 // signature required) so the UX flow is unchanged — but the actual tier
 // mutation happens on the SERVER, not in localStorage. The localStorage
 // user record is mirrored here for UI reactivity only.
+//
+// IMPORTANT: We NEVER invent a revenue amount on the client. Revenue is
+// only recorded by the server when a real payment signature is verified.
+// The client just mirrors the server's `realPayment` flag — if false,
+// no revenue is added to localStorage. This keeps the admin panel honest.
 export async function upgradeToTier(
   tier: TierId,
   email?: string,
   name?: string,
-  /** One-time project price in XAF (defaults to the tier's price). */
-  priceXAFOverride?: number,
 ): Promise<{ ok: boolean; user: UserRecord }> {
   const session = getCurrentSession()
   if (!session) return { ok: false, user: { ...ANON_USER } }
@@ -330,23 +333,20 @@ export async function upgradeToTier(
     }
 
     // Mirror the upgrade in localStorage for UI reactivity.
+    // NOTE: We do NOT touch user.revenue here. The server is the source of
+    // truth for revenue — it only records revenue when a real payment
+    // signature is verified (realPayment === true). In demo mode the admin
+    // panel shows 0 XAF, which is the truth.
     const finalTier: TierId = data.tier || migrateLegacyTier(tier)
     const user = getCurrentUser()
-    const t = TIERS[finalTier]
-    const amountXAF = priceXAFOverride ?? t.priceXAF
 
     user.tier = finalTier
     if (email) user.email = email
     if (name) user.name = name
-    if (finalTier !== 'free' && session.email !== ADMIN_EMAIL && amountXAF > 0) {
-      user.revenue.total += amountXAF
-      user.revenue.lastPaymentAt = Date.now()
-      user.revenue.history.push({ ts: Date.now(), amount: amountXAF, tier: finalTier })
-    }
 
     write(K_USER, user)
     upsertUserInIndex(user)
-    track('upgrade_complete', { tier: finalTier, amount: amountXAF })
+    track('upgrade_complete', { tier: finalTier, realPayment: data.realPayment === true })
 
     // Update the local session so useAuth re-renders immediately
     if (typeof window !== 'undefined') {

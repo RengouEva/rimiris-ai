@@ -321,10 +321,23 @@ export function AdminPortal() {
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-6"
               >
+                {/* Honest banner: revenue is 0 in demo mode (no mock data) */}
+                {stats.totalRevenue === 0 && (
+                  <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 text-xs text-amber-800 flex items-start gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                    <p>
+                      <strong>Mode démo.</strong> Aucun paiement réel n'a été traité à ce stade —
+                      le revenu affiché est de <strong>0 XAF</strong>, ce qui est exact.
+                      Les compteurs « Utilisateurs » et « Requêtes IA » reflètent l'activité réelle.
+                      Le revenu sera alimenté automatiquement dès l'intégration d'un prestataire
+                      de paiement (Stripe, FedaPay, Campay…).
+                    </p>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <StatCard label="Utilisateurs totaux" value={rows.length.toString()} sublabel={`${stats.activeUsers7d} actifs (7j)`} icon={Users} accent="#145DD6" />
                   <StatCard label="Revenu total" value={fmtXaf(stats.totalRevenue)} sublabel={`30j : ${fmtXaf(stats.mrr)}`} icon={DollarSign} accent="#10B981" />
-                  <StatCard label="Taux de conversion" value={fmtPct(stats.conversionRate)} sublabel={`${stats.tierDistribution.pro} payants`} icon={TrendingUp} accent="#6D28D9" />
+                  <StatCard label="Utilisateurs Pro" value={String(stats.tierDistribution.pro)} sublabel={`Taux : ${fmtPct(stats.conversionRate)}`} icon={TrendingUp} accent="#6D28D9" />
                   <StatCard label="Requêtes IA" value={stats.totalAIRequests.toLocaleString('fr-FR')} sublabel={`ARPU : ${fmtXaf(stats.arpu)}`} icon={Activity} accent="#F59E0B" />
                 </div>
 
@@ -520,6 +533,20 @@ export function AdminPortal() {
 
             {tab === 'revenue' && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                {/* Honest banner — no real payments yet */}
+                {stats.totalRevenue === 0 && (
+                  <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/50 text-sm text-amber-800 flex items-start gap-3">
+                    <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Aucun paiement réel enregistré</p>
+                      <p className="mt-1 text-xs">
+                        Le revenu affiché (0 XAF) est exact. Les montants non nuls n'apparaîtront qu'après
+                        l'intégration d'un prestataire de paiement (Stripe, FedaPay, Campay…) et la
+                        vérification HMAC côté serveur. Aucune donnée fictive n'est générée.
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <StatCard label="Revenu total" value={fmtXaf(stats.totalRevenue)} icon={DollarSign} accent="#10B981" />
                   <StatCard label="30 jours" value={fmtXaf(stats.mrr)} sublabel="Revenu collecté (30j)" icon={TrendingUp} accent="#145DD6" />
