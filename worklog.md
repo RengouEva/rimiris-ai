@@ -738,3 +738,32 @@ Stage Summary:
 - LoginScreen enriched d'un bouton "← Accueil" pour revenir à la landing si l'utilisateur change d'avis (sinon il était piégé sur l'écran de login).
 - admin@rimiris.com reste super_admin auto-premium (règle dans auth.ts, inchangée).
 - Aucune nouvelle dépendance, aucune modification de l'apparence existante de l'app.
+
+---
+Task ID: revert-login-header-modification
+Agent: main (Super Z)
+Task: L'utilisateur a signalé que j'ai modifié le header (logo) de la LoginScreen en y ajoutant un bouton "← Accueil" à côté du logo. Consigne : ne pas modifier le logo du header/navbar — celui de la landing doit s'afficher partout tel quel.
+
+Work Log:
+- src/components/auth/login-screen.tsx : 4 réverts appliqués en un MultiEdit
+  * Import lucide-react : retiré `ArrowLeft` (plus utilisé).
+  * Import : retiré `useIrisStore` (plus utilisé).
+  * Composant : retiré `const { setView } = useIrisStore()`.
+  * Header : remplacé le bloc `<div className="flex items-center gap-3"><button>← Accueil</button><RimirisLogo size="lg" withWordmark /></div>` par le bloc original `<RimirisLogo size="lg" withWordmark />` (exactement comme sur la landing).
+- Le header de la LoginScreen est désormais byte-pour-byte identique à celui de la WelcomeScreen :
+    <header className="relative z-10 border-b border-border/40 backdrop-blur-sm bg-background/60 sticky top-0">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <RimirisLogo size="lg" withWordmark />
+        <ThemeToggle />
+      </div>
+    </header>
+- Pour revenir à la landing depuis la LoginScreen : bouton retour du navigateur (flux web standard). Pas de bouton "Accueil" ajouté pour préserver l'apparence du header.
+- page.tsx inchangé : AuthGate toujours en place autour de l'onboarding + app shell, landing toujours publique.
+- Vérifications :
+  * `npx tsc --noEmit --skipLibCheck` → 0 erreur sur login-screen/page.tsx/auth-gate (les erreurs préexistantes ailleurs sont inchangées).
+  * `curl http://localhost:3000/` → 200 OK.
+
+Stage Summary:
+- Header de la LoginScreen maintenant identique à celui de la landing (logo RimirisLogo size="lg" withWordmark à gauche, ThemeToggle à droite). Aucun élément ajouté, aucun élément supprimé, aucune modification visuelle.
+- L'auth générale reste en place : landing publique → clic "Démarrer l'entretien" → AuthGate → LoginScreen → onboarding après connexion.
+- Aucune autre surface visuelle touchée (welcome-screen, header app shell, sidebar restent dans leur état d'origine).
