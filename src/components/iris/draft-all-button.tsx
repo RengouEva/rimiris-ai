@@ -205,7 +205,7 @@ export function DraftAllButton({ compact = false }: { compact?: boolean }) {
         {compact ? (
           <span>Rédiger tout ({emptySections.length})</span>
         ) : (
-          <span>IRIS rédige les {emptySections.length} sections vides</span>
+          <span>Rimiris rédige les {emptySections.length} sections vides</span>
         )}
       </Button>
 
@@ -270,7 +270,7 @@ function DraftAllProgressModal({
             <div className="flex-1 min-w-0">
               <h3 className="font-bold text-base">
                 {isGenerating
-                  ? 'IRIS rédige vos sections…'
+                  ? 'Rimiris rédige vos sections…'
                   : isDone
                   ? 'Rédaction terminée'
                   : 'Erreur'}

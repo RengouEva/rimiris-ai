@@ -144,7 +144,7 @@ function OnboardingHeader({ step }: { step: OnboardingStep }) {
             <GraduationCap className="h-5 w-5 text-white" />
           </div>
           <div>
-            <p className="font-bold text-base leading-none">IRIS</p>
+            <p className="font-bold text-base leading-none">Rimiris</p>
             <p className="text-xs text-muted-foreground leading-none mt-0.5">
               Configuration du projet · étape {currentIdx + 1}/{steps.length}
             </p>
@@ -262,7 +262,7 @@ function CollectStep({ onDone }: { onDone: () => void }) {
           Construisons le contexte permanent de votre mémoire
         </h1>
         <p className="text-sm text-muted-foreground">
-          Ces informations seront utilisées par tous les agents IRIS tout au long de votre
+          Ces informations seront utilisées par tous les agents Rimiris tout au long de votre
           mémoire. Plus elles sont précises, plus l'accompagnement sera adapté.
         </p>
       </div>
@@ -489,7 +489,7 @@ function UnderstandingStep({
           Phase 1 · Compréhension du sujet
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold mb-3">
-          IRIS analyse votre thème
+          Rimiris analyse votre thème
         </h1>
         <p className="text-sm text-muted-foreground">
           L'agent Chercheur documentaire identifie les concepts clés, le domaine, les disciplines
@@ -501,7 +501,7 @@ function UnderstandingStep({
         <div className="rounded-2xl border border-border bg-card p-12 flex flex-col items-center justify-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground italic">
-            IRIS analyse votre thème et identifie les concepts clés...
+            Rimiris analyse votre thème et identifie les concepts clés...
           </p>
         </div>
       )}
@@ -521,7 +521,7 @@ function UnderstandingStep({
           <div className="rounded-2xl border border-border bg-card p-6 space-y-5">
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Résumé d'IRIS
+                Résumé de Rimiris
               </p>
               <p className="text-[15px] leading-relaxed">{understanding.summary}</p>
             </div>
@@ -741,7 +741,7 @@ function ProblemBuildStep({
           Choisissez l'hypothèse de contexte qui vous correspond
         </h1>
         <p className="text-sm text-muted-foreground">
-          Au lieu de vous demander « depuis quand ce problème existe-t-il », IRIS raisonne à partir
+          Au lieu de vous demander « depuis quand ce problème existe-t-il », Rimiris raisonne à partir
           de votre thème et propose 3 hypothèses argumentées. Choisissez celle qui correspond le
           mieux — vous pourrez la modifier plus tard.
         </p>
@@ -769,7 +769,7 @@ function ProblemBuildStep({
       {!loading && reasoning && (
         <div className="rounded-2xl border border-border bg-muted/30 p-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-            Le raisonnement d'IRIS
+            Le raisonnement de Rimiris
           </p>
           <p className="text-sm leading-relaxed">{reasoning}</p>
         </div>
@@ -887,7 +887,7 @@ function PlanStep() {
       if (Array.isArray(data.sections) && data.sections.length > 0) {
         setProposedPlan(data.sections)
       } else {
-        setError("IRIS n'a pas pu proposer de plan. Réessayez.")
+        setError("Rimiris n'a pas pu proposer de plan. Réessayez.")
       }
     } catch {
       setError('Connexion impossible.')
@@ -929,7 +929,7 @@ function PlanStep() {
       <div className="text-center max-w-2xl mx-auto">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary text-xs font-medium mb-4">
           <Sparkles className="h-3.5 w-3.5" />
-          Plan proposé par IRIS
+          Plan proposé par Rimiris
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold mb-3">
           Voici le plan que je suggère pour votre mémoire

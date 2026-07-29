@@ -474,7 +474,7 @@ function InterviewStep({
           <ModeButton
             icon={<HelpCircle className="h-3.5 w-3.5" />}
             label="Je ne sais pas"
-            desc="IRIS m'explique"
+            desc="Rimiris m'explique"
             onClick={() => handleModeAction('dont_know')}
             color="amber"
           />

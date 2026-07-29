@@ -28,7 +28,7 @@ export const INTERVIEW_STEPS = [
     id: 'topic',
     field: 'title',
     question:
-      "Bonjour, je suis Pr. IRIS, votre directeur de mémoire virtuel. Pour bien démarrer, dites-moi en une phrase : sur quel sujet voulez-vous écrire votre mémoire ?",
+      "Bonjour, je suis Pr. Rimiris, votre directeur de mémoire virtuel. Pour bien démarrer, dites-moi en une phrase : sur quel sujet voulez-vous écrire votre mémoire ?",
     placeholder: 'Ex : L\'impact du télétravail sur la productivité des employés',
     helper: 'Pas besoin d\'être parfait — on affinera ensemble.',
   },
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
           messages: [
             {
               role: 'assistant',
-              content: `Tu es Pr. IRIS, directeur de mémoire. L'étudiant vient de répondre à la question "${lastAnswer.question}". Sa réponse : "${lastAnswer.answer}".
+              content: `Tu es Pr. Rimiris, directeur de mémoire. L'étudiant vient de répondre à la question "${lastAnswer.question}". Sa réponse : "${lastAnswer.answer}".
 
 Tu dois maintenant poser la question suivante : "${step.question}".
 
@@ -136,7 +136,7 @@ INSTRUCTIONS :
               messages: [
                 {
                   role: 'assistant',
-                  content: `Tu es Pr. IRIS. À partir du sujet "${topicAnswer.answer}" (niveau ${levelAnswer?.answer || 'Master'}), propose 3 problématiques académiques formulées sous forme de questions de recherche. Chaque problématique doit être :
+                  content: `Tu es Pr. Rimiris. À partir du sujet "${topicAnswer.answer}" (niveau ${levelAnswer?.answer || 'Master'}), propose 3 problématiques académiques formulées sous forme de questions de recherche. Chaque problématique doit être :
 - Une vraie question (qui se termine par "?")
 - Spécifique et défendable
 - Adaptée au niveau d'études

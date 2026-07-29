@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as SubjectsRequest
     const { project, keywords } = body
 
-    const systemPrompt = `Tu es Pr. IRIS, directeur de mémoire. L'étudiant cherche un sujet de recherche. Propose 5 sujets pertinents, originaux et faisables, basés sur le profil de l'étudiant.
+    const systemPrompt = `Tu es Pr. Rimiris, directeur de mémoire. L'étudiant cherche un sujet de recherche. Propose 5 sujets pertinents, originaux et faisables, basés sur le profil de l'étudiant.
 
 PROFIL DE L'ÉTUDIANT :
 - Filière : ${project.filiere || 'non précisée'}

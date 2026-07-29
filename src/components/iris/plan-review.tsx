@@ -111,7 +111,7 @@ export function PlanReview() {
               <GraduationCap className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="font-bold text-base leading-none">IRIS</p>
+            <p className="font-bold text-base leading-none">Rimiris</p>
               <p className="text-xs text-muted-foreground leading-none mt-0.5">
                 Proposition de plan
               </p>
@@ -142,7 +142,7 @@ export function PlanReview() {
           >
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary text-xs font-medium mb-4">
               <Sparkles className="h-3.5 w-3.5" />
-              Plan proposé par IRIS
+              Plan proposé par Rimiris
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold mb-3">
               Voici le plan que je suggère pour votre mémoire
@@ -162,7 +162,7 @@ export function PlanReview() {
               className="rounded-2xl border border-border bg-muted/30 p-4"
             >
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Ce qu'IRIS a retenu de vous
+                Ce que Rimiris a retenu de vous
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                 {topicAnswer && (

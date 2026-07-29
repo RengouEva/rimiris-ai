@@ -600,3 +600,56 @@ Stage Summary:
 - Plateforme renommée « Rimiris AI » dans toute la base de code source.
 - Aucune modification fonctionnelle — uniquement du renommage textuel (titres, prompts, commentaires, métadonnées).
 - L'identifiant interne "IRIS" (noms de dossiers, noms de variables, types TypeScript) reste inchangé pour éviter de casser les imports ; seul le nom affiché aux utilisateurs change.
+
+---
+Task ID: rename-platform-to-rimiris-v2
+Agent: main (Super Z)
+Task: Corriger le renommage incomplet « IRIS Thesis AI » → « Rimiris AI ». L'utilisateur a signalé que seul le titre du navigateur avait changé — la landing page et les autres vues affichaient toujours "IRIS / Thesis AI".
+
+Work Log:
+- Délégué à un sous-agent Explore une audit complet de toutes les références visibles à "IRIS" dans src/. Rapport identifie 5 wordmarks visibles (welcome-screen, sidebar, header, onboarding-interview, plan-review), 46 mentions IRIS dans le body text de 11 fichiers, et 9 prompts IA qui font que l'IA s'auto-présente comme "Pr. IRIS" ou "Coach d'IRIS".
+- P0 — Wordmarks corrigés (5 fichiers) :
+  * welcome-screen.tsx ligne 56-57 : "IRIS" + "Thesis AI" → "Rimiris" + "AI"
+  * sidebar.tsx ligne 63 : "IRIS" → "Rimiris"
+  * header.tsx ligne 48 : "IRIS" → "Rimiris"
+  * onboarding-interview.tsx ligne 147 : "IRIS" → "Rimiris"
+  * plan-review.tsx ligne 114 : "IRIS" → "Rimiris"
+- P1 — Body text (11 fichiers, ~46 occurrences) :
+  * welcome-screen.tsx : 9 mentions (H1, intro, CTA, 3 cartes workflow, 3 cartes features)
+  * onboarding-interview.tsx : 7 mentions (agents, headings, loading, erreurs, plan)
+  * workspace.tsx : 4 mentions (tooltip, CTA vide, bouton rédiger, hint relire)
+  * draft-all-button.tsx : 2 mentions (label bouton, statut)
+  * section-workflow-panel.tsx : 1 mention (desc bouton "Rimiris m'explique")
+  * plan-review.tsx : 2 mentions (plan proposé, ce que retenu)
+  * guide-view.tsx : 4 mentions (intro, pourquoi, comment exploite, conformité)
+  * guide-upload.tsx : 2 mentions (toast succès, intro compact)
+  * coherence-view.tsx : 2 mentions (intro, "Ce que vérifie")
+  * plagiarism-view.tsx : 2 mentions (intro, loading)
+  * soutenance-view.tsx : 2 mentions (intro, conseil)
+  * agents-view.tsx : 3 mentions (intro, comment ça marche avec "Pr. Rimiris", partage projet)
+  * export-view.tsx : 1 mention (tips HTML)
+  * a4-editor.tsx : 1 mention (placeholder éditeur)
+  Toutes les élisions françaises corrigées : "d'IRIS" → "de Rimiris", "Ce qu'IRIS a retenu" → "Ce que Rimiris a retenu".
+- P2 — Prompts système IA (5 fichiers route.ts) :
+  * api/ai/interview/route.ts : 3 prompts (message d'accueil "Pr. Rimiris", génération question suivante, génération problématiques)
+  * api/ai/plan/route.ts : 1 prompt (génération plan)
+  * api/ai/subjects/route.ts : 1 prompt (suggestion sujets)
+  * api/ai/section-interview/route.ts : 4 prompts (Coach méthodologique x3 + Contrôleur qualité)
+  * api/ai/humanize/route.ts : 1 prompt (Humaniseur résumé passe)
+- Vérification finale : 
+  * Grep "IRIS Thesis|Pr. IRIS|Thesis AI|d'IRIS|agents IRIS|projet IRIS" → 0 résultat dans src/
+  * Grep "\bIRIS\b" dans src/components/iris/ → 6 résultats, tous en commentaires de code (non visibles utilisateur)
+  * Grep "\bIRIS\b" dans src/app/api/ → 6 résultats, tous en commentaires de code (non visibles)
+  * TypeScript : aucune nouvelle erreur introduite (les 2 erreurs restantes sont préexistantes dans examples/websocket/, sans rapport)
+- NON touchés (intentionnellement) :
+  * Identifiants internes TypeScript : IrisState, useIrisStore, IrisStore
+  * Chemins d'imports : @/lib/iris/, @/components/iris/, src/lib/iris/, src/store/iris-store.ts
+  * Classes CSS : .iris-gradient, .iris-glow, .iris-gradient-text, .iris-table, .iris-spreadsheet, .iris-page-break, .iris-footnotes, .iris-fn, .iris-img, .prose-iris
+  * Clé de persistance localStorage : 'iris-thesis-ai-v3' (renommage = perte de données utilisateurs existants)
+  * Fallbacks de noms de fichiers export : 'memoire-iris' (apparaît uniquement si l'étudiant n'a pas saisi de titre — non critique)
+  * Logo SVG /public/logo.svg (forme géométrique abstraite, pas de texte IRIS dedans)
+
+Stage Summary:
+- Rebranding "IRIS Thesis AI" → "Rimiris AI" COMPLETE cette fois pour toutes les surfaces visibles.
+- L'utilisateur verra désormais "Rimiris" dans : le titre navigateur, le logo wordmark (landing + sidebar + header + onboarding + plan-review), tous les textes descriptifs, tous les boutons/CTA, tous les tooltips, tous les messages d'erreur, tous les toasts, le placeholder de l'éditeur, et l'IA s'auto-présentera comme "Pr. Rimiris" au lieu de "Pr. IRIS".
+- Les identifiants internes (IrisState, /lib/iris/, .iris-* CSS) restent intacts pour préserver les imports et les données sauvegardées — pas d'impact utilisateur.

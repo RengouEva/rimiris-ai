@@ -1,0 +1,252 @@
+     1→     1→/home/z/my-project/src/store/iris-store.ts:1:// Store global Rimiris AI — V3
+     2→     2→/home/z/my-project/src/store/iris-store.ts:29:  // Phase 1 output — IRIS's analysis of the section's intent
+     3→     3→/home/z/my-project/src/store/iris-store.ts:70:  // Phase 1 — Understanding (filled by IRIS, validated by student)
+     4→     4→/home/z/my-project/src/store/iris-store.ts:106:  | 'phase_1_understanding' // IRIS analyzes theme, student validates
+     5→     5→/home/z/my-project/src/store/iris-store.ts:203:interface IrisState {
+     6→     6→/home/z/my-project/src/store/iris-store.ts:303:  setSoutenanceData: (data: IrisState['soutenanceData']) => void
+     7→     7→/home/z/my-project/src/store/iris-store.ts:346:export const useIrisStore = create<IrisState>()(
+     8→     8→/home/z/my-project/src/store/iris-store.ts:647:      name: 'iris-thesis-ai-v3',
+     9→     9→/home/z/my-project/src/store/iris-store.ts:702:export function selectTotalWords(state: IrisState) {
+    10→    10→/home/z/my-project/src/store/iris-store.ts:706:export function selectCompletedCount(state: IrisState) {
+    11→    11→/home/z/my-project/src/store/iris-store.ts:734:export function selectCurrentPhase(state: IrisState): WorkflowPhase {
+    12→    12→/home/z/my-project/src/lib/iris/agents.ts:1:// Agents IA spécialisés de Rimiris AI — V3
+    13→    13→/home/z/my-project/src/app/api/extract-pdf/route.ts:20:// The text is stored in the IrisStore as `project.guideText` and injected in
+    14→    14→/home/z/my-project/src/app/api/extract-pdf/route.ts:59:    const tmpDir = join(tmpdir(), 'iris-pdf-extract')
+    15→    15→/home/z/my-project/src/app/api/ai/scientific-check/route.ts:40:    const systemPrompt = `Tu es le Contrôleur qualité de Rimiris AI. Vérifie la cohérence scientifique globale du mémoire suivant.
+    16→    16→/home/z/my-project/src/app/api/ai/interview/route.ts:9:// IRIS mène un entretien guidé avec l'étudiant pour démarrer son mémoire.
+    17→    17→/home/z/my-project/src/app/api/ai/interview/route.ts:31:      "Bonjour, je suis Pr. IRIS, votre directeur de mémoire virtuel. Pour bien démarrer, dites-moi en une phrase : sur quel sujet voulez-vous écrire votre mémoire ?",
+    18→    18→/home/z/my-project/src/app/api/ai/interview/route.ts:100:              content: `Tu es Pr. IRIS, directeur de mémoire. L'étudiant vient de répondre à la question "${lastAnswer.question}". Sa réponse : "${lastAnswer.answer}".
+    19→    19→/home/z/my-project/src/app/api/ai/interview/route.ts:139:                  content: `Tu es Pr. IRIS. À partir du sujet "${topicAnswer.answer}" (niveau ${levelAnswer?.answer || 'Master'}), propose 3 problématiques académiques formulées sous forme de questions de recherche. Chaque problématique doit être :
+    20→    20→/home/z/my-project/src/app/api/ai/draft-all/route.ts:3:import { AGENTS } from '@/lib/iris/agents'
+    21→    21→/home/z/my-project/src/app/api/ai/draft-all/route.ts:4:import { buildGuideContext, buildProjectContext } from '@/lib/iris/prompt-context'
+    22→    22→/home/z/my-project/src/app/api/ai/draft-all/route.ts:20:// validated), Phase 2 (problem hypothesis selected). IRIS uses that validated
+    23→    23→/home/z/my-project/src/app/api/ai/plan/route.ts:9:// À partir des réponses de l'interview, IRIS propose un plan de mémoire
+    24→    24→/home/z/my-project/src/app/api/ai/plan/route.ts:38:    const systemPrompt = `Tu es Pr. IRIS, directeur de mémoire virtuel. À partir des éléments fournis par l'étudiant, propose un PLAN de mémoire cohérent et adapté à son niveau.
+    25→    25→/home/z/my-project/src/app/api/ai/validate/route.ts:3:import { buildGuideContext } from '@/lib/iris/prompt-context'
+    26→    26→/home/z/my-project/src/app/api/ai/validate/route.ts:30:          content: `Tu es le Contrôleur qualité de Rimiris AI. Vérifie les réponses collectées pour cette section avant la rédaction.
+    27→    27→/home/z/my-project/src/app/api/ai/section-interview/route.ts:47:// Question banks per section type — IRIS picks the next unanswered question
+    28→    28→/home/z/my-project/src/app/api/ai/section-interview/route.ts:195:            content: `Tu es le Coach méthodologique d'IRIS. L'étudiant ne sait pas répondre à cette question. Explique-lui le concept en français académique, en 3-4 phrases maximum, avec un exemple concret adapté à son domaine (${project.filiere || 'général'}). Ne lui donne PAS la réponse, mais aide-le à la trouver lui-même.
+    29→    29→/home/z/my-project/src/app/api/ai/section-interview/route.ts:218:            content: `Tu es le Coach méthodologique d'IRIS. L'étudiant veut que tu lui proposes plusieurs réponses. Génère 3 propositions argumentées, spécifiques à son contexte.
+    30→    30→/home/z/my-project/src/app/api/ai/section-interview/route.ts:267:            content: `Tu es le Coach méthodologique d'IRIS. L'étudiant veut voir un exemple. Affiche un exemple concret, adapté à son domaine, en 3-5 phrases.
+    31→    31→/home/z/my-project/src/app/api/ai/section-interview/route.ts:299:            content: `Tu es le Contrôleur qualité d'IRIS. Vérifie les réponses collectées pour cette section avant la rédaction.
+    32→    32→/home/z/my-project/src/app/api/ai/humanize/route.ts:92:  const systemPrompt = `Tu es l'Humaniseur de Rimiris AI, passe "${passName}".
+    33→    33→/home/z/my-project/src/app/api/ai/humanize/route.ts:124:        content: `Tu es l'Humaniseur d'IRIS. Résume en 1-2 phrases ce que la passe "${passName}" a modifié dans le texte. Sois concret (ex : "Corrigé 3 accords et 2 ponctuations", "Varié le vocabulaire répétitif", etc.). Ne dépasse pas 30 mots.`,
+    34→    34→/home/z/my-project/src/app/api/ai/chat/route.ts:3:import { AGENTS } from '@/lib/iris/agents'
+    35→    35→/home/z/my-project/src/app/api/ai/chat/route.ts:4:import { CHAPTERS } from '@/lib/iris/chapters'
+    36→    36→/home/z/my-project/src/components/iris/onboarding-interview.tsx:23:  useIrisStore,
+    37→    37→/home/z/my-project/src/components/iris/onboarding-interview.tsx:26:} from '@/store/iris-store'
+    38→    38→/home/z/my-project/src/components/iris/onboarding-interview.tsx:54:  } = useIrisStore()
+    39→    39→/home/z/my-project/src/components/iris/onboarding-interview.tsx:143:          <div className="w-9 h-9 rounded-xl iris-gradient flex items-center justify-center iris-glow">
+    40→    40→/home/z/my-project/src/components/iris/onboarding-interview.tsx:147:            <p className="font-bold text-base leading-none">IRIS</p>
+    41→    41→/home/z/my-project/src/components/iris/onboarding-interview.tsx:197:    useIrisStore()
+    42→    42→/home/z/my-project/src/components/iris/onboarding-interview.tsx:265:          Ces informations seront utilisées par tous les agents IRIS tout au long de votre
+    43→    43→/home/z/my-project/src/components/iris/onboarding-interview.tsx:408:          className="rounded-full iris-gradient text-white"
+    44→    44→/home/z/my-project/src/components/iris/onboarding-interview.tsx:419:// PHASE 1 — Understanding (IRIS analyzes theme, student validates)
+    45→    45→/home/z/my-project/src/components/iris/onboarding-interview.tsx:429:  const { project, themeUnderstanding, setThemeUnderstanding } = useIrisStore()
+    46→    46→/home/z/my-project/src/components/iris/onboarding-interview.tsx:492:          IRIS analyse votre thème
+    47→    47→/home/z/my-project/src/components/iris/onboarding-interview.tsx:504:            IRIS analyse votre thème et identifie les concepts clés...
+    48→    48→/home/z/my-project/src/components/iris/onboarding-interview.tsx:524:                Résumé d'IRIS
+    49→    49→/home/z/my-project/src/components/iris/onboarding-interview.tsx:640:                className="rounded-full iris-gradient text-white"
+    50→    50→/home/z/my-project/src/components/iris/onboarding-interview.tsx:670:  const { project, themeUnderstanding, problemContext, setProblemContext } = useIrisStore()
+    51→    51→/home/z/my-project/src/components/iris/onboarding-interview.tsx:744:          Au lieu de vous demander « depuis quand ce problème existe-t-il », IRIS raisonne à partir
+    52→    52→/home/z/my-project/src/components/iris/onboarding-interview.tsx:772:            Le raisonnement d'IRIS
+    53→    53→/home/z/my-project/src/components/iris/onboarding-interview.tsx:844:            className="rounded-full iris-gradient text-white"
+    54→    54→/home/z/my-project/src/components/iris/onboarding-interview.tsx:868:    useIrisStore()
+    55→    55→/home/z/my-project/src/components/iris/onboarding-interview.tsx:890:        setError("IRIS n'a pas pu proposer de plan. Réessayez.")
+    56→    56→/home/z/my-project/src/components/iris/onboarding-interview.tsx:932:          Plan proposé par IRIS
+    57→    57→/home/z/my-project/src/components/iris/onboarding-interview.tsx:986:          className="rounded-full iris-gradient text-white"
+    58→    58→/home/z/my-project/src/components/iris/draft-all-button.tsx:14:import { useIrisStore, plainTextToHtml } from '@/store/iris-store'
+    59→    59→/home/z/my-project/src/components/iris/draft-all-button.tsx:21:// DraftAllButton — triggers the "IRIS rédige toutes les sections vides" orchestrator.
+    60→    60→/home/z/my-project/src/components/iris/draft-all-button.tsx:55:  } = useIrisStore()
+    61→    61→/home/z/my-project/src/components/iris/draft-all-button.tsx:200:          !compact && 'iris-gradient-text font-semibold'
+    62→    62→/home/z/my-project/src/components/iris/draft-all-button.tsx:208:          <span>IRIS rédige les {emptySections.length} sections vides</span>
+    63→    63→/home/z/my-project/src/components/iris/draft-all-button.tsx:261:            <div className="w-10 h-10 rounded-xl iris-gradient flex items-center justify-center flex-shrink-0">
+    64→    64→/home/z/my-project/src/components/iris/draft-all-button.tsx:273:                  ? 'IRIS rédige vos sections…'
+    65→    65→/home/z/my-project/src/components/iris/draft-all-button.tsx:306:                className="h-full iris-gradient"
+    66→    66→/home/z/my-project/src/components/iris/draft-all-button.tsx:402:              <Button onClick={onClose} size="sm" className="rounded-full iris-gradient text-white">
+    67→    67→/home/z/my-project/src/components/iris/workspace.tsx:35:import { useIrisStore, type Section, type SectionStatus, htmlToPlainText } from '@/store/iris-store'
+    68→    68→/home/z/my-project/src/components/iris/workspace.tsx:36:import { AGENTS } from '@/lib/iris/agents'
+    69→    69→/home/z/my-project/src/components/iris/workspace.tsx:37:import { A4Editor, type A4EditorHandle } from '@/components/iris/a4-editor'
+    70→    70→/home/z/my-project/src/components/iris/workspace.tsx:38:import { SectionWorkflowPanel } from '@/components/iris/section-workflow-panel'
+    71→    71→/home/z/my-project/src/components/iris/workspace.tsx:39:import { DraftAllButton } from '@/components/iris/draft-all-button'
+    72→    72→/home/z/my-project/src/components/iris/workspace.tsx:84:  } = useIrisStore()
+    73→    73→/home/z/my-project/src/components/iris/workspace.tsx:350:          title="Rédiger cette section avec IRIS"
+    74→    74→/home/z/my-project/src/components/iris/workspace.tsx:354:              ? 'iris-gradient text-white shadow-sm'
+    75→    75→/home/z/my-project/src/components/iris/workspace.tsx:459:          {/* Exporter — remplace "Imprimer" et le bouton "IRIS".
+    76→    76→/home/z/my-project/src/components/iris/workspace.tsx:464:            className="rounded-full iris-gradient text-white"
+    77→    77→/home/z/my-project/src/components/iris/workspace.tsx:473:      {/* Empty section CTA — IRIS rédige */}
+    78→    78→/home/z/my-project/src/components/iris/workspace.tsx:489:                  IRIS peut rédiger cette section avec vous
+    79→    79→/home/z/my-project/src/components/iris/workspace.tsx:499:                    className="rounded-full iris-gradient text-white"
+    80→    80→/home/z/my-project/src/components/iris/workspace.tsx:502:                    IRIS rédige cette section
+    81→    81→/home/z/my-project/src/components/iris/workspace.tsx:529:              <div className="w-8 h-8 rounded-full iris-gradient flex items-center justify-center flex-shrink-0">
+    82→    82→/home/z/my-project/src/components/iris/workspace.tsx:535:                  IRIS peut relire votre brouillon et proposer des améliorations.
+    83→    83→/home/z/my-project/src/components/iris/workspace.tsx:573:        <div className="w-16 h-16 rounded-2xl iris-gradient flex items-center justify-center mx-auto mb-4">
+    84→    84→/home/z/my-project/src/components/iris/workspace.tsx:582:          <Button onClick={onNewSection} className="iris-gradient text-white rounded-full">
+    85→    85→/home/z/my-project/src/components/iris/quick-start.tsx:6:import { useIrisStore } from '@/store/iris-store'
+    86→    86→/home/z/my-project/src/components/iris/quick-start.tsx:30:  const { completeQuickStart, project, updateProject } = useIrisStore()
+    87→    87→/home/z/my-project/src/components/iris/quick-start.tsx:54:        <div className="iris-gradient p-6 text-white relative">
+    88→    88→/home/z/my-project/src/components/iris/quick-start.tsx:136:              className="iris-gradient text-white rounded-full"
+    89→    89→/home/z/my-project/src/components/iris/soutenance-view.tsx:20:import { useIrisStore } from '@/store/iris-store'
+    90→    90→/home/z/my-project/src/components/iris/soutenance-view.tsx:40:  const { soutenanceData, setSoutenanceData, project, sections, setView } = useIrisStore() as any
+    91→    91→/home/z/my-project/src/components/iris/soutenance-view.tsx:118:          <div className="w-16 h-16 rounded-2xl iris-gradient flex items-center justify-center mx-auto mb-4">
+    92→    92→/home/z/my-project/src/components/iris/soutenance-view.tsx:123:            Quand votre mémoire est prêt, IRIS génère automatiquement : un résumé, un plan de
+    93→    93→/home/z/my-project/src/components/iris/soutenance-view.tsx:154:              className="w-full mt-6 iris-gradient text-white rounded-xl h-12"
+    94→    94→/home/z/my-project/src/components/iris/soutenance-view.tsx:283:                      <div className="w-8 h-8 rounded-lg iris-gradient text-white flex items-center justify-center flex-shrink-0 text-sm font-bold">
+    95→    95→/home/z/my-project/src/components/iris/soutenance-view.tsx:426:                  Retournez dans votre mémoire et demandez à IRIS de vous aider à renforcer ces points.
+    96→    96→/home/z/my-project/src/components/iris/soutenance-view.tsx:449:            className="iris-gradient text-white rounded-xl"
+    97→    97→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:26:  useIrisStore,
+    98→    98→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:32:} from '@/store/iris-store'
+    99→    99→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:69:  } = useIrisStore()
+   100→   100→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:477:            desc="IRIS m'explique"
+   101→   101→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:522:              className="flex-1 iris-gradient text-white"
+   102→   102→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:755:          className="w-full iris-gradient text-white rounded-full"
+   103→   103→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:820:            className="w-full iris-gradient text-white rounded-full"
+   104→   104→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:950:          className="w-full iris-gradient text-white rounded-full"
+   105→   105→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:978:            className="rounded-xl border border-border bg-white text-black p-4 prose-iris max-h-[400px] overflow-y-auto text-sm"
+   106→   106→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:989:              className="flex-1 iris-gradient text-white rounded-full"
+   107→   107→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:1260:              className="h-full iris-gradient"
+   108→   108→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:1286:          className="w-full iris-gradient text-white rounded-full"
+   109→   109→/home/z/my-project/src/components/iris/section-workflow-panel.tsx:1384:          className="w-full iris-gradient text-white rounded-full"
+   110→   110→/home/z/my-project/src/components/iris/welcome-screen.tsx:19:import { useIrisStore } from '@/store/iris-store'
+   111→   111→/home/z/my-project/src/components/iris/welcome-screen.tsx:24:  const { setView, projectInitialized, project, sections, interviewAnswers } = useIrisStore()
+   112→   112→/home/z/my-project/src/components/iris/welcome-screen.tsx:52:            <div className="w-9 h-9 rounded-xl iris-gradient flex items-center justify-center iris-glow">
+   113→   113→/home/z/my-project/src/components/iris/welcome-screen.tsx:56:              <p className="font-bold text-base leading-none">IRIS</p>
+   114→   114→/home/z/my-project/src/components/iris/welcome-screen.tsx:89:            IRIS vous pose les bonnes questions.
+   115→   115→/home/z/my-project/src/components/iris/welcome-screen.tsx:91:            <span className="iris-gradient-text">Vous rédigez votre mémoire.</span>
+   116→   116→/home/z/my-project/src/components/iris/welcome-screen.tsx:94:            Pas de page blanche. IRIS vous guide par un entretien court,
+   117→   117→/home/z/my-project/src/components/iris/welcome-screen.tsx:102:              className="rounded-full px-8 h-12 text-base iris-gradient text-white hover:opacity-90"
+   118→   118→/home/z/my-project/src/components/iris/welcome-screen.tsx:109:                : 'Démarrer l\'entretien avec IRIS'}
+   119→   119→/home/z/my-project/src/components/iris/welcome-screen.tsx:135:                desc: 'IRIS vous pose 5 questions sur votre sujet',
+   120→   120→/home/z/my-project/src/components/iris/welcome-screen.tsx:140:                desc: 'IRIS suggère un plan, vous le modifiez librement',
+   121→   121→/home/z/my-project/src/components/iris/welcome-screen.tsx:145:                desc: 'Section par section, IRIS rédige avec vous',
+   122→   122→/home/z/my-project/src/components/iris/welcome-screen.tsx:180:              title: 'IRIS vous interviewe',
+   123→   123→/home/z/my-project/src/components/iris/welcome-screen.tsx:181:              desc: "Plus de page blanche. IRIS pose les questions, vous répondez, et le plan se construit naturellement. Pas besoin de savoir par où commencer.",
+   124→   124→/home/z/my-project/src/components/iris/welcome-screen.tsx:186:              desc: "Pour chaque section, IRIS rédige un brouillon déjà formaté aux normes académiques. Vous l'éditez directement dans l'éditeur A4.",
+   125→   125→/home/z/my-project/src/components/iris/welcome-screen.tsx:191:              desc: "Quand vous êtes prêt, IRIS vérifie la cohérence globale et génère votre kit de soutenance : résumé, plan, questions du jury.",
+   126→   126→/home/z/my-project/src/components/iris/welcome-screen.tsx:225:          Rimiris AI — Plateforme d'accompagnement à la rédaction académique
+   127→   127→/home/z/my-project/src/components/iris/export-view.tsx:30:import { useIrisStore } from '@/store/iris-store'
+   128→   128→/home/z/my-project/src/components/iris/export-view.tsx:81:  const { project, sections, setView } = useIrisStore()
+   129→   129→/home/z/my-project/src/components/iris/export-view.tsx:102:            <div className="w-8 h-8 rounded-lg iris-gradient flex items-center justify-center">
+   130→   130→/home/z/my-project/src/components/iris/export-view.tsx:403:                  className="prose-iris text-sm leading-relaxed"
+   131→   131→/home/z/my-project/src/components/iris/export-view.tsx:679:        'Le rendu visuel est identique à l\'aperçu dans IRIS.',
+   132→   132→/home/z/my-project/src/components/iris/export-view.tsx:718:        filename = `${slugify(project.title || 'memoire-iris')}.doc`
+   133→   133→/home/z/my-project/src/components/iris/export-view.tsx:722:        filename = `${slugify(project.title || 'memoire-iris')}.html`
+   134→   134→/home/z/my-project/src/components/iris/export-view.tsx:727:        filename = `${slugify(project.title || 'memoire-iris')}.md`
+   135→   135→/home/z/my-project/src/components/iris/export-view.tsx:832:          className="iris-gradient text-white rounded-full flex-1 sm:flex-initial"
+   136→   136→/home/z/my-project/src/components/iris/export-view.tsx:967:            className="w-full iris-gradient text-white rounded-full"
+   137→   137→/home/z/my-project/src/components/iris/export-view.tsx:1149:              className="text-sm leading-relaxed prose-iris"
+   138→   138→/home/z/my-project/src/components/iris/export-view.tsx:1170:    .slice(0, 60) || 'memoire-iris'
+   139→   139→/home/z/my-project/src/app/api/ai/draft/route.ts:3:import { AGENTS } from '@/lib/iris/agents'
+   140→   140→/home/z/my-project/src/app/api/ai/draft/route.ts:4:import { buildGuideContext, buildProjectContext } from '@/lib/iris/prompt-context'
+   141→   141→/home/z/my-project/src/components/iris/a4-editor.tsx:279:    // <div class="iris-page-break iris-page-break-auto" contenteditable="false">
+   142→   142→/home/z/my-project/src/components/iris/a4-editor.tsx:327:        const oldAuto = editor.querySelectorAll('.iris-page-break-auto[data-auto="true"]')
+   143→   143→/home/z/my-project/src/components/iris/a4-editor.tsx:342:            if (child.classList.contains('iris-page-break-auto')) continue
+   144→   144→/home/z/my-project/src/components/iris/a4-editor.tsx:344:            if (child.classList.contains('iris-footnotes')) continue
+   145→   145→/home/z/my-project/src/components/iris/a4-editor.tsx:348:              child.classList.contains('iris-page-break') &&
+   146→   146→/home/z/my-project/src/components/iris/a4-editor.tsx:349:              !child.classList.contains('iris-page-break-auto')
+   147→   147→/home/z/my-project/src/components/iris/a4-editor.tsx:409:              pusher.className = 'iris-page-break iris-page-break-auto'
+   148→   148→/home/z/my-project/src/components/iris/a4-editor.tsx:412:              pusher.setAttribute('data-iris', 'page-break')
+   149→   149→/home/z/my-project/src/components/iris/a4-editor.tsx:789:      const html = `<table class="iris-table"><caption>Légende du tableau</caption>${head}<tbody>${bodyRows}</tbody></table><p>&nbsp;</p>`
+   150→   150→/home/z/my-project/src/components/iris/a4-editor.tsx:797:    // Generates an HTML <table class="iris-spreadsheet"> with column headers
+   151→   151→/home/z/my-project/src/components/iris/a4-editor.tsx:804:      const head = `<thead><tr><th class="iris-corner">#</th>${colHeaders.map((c) => `<th class="iris-col-h">${c}</th>`).join('')}</tr></thead>`
+   152→   152→/home/z/my-project/src/components/iris/a4-editor.tsx:807:        return `<tr><th class="iris-row-h">${r + 1}</th>${cells}</tr>`
+   153→   153→/home/z/my-project/src/components/iris/a4-editor.tsx:809:      const html = `<table class="iris-spreadsheet">${head}<tbody>${bodyRows}</tbody></table><p>&nbsp;</p>`
+   154→   154→/home/z/my-project/src/components/iris/a4-editor.tsx:847:      document.execCommand('insertHTML', false, `<img src="${safe}" alt="${altSafe}" class="iris-img" />`)
+   155→   155→/home/z/my-project/src/components/iris/a4-editor.tsx:877:      const html = `<div class="iris-page-break" contenteditable="false" data-iris="page-break"><span>Saut de page</span></div><p>&nbsp;</p>`
+   156→   156→/home/z/my-project/src/components/iris/a4-editor.tsx:909:      const existing = editorRef.current?.querySelectorAll('sup.iris-fn')
+   157→   157→/home/z/my-project/src/components/iris/a4-editor.tsx:911:      const html = `<sup class="iris-fn" data-fn="${next}"><a href="#fn-${next}" id="fnref-${next}">[${next}]</a></sup>`
+   158→   158→/home/z/my-project/src/components/iris/a4-editor.tsx:916:        let notes = editor.querySelector('.iris-footnotes')
+   159→   159→/home/z/my-project/src/components/iris/a4-editor.tsx:919:          notes.className = 'iris-footnotes'
+   160→   160→/home/z/my-project/src/components/iris/a4-editor.tsx:926:        p.innerHTML = `<sup>[${next}]</sup> &nbsp; <span class="iris-fn-text">Saisissez votre note ici…</span>`
+   161→   161→/home/z/my-project/src/components/iris/a4-editor.tsx:1334:          'prose-iris',
+   162→   162→/home/z/my-project/src/components/iris/a4-editor.tsx:1343:        data-placeholder="Commencez à écrire ici, ou demandez à IRIS de générer un brouillon formaté…"
+   163→   163→/home/z/my-project/src/components/iris/header.tsx:5:import { useIrisStore } from '@/store/iris-store'
+   164→   164→/home/z/my-project/src/components/iris/header.tsx:22:  } = useIrisStore()
+   165→   165→/home/z/my-project/src/components/iris/header.tsx:45:            <div className="w-7 h-7 rounded-lg iris-gradient flex items-center justify-center">
+   166→   166→/home/z/my-project/src/components/iris/header.tsx:48:            <span className="font-bold text-sm">IRIS</span>
+   167→   167→/home/z/my-project/src/components/iris/header.tsx:103:  const { view, setView } = useIrisStore()
+   168→   168→/home/z/my-project/src/components/iris/plagiarism-view.tsx:21:import { useIrisStore } from '@/store/iris-store'
+   169→   169→/home/z/my-project/src/components/iris/plagiarism-view.tsx:63:  } = useIrisStore() as any
+   170→   170→/home/z/my-project/src/components/iris/plagiarism-view.tsx:114:            Avant l'audit final, IRIS scanne votre mémoire pour détecter les redondances internes,
+   171→   171→/home/z/my-project/src/components/iris/plagiarism-view.tsx:163:              className="w-full iris-gradient text-white rounded-xl h-12"
+   172→   172→/home/z/my-project/src/components/iris/plagiarism-view.tsx:197:            IRIS analyse vos sections (règles + IA) — cela peut prendre 20 à 40 secondes.
+   173→   173→/home/z/my-project/src/components/iris/audit-view.tsx:15:import { useIrisStore, type AuditScore, type AuditReport, htmlToPlainText } from '@/store/iris-store'
+   174→   174→/home/z/my-project/src/components/iris/audit-view.tsx:43:  const { project, sections, auditReport, setAuditReport } = useIrisStore()
+   175→   175→/home/z/my-project/src/components/iris/audit-view.tsx:332:          <Button onClick={runAudit} size="lg" className="rounded-full iris-gradient text-white">
+   176→   176→/home/z/my-project/src/components/iris/simulation-view.tsx:22:import { useIrisStore, type JuryRole } from '@/store/iris-store'
+   177→   177→/home/z/my-project/src/components/iris/simulation-view.tsx:67:  } = useIrisStore() as any
+   178→   178→/home/z/my-project/src/components/iris/simulation-view.tsx:347:              className="w-full iris-gradient text-white rounded-xl h-12"
+   179→   179→/home/z/my-project/src/components/iris/simulation-view.tsx:761:              className="rounded-full h-11 w-11 flex-shrink-0 iris-gradient text-white"
+   180→   180→/home/z/my-project/src/components/iris/guide-view.tsx:5:import { useIrisStore } from '@/store/iris-store'
+   181→   181→/home/z/my-project/src/components/iris/guide-view.tsx:6:import { GuideUpload } from '@/components/iris/guide-upload'
+   182→   182→/home/z/my-project/src/components/iris/guide-view.tsx:14:// et comprend comment IRIS l'utilise pour adapter ses rédactions.
+   183→   183→/home/z/my-project/src/components/iris/guide-view.tsx:18:  const { project, setView } = useIrisStore()
+   184→   184→/home/z/my-project/src/components/iris/guide-view.tsx:34:            <div className="w-11 h-11 rounded-xl iris-gradient flex items-center justify-center flex-shrink-0">
+   185→   185→/home/z/my-project/src/components/iris/guide-view.tsx:40:                Importez le PDF officiel de votre université. IRIS l'utilise comme
+   186→   186→/home/z/my-project/src/components/iris/guide-view.tsx:60:                  IRIS utilise les conventions académiques générales. Avec votre guide, IRIS
+   187→   187→/home/z/my-project/src/components/iris/guide-view.tsx:86:        {/* How IRIS uses the guide */}
+   188→   188→/home/z/my-project/src/components/iris/guide-view.tsx:91:              Comment IRIS exploite votre guide
+   189→   189→/home/z/my-project/src/components/iris/guide-view.tsx:115:                  <strong className="text-foreground">Conformité structurelle</strong> — IRIS
+   190→   190→/home/z/my-project/src/components/iris/guide-view.tsx:137:              className="rounded-full iris-gradient text-white"
+   191→   191→/home/z/my-project/src/components/iris/plan-review.tsx:18:import { useIrisStore } from '@/store/iris-store'
+   192→   192→/home/z/my-project/src/components/iris/plan-review.tsx:37:  } = useIrisStore()
+   193→   193→/home/z/my-project/src/components/iris/plan-review.tsx:110:            <div className="w-9 h-9 rounded-xl iris-gradient flex items-center justify-center iris-glow">
+   194→   194→/home/z/my-project/src/components/iris/plan-review.tsx:114:              <p className="font-bold text-base leading-none">IRIS</p>
+   195→   195→/home/z/my-project/src/components/iris/plan-review.tsx:145:              Plan proposé par IRIS
+   196→   196→/home/z/my-project/src/components/iris/plan-review.tsx:165:                Ce qu'IRIS a retenu de vous
+   197→   197→/home/z/my-project/src/components/iris/plan-review.tsx:248:                className="rounded-full iris-gradient text-white"
+   198→   198→/home/z/my-project/src/components/iris/agents-view.tsx:20:import { useIrisStore } from '@/store/iris-store'
+   199→   199→/home/z/my-project/src/components/iris/agents-view.tsx:21:import { AGENTS } from '@/lib/iris/agents'
+   200→   200→/home/z/my-project/src/components/iris/agents-view.tsx:22:import { CHAPTERS } from '@/lib/iris/chapters'
+   201→   201→/home/z/my-project/src/components/iris/agents-view.tsx:59:  const { sections, setView, setActiveSection, setAIPanel } = useIrisStore()
+   202→   202→/home/z/my-project/src/components/iris/agents-view.tsx:103:          IRIS choisit automatiquement le bon agent selon votre section. Vous pouvez aussi
+   203→   203→/home/z/my-project/src/components/iris/agents-view.tsx:178:              Quand vous écrivez dans une section importée du template académique, IRIS active
+   204→   204→/home/z/my-project/src/components/iris/agents-view.tsx:180:              sections que vous créez librement, c'est Pr. IRIS (directeur de mémoire) qui vous
+   205→   205→/home/z/my-project/src/components/iris/agents-view.tsx:207:                  Partagez votre projet IRIS avec votre véritable directeur de mémoire. Il pourra
+   206→   206→/home/z/my-project/src/components/iris/agents-view.tsx:227:              sera déployée dans une prochaine version de Rimiris AI.
+   207→   207→/home/z/my-project/src/components/iris/sidebar.tsx:20:import { useIrisStore, type ViewMode } from '@/store/iris-store'
+   208→   208→/home/z/my-project/src/components/iris/sidebar.tsx:38:  const { view, setView, sidebarCollapsed, toggleSidebar, project, sections } = useIrisStore() as any
+   209→   209→/home/z/my-project/src/components/iris/sidebar.tsx:57:          className="w-9 h-9 rounded-xl iris-gradient flex items-center justify-center flex-shrink-0"
+   210→   210→/home/z/my-project/src/components/iris/sidebar.tsx:63:            <p className="font-bold text-sm leading-none">IRIS</p>
+   211→   211→/home/z/my-project/src/components/iris/sidebar.tsx:120:              className="h-full iris-gradient transition-all"
+   212→   212→/home/z/my-project/src/components/iris/coherence-view.tsx:14:import { useIrisStore, type CoherenceIssue } from '@/store/iris-store'
+   213→   213→/home/z/my-project/src/components/iris/coherence-view.tsx:23:    useIrisStore()
+   214→   214→/home/z/my-project/src/components/iris/coherence-view.tsx:59:            IRIS vérifie que toutes vos sections s'enchaînent logiquement et qu'il n'y a pas de
+   215→   215→/home/z/my-project/src/components/iris/coherence-view.tsx:66:          className="rounded-full iris-gradient text-white"
+   216→   216→/home/z/my-project/src/components/iris/coherence-view.tsx:163:            Ce que IRIS vérifie
+   217→   217→/home/z/my-project/src/components/iris/guide-upload.tsx:15:import { useIrisStore } from '@/store/iris-store'
+   218→   218→/home/z/my-project/src/components/iris/guide-upload.tsx:34:  const { project, updateProject } = useIrisStore()
+   219→   219→/home/z/my-project/src/components/iris/guide-upload.tsx:73:        `Guide méthodologique importé (${data.numPages} pages, ${data.charCount} caractères${data.truncated ? ', tronqué à 30k' : ''}). IRIS l'utilisera comme contexte permanent.`
+   220→   220→/home/z/my-project/src/components/iris/guide-upload.tsx:164:            Importez le PDF — IRIS l'utilisera comme contexte permanent pour adapter
+   221→   221→/home/z/my-project/src/app/api/ai/audit/route.ts:3:import { buildGuideContext } from '@/lib/iris/prompt-context'
+   222→   222→/home/z/my-project/src/app/api/ai/audit/route.ts:43:    const systemPrompt = `Tu es le Contrôleur qualité de Rimiris AI. Réalise l'audit final du mémoire suivant.
+   223→   223→/home/z/my-project/src/app/api/ai/blocked/route.ts:3:import { CHAPTERS } from '@/lib/iris/chapters'
+   224→   224→/home/z/my-project/src/app/api/ai/blocked/route.ts:29:    const systemPrompt = `Tu es l'assistant "Je suis bloqué" de Rimiris AI. L'étudiant vient de cliquer sur le bouton "Je suis bloqué". Ta mission est de le débloquer IMMÉDIATEMENT avec bienveillance.
+   225→   225→/home/z/my-project/src/app/api/ai/subjects/route.ts:24:    const systemPrompt = `Tu es Pr. IRIS, directeur de mémoire. L'étudiant cherche un sujet de recherche. Propose 5 sujets pertinents, originaux et faisables, basés sur le profil de l'étudiant.
+   226→   226→/home/z/my-project/src/app/page.tsx:4:import { useIrisStore } from '@/store/iris-store'
+   227→   227→/home/z/my-project/src/app/page.tsx:5:import { WelcomeScreen } from '@/components/iris/welcome-screen'
+   228→   228→/home/z/my-project/src/app/page.tsx:6:import { OnboardingInterview } from '@/components/iris/onboarding-interview'
+   229→   229→/home/z/my-project/src/app/page.tsx:7:import { Sidebar } from '@/components/iris/sidebar'
+   230→   230→/home/z/my-project/src/app/page.tsx:8:import { Header } from '@/components/iris/header'
+   231→   231→/home/z/my-project/src/app/page.tsx:9:import { Workspace } from '@/components/iris/workspace'
+   232→   232→/home/z/my-project/src/app/page.tsx:10:import { CoherenceView } from '@/components/iris/coherence-view'
+   233→   233→/home/z/my-project/src/app/page.tsx:11:import { SoutenanceView } from '@/components/iris/soutenance-view'
+   234→   234→/home/z/my-project/src/app/page.tsx:12:import { SimulationView } from '@/components/iris/simulation-view'
+   235→   235→/home/z/my-project/src/app/page.tsx:13:import { PlagiarismView } from '@/components/iris/plagiarism-view'
+   236→   236→/home/z/my-project/src/app/page.tsx:14:import { ExportView } from '@/components/iris/export-view'
+   237→   237→/home/z/my-project/src/app/page.tsx:15:import { AgentsView } from '@/components/iris/agents-view'
+   238→   238→/home/z/my-project/src/app/page.tsx:16:import { AuditView } from '@/components/iris/audit-view'
+   239→   239→/home/z/my-project/src/app/page.tsx:17:import { GuideView } from '@/components/iris/guide-view'
+   240→   240→/home/z/my-project/src/app/page.tsx:20:  const { view, projectInitialized } = useIrisStore()
+   241→   241→/home/z/my-project/src/app/globals.css:47:  /* RIMIRIS AI - Identité visuelle : violet académique profond + accents or/ambre */
+   242→   242→/home/z/my-project/src/app/globals.css:142:/* IRIS branded gradient utilities */
+   243→   243→/home/z/my-project/src/app/globals.css:143:.iris-gradient {
+   244→   244→/home/z/my-project/src/app/globals.css:146:.iris-gradient-text {
+   245→   245→/home/z/my-project/src/app/globals.css:153:.dark .iris-gradient-text {
+   246→   246→/home/z/my-project/src/app/globals.css:160:.iris-glow {
+   247→   247→/home/z/my-project/src/app/globals.css:163:.dark .iris-glow {
+   248→   248→/home/z/my-project/src/app/globals.css:309:.prose-iris p,
+   249→   249→/home/z/my-project/src/app/globals.css:310:.prose-iris li,
+   250→   250→/home/z/my-project/src/app/globals.css:311:.prose-iris blockquote,
+
+[showing lines 1-250 of 302; use offset=251 with limit to continue reading]

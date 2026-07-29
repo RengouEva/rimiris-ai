@@ -56,7 +56,7 @@ export function CoherenceView() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold">Cohérence globale</h1>
           <p className="text-muted-foreground text-sm mt-1 max-w-2xl">
-            IRIS vérifie que toutes vos sections s'enchaînent logiquement et qu'il n'y a pas de
+            Rimiris vérifie que toutes vos sections s'enchaînent logiquement et qu'il n'y a pas de
             contradiction entre vos objectifs, votre méthodologie et vos conclusions.
           </p>
         </div>
@@ -160,7 +160,7 @@ export function CoherenceView() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
-            Ce que IRIS vérifie
+            Ce que Rimiris vérifie
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">

@@ -121,7 +121,7 @@ RÈGLES :
     messages: [
       {
         role: 'assistant',
-        content: `Tu es l'Humaniseur d'IRIS. Résume en 1-2 phrases ce que la passe "${passName}" a modifié dans le texte. Sois concret (ex : "Corrigé 3 accords et 2 ponctuations", "Varié le vocabulaire répétitif", etc.). Ne dépasse pas 30 mots.`,
+        content: `Tu es l'Humaniseur de Rimiris. Résume en 1-2 phrases ce que la passe "${passName}" a modifié dans le texte. Sois concret (ex : "Corrigé 3 accords et 2 ponctuations", "Varié le vocabulaire répétitif", etc.). Ne dépasse pas 30 mots.`,
       },
       {
         role: 'user',

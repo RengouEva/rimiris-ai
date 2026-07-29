@@ -70,7 +70,7 @@ export function GuideUpload({ variant = 'full', onClose }: GuideUploadProps) {
       })
 
       toast.success(
-        `Guide méthodologique importé (${data.numPages} pages, ${data.charCount} caractères${data.truncated ? ', tronqué à 30k' : ''}). IRIS l'utilisera comme contexte permanent.`
+        `Guide méthodologique importé (${data.numPages} pages, ${data.charCount} caractères${data.truncated ? ', tronqué à 30k' : ''}). Rimiris l'utilisera comme contexte permanent.`
       )
     } catch (err: any) {
       console.error('[GuideUpload] Error:', err)
@@ -161,7 +161,7 @@ export function GuideUpload({ variant = 'full', onClose }: GuideUploadProps) {
             Guide méthodologique de votre université
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Importez le PDF — IRIS l'utilisera comme contexte permanent pour adapter
+            Importez le PDF — Rimiris l'utilisera comme contexte permanent pour adapter
             structure, normes et formulation aux exigences de votre établissement.
           </p>
         </div>

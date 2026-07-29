@@ -1340,7 +1340,7 @@ const A4Page = React.forwardRef<
           minHeight: '297mm',
           padding: '25mm 25mm 30mm 25mm',
         }}
-        data-placeholder="Commencez à écrire ici, ou demandez à IRIS de générer un brouillon formaté…"
+        data-placeholder="Commencez à écrire ici, ou demandez à Rimiris de générer un brouillon formaté…"
       />
       {/* Watermark layer — rendered behind the content, repeated on each A4 page.
           Only visible when `watermark` prop is non-null. */}

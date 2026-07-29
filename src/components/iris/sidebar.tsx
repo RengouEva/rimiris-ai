@@ -60,7 +60,7 @@ export function Sidebar() {
         </button>
         {!sidebarCollapsed && (
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm leading-none">IRIS</p>
+            <p className="font-bold text-sm leading-none">Rimiris</p>
             <p className="text-xs text-muted-foreground leading-none mt-1 truncate">
               {project.title || 'Nouveau mémoire'}
             </p>

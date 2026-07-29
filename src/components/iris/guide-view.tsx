@@ -37,7 +37,7 @@ export function GuideView() {
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold leading-none">Guide méthodologique</h1>
               <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-                Importez le PDF officiel de votre université. IRIS l'utilise comme
+                Importez le PDF officiel de votre université. Rimiris l'utilise comme
                 contexte permanent pour adapter la structure, les normes bibliographiques
                 et la formulation à vos exigences locales.
               </p>
@@ -57,7 +57,7 @@ export function GuideView() {
                 <p className="text-muted-foreground">
                   Chaque établissement a ses propres règles : nombre de pages, structure
                   attendue, style des citations, formulation de la problématique. Sans guide,
-                  IRIS utilise les conventions académiques générales. Avec votre guide, IRIS
+                  Rimiris utilise les conventions académiques générales. Avec votre guide, Rimiris
                   produit un mémoire conforme à <strong>votre</strong> université.
                 </p>
               </div>
@@ -88,7 +88,7 @@ export function GuideView() {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Info className="h-4 w-4 text-primary" />
-              Comment IRIS exploite votre guide
+              Comment Rimiris exploite votre guide
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -112,7 +112,7 @@ export function GuideView() {
               <li className="flex items-start gap-2.5">
                 <span className="text-primary mt-0.5 font-bold">3.</span>
                 <span>
-                  <strong className="text-foreground">Conformité structurelle</strong> — IRIS
+                  <strong className="text-foreground">Conformité structurelle</strong> — Rimiris
                   adapte le nombre de sections, leur titrage, la formulation de la problématique
                   et le style de citation aux règles détectées dans le guide.
                 </span>

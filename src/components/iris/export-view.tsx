@@ -676,7 +676,7 @@ function FormatPanel({
       tips: [
         'Le HTML inclut le CSS en ligne (aucun fichier externe nécessaire).',
         'Idéal pour publier en ligne ou partager par email.',
-        'Le rendu visuel est identique à l\'aperçu dans IRIS.',
+        'Le rendu visuel est identique à l\'aperçu dans Rimiris.',
       ],
     },
     markdown: {

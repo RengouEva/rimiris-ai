@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
         messages: [
           {
             role: 'assistant',
-            content: `Tu es le Coach méthodologique d'IRIS. L'étudiant ne sait pas répondre à cette question. Explique-lui le concept en français académique, en 3-4 phrases maximum, avec un exemple concret adapté à son domaine (${project.filiere || 'général'}). Ne lui donne PAS la réponse, mais aide-le à la trouver lui-même.
+            content: `Tu es le Coach méthodologique de Rimiris. L'étudiant ne sait pas répondre à cette question. Explique-lui le concept en français académique, en 3-4 phrases maximum, avec un exemple concret adapté à son domaine (${project.filiere || 'général'}). Ne lui donne PAS la réponse, mais aide-le à la trouver lui-même.
 
 Question : "${nextQuestion.question}"
 Thème : ${project.title || 'non précisé'}
@@ -215,7 +215,7 @@ Domaine : ${themeUnderstanding?.domain || project.filiere || 'non précisé'}`,
         messages: [
           {
             role: 'assistant',
-            content: `Tu es le Coach méthodologique d'IRIS. L'étudiant veut que tu lui proposes plusieurs réponses. Génère 3 propositions argumentées, spécifiques à son contexte.
+            content: `Tu es le Coach méthodologique de Rimiris. L'étudiant veut que tu lui proposes plusieurs réponses. Génère 3 propositions argumentées, spécifiques à son contexte.
 
 Question : "${nextQuestion.question}"
 Thème : ${project.title || 'non précisé'}
@@ -264,7 +264,7 @@ Réponds UNIQUEMENT en JSON :
         messages: [
           {
             role: 'assistant',
-            content: `Tu es le Coach méthodologique d'IRIS. L'étudiant veut voir un exemple. Affiche un exemple concret, adapté à son domaine, en 3-5 phrases.
+            content: `Tu es le Coach méthodologique de Rimiris. L'étudiant veut voir un exemple. Affiche un exemple concret, adapté à son domaine, en 3-5 phrases.
 
 Question : "${nextQuestion.question}"
 Thème : ${project.title || 'non précisé'}
@@ -296,7 +296,7 @@ Réponds en français académique, max 150 mots.`,
         messages: [
           {
             role: 'assistant',
-            content: `Tu es le Contrôleur qualité d'IRIS. Vérifie les réponses collectées pour cette section avant la rédaction.
+            content: `Tu es le Contrôleur qualité de Rimiris. Vérifie les réponses collectées pour cette section avant la rédaction.
 
 SECTION : "${sectionTitle}"
 ${sectionDescription ? `Description : ${sectionDescription}` : ''}

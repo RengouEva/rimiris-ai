@@ -45,7 +45,7 @@ export function Header() {
             <div className="w-7 h-7 rounded-lg iris-gradient flex items-center justify-center">
               <GraduationCap className="h-4 w-4 text-white" />
             </div>
-            <span className="font-bold text-sm">IRIS</span>
+            <span className="font-bold text-sm">Rimiris</span>
           </div>
         </div>
 

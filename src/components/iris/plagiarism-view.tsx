@@ -111,7 +111,7 @@ export function PlagiarismView() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">Vérification anti-plagiat</h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            Avant l'audit final, IRIS scanne votre mémoire pour détecter les redondances internes,
+            Avant l'audit final, Rimiris scanne votre mémoire pour détecter les redondances internes,
             les formulations passe-partout, les sections sous-développées et les affirmations non
             sourcées. <strong>Cette vérification est interne</strong> — elle ne remplace pas un
             outil comme Turnitin, mais elle vous aide à retravailler les zones à risque.
@@ -194,7 +194,7 @@ export function PlagiarismView() {
           </div>
           <h1 className="text-2xl font-bold mb-2">Vérification en cours…</h1>
           <p className="text-muted-foreground">
-            IRIS analyse vos sections (règles + IA) — cela peut prendre 20 à 40 secondes.
+            Rimiris analyse vos sections (règles + IA) — cela peut prendre 20 à 40 secondes.
           </p>
         </div>
       </div>

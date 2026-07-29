@@ -120,7 +120,7 @@ export function SoutenanceView() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">Préparation à la soutenance</h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            Quand votre mémoire est prêt, IRIS génère automatiquement : un résumé, un plan de
+            Quand votre mémoire est prêt, Rimiris génère automatiquement : un résumé, un plan de
             présentation, les questions probables du jury (classées par rôle : président,
             rapporteur, directeur, examinateur), et les points faibles à renforcer.
           </p>
@@ -423,7 +423,7 @@ export function SoutenanceView() {
               <div className="mt-4 pt-4 border-t flex items-start gap-2">
                 <Lightbulb className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-muted-foreground">
-                  Retournez dans votre mémoire et demandez à IRIS de vous aider à renforcer ces points.
+                  Retournez dans votre mémoire et demandez à Rimiris de vous aider à renforcer ces points.
                 </p>
               </div>
             </CardContent>

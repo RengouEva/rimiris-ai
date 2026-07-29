@@ -53,8 +53,8 @@ export function WelcomeScreen() {
               <GraduationCap className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="font-bold text-base leading-none">IRIS</p>
-              <p className="text-xs text-muted-foreground leading-none mt-0.5">Thesis AI</p>
+              <p className="font-bold text-base leading-none">Rimiris</p>
+              <p className="text-xs text-muted-foreground leading-none mt-0.5">AI</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -86,12 +86,12 @@ export function WelcomeScreen() {
             Votre directeur de mémoire virtuel
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-5">
-            IRIS vous pose les bonnes questions.
+            Rimiris vous pose les bonnes questions.
             <br />
             <span className="iris-gradient-text">Vous rédigez votre mémoire.</span>
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed">
-            Pas de page blanche. IRIS vous guide par un entretien court,
+            Pas de page blanche. Rimiris vous guide par un entretien court,
             propose un plan structuré, puis rédige chaque section avec vous — déjà mise en forme.
             Vous gardez le contrôle à chaque étape.
           </p>
@@ -106,7 +106,7 @@ export function WelcomeScreen() {
                 ? 'Reprendre mon mémoire'
                 : interviewAnswers.length > 0
                 ? 'Reprendre l\'entretien'
-                : 'Démarrer l\'entretien avec IRIS'}
+                : 'Démarrer l\'entretien avec Rimiris'}
               <ArrowRight className="h-5 w-5 ml-2" />
             </Button>
             <span className="text-xs text-muted-foreground">
@@ -132,17 +132,17 @@ export function WelcomeScreen() {
               {
                 icon: MessageCircle,
                 label: '1. Entretien',
-                desc: 'IRIS vous pose 5 questions sur votre sujet',
+                desc: 'Rimiris vous pose 5 questions sur votre sujet',
               },
               {
                 icon: Layers,
                 label: '2. Plan proposé',
-                desc: 'IRIS suggère un plan, vous le modifiez librement',
+                desc: 'Rimiris suggère un plan, vous le modifiez librement',
               },
               {
                 icon: PenLine,
                 label: '3. Rédaction guidée',
-                desc: 'Section par section, IRIS rédige avec vous',
+                desc: 'Section par section, Rimiris rédige avec vous',
               },
               {
                 icon: Presentation,
@@ -177,18 +177,18 @@ export function WelcomeScreen() {
           {[
             {
               icon: MessageCircle,
-              title: 'IRIS vous interviewe',
-              desc: "Plus de page blanche. IRIS pose les questions, vous répondez, et le plan se construit naturellement. Pas besoin de savoir par où commencer.",
+              title: 'Rimiris vous interviewe',
+              desc: "Plus de page blanche. Rimiris pose les questions, vous répondez, et le plan se construit naturellement. Pas besoin de savoir par où commencer.",
             },
             {
               icon: PenLine,
               title: 'Rédaction section par section',
-              desc: "Pour chaque section, IRIS rédige un brouillon déjà formaté aux normes académiques. Vous l'éditez directement dans l'éditeur A4.",
+              desc: "Pour chaque section, Rimiris rédige un brouillon déjà formaté aux normes académiques. Vous l'éditez directement dans l'éditeur A4.",
             },
             {
               icon: ShieldCheck,
               title: 'Cohérence et soutenance',
-              desc: "Quand vous êtes prêt, IRIS vérifie la cohérence globale et génère votre kit de soutenance : résumé, plan, questions du jury.",
+              desc: "Quand vous êtes prêt, Rimiris vérifie la cohérence globale et génère votre kit de soutenance : résumé, plan, questions du jury.",
             },
           ].map((feat, idx) => (
             <motion.div

@@ -347,7 +347,7 @@ function SectionItem({
             e.stopPropagation()
             onOpenAI()
           }}
-          title="Rédiger cette section avec IRIS"
+          title="Rédiger cette section avec Rimiris"
           className={cn(
             'flex-shrink-0 p-1.5 rounded-md transition-all',
             active
@@ -486,7 +486,7 @@ function EditorView({
                   Section vide
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold">
-                  IRIS peut rédiger cette section avec vous
+                  Rimiris peut rédiger cette section avec vous
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   Cliquez sur l'icône <Sparkles className="inline h-3 w-3" /> à côté du titre de la section
@@ -499,7 +499,7 @@ function EditorView({
                     className="rounded-full iris-gradient text-white"
                   >
                     <Wand2 className="h-4 w-4 mr-2" />
-                    IRIS rédige cette section
+                    Rimiris rédige cette section
                   </Button>
                 </div>
               </div>
@@ -532,7 +532,7 @@ function EditorView({
               <div className="flex-1">
                 <p className="text-xs font-medium mb-1">Envie d'un retour ?</p>
                 <p className="text-[11px] text-muted-foreground mb-2">
-                  IRIS peut relire votre brouillon et proposer des améliorations.
+                  Rimiris peut relire votre brouillon et proposer des améliorations.
                 </p>
                 <div className="flex gap-1.5">
                   <Button size="sm" variant="outline" onClick={onOpenAI} className="h-7 text-xs">

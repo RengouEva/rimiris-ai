@@ -100,7 +100,7 @@ export function AgentsView() {
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold">10 agents IA à votre service</h1>
         <p className="text-muted-foreground text-sm mt-1 max-w-2xl">
-          IRIS choisit automatiquement le bon agent selon votre section. Vous pouvez aussi
+          Rimiris choisit automatiquement le bon agent selon votre section. Vous pouvez aussi
           solliciter un agent spécifique via le panneau IA.
         </p>
       </div>
@@ -175,9 +175,9 @@ export function AgentsView() {
           <div className="text-sm">
             <p className="font-semibold mb-1">Comment ça marche ?</p>
             <p className="text-muted-foreground">
-              Quand vous écrivez dans une section importée du template académique, IRIS active
+              Quand vous écrivez dans une section importée du template académique, Rimiris active
               automatiquement l'agent correspondant (méthodologie, bibliographie, etc.). Pour les
-              sections que vous créez librement, c'est Pr. IRIS (directeur de mémoire) qui vous
+              sections que vous créez librement, c'est Pr. Rimiris (directeur de mémoire) qui vous
               accompagne par défaut.
             </p>
           </div>
@@ -204,7 +204,7 @@ export function AgentsView() {
                   </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Partagez votre projet IRIS avec votre véritable directeur de mémoire. Il pourra
+                  Partagez votre projet Rimiris avec votre véritable directeur de mémoire. Il pourra
                   laisser des annotations paragraphe par paragraphe, valider ou invalider les
                   phases du workflow, et co-rédiger les commentaires méthodologiques.
                 </p>
