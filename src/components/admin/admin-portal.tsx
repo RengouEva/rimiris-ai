@@ -23,7 +23,7 @@ import {
   type AuthAccount, type AuthSession,
 } from '@/lib/iris/auth'
 import { useAuth } from '@/hooks/use-auth'
-import { TIER_LIST, getTier } from '@/lib/iris/tiers'
+import { TIER_LIST, getTier, formatXAF } from '@/lib/iris/tiers'
 import { RimirisLogo } from '@/components/iris/rimiris-logo'
 import { LoginScreen } from '@/components/auth/login-screen'
 
@@ -242,8 +242,7 @@ export function AdminPortal() {
   if (!isSuperAdmin(session)) return <AccessDenied session={session} />
   if (!stats) return <div className="p-8">Chargement…</div>
 
-  const fmtEur = (cents: number) =>
-    (cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
+  const fmtXaf = (amount: number) => formatXAF(amount)
   const fmtPct = (n: number) => `${n.toFixed(1)}%`
 
   const filteredRows = rows.filter((r) => {
@@ -321,9 +320,9 @@ export function AdminPortal() {
               >
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <StatCard label="Utilisateurs totaux" value={rows.length.toString()} sublabel={`${stats.activeUsers7d} actifs (7j)`} icon={Users} accent="#145DD6" />
-                  <StatCard label="Revenu total" value={fmtEur(stats.totalRevenue)} sublabel={`MRR : ${fmtEur(stats.mrr)}`} icon={DollarSign} accent="#10B981" />
-                  <StatCard label="Taux de conversion" value={fmtPct(stats.conversionRate)} sublabel={`${stats.tierDistribution.pro + stats.tierDistribution.premium} payants`} icon={TrendingUp} accent="#6D28D9" />
-                  <StatCard label="Requêtes IA" value={stats.totalAIRequests.toLocaleString('fr-FR')} sublabel={`ARPU : ${fmtEur(stats.arpu)}`} icon={Activity} accent="#F59E0B" />
+                  <StatCard label="Revenu total" value={fmtXaf(stats.totalRevenue)} sublabel={`30j : ${fmtXaf(stats.mrr)}`} icon={DollarSign} accent="#10B981" />
+                  <StatCard label="Taux de conversion" value={fmtPct(stats.conversionRate)} sublabel={`${stats.tierDistribution.pro} payants`} icon={TrendingUp} accent="#6D28D9" />
+                  <StatCard label="Requêtes IA" value={stats.totalAIRequests.toLocaleString('fr-FR')} sublabel={`ARPU : ${fmtXaf(stats.arpu)}`} icon={Activity} accent="#F59E0B" />
                 </div>
 
                 <div className="grid lg:grid-cols-3 gap-4">
@@ -331,7 +330,7 @@ export function AdminPortal() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm text-muted-foreground">Revenus (30j)</p>
-                        <p className="text-xl font-bold">{fmtEur(stats.revenueSeries.reduce((s, p) => s + p.revenue, 0))}</p>
+                        <p className="text-xl font-bold">{fmtXaf(stats.revenueSeries.reduce((s, p) => s + p.revenue, 0))}</p>
                       </div>
                       <DollarSign className="h-5 w-5 text-emerald-500" />
                     </div>
@@ -385,7 +384,7 @@ export function AdminPortal() {
                               <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 rounded-full" style={{ background: t.color }} />
                                 <span className="text-sm font-medium">{t.name}</span>
-                                <span className="text-xs text-muted-foreground">{fmtEur(t.priceMonthly * 100)}/mois</span>
+                                <span className="text-xs text-muted-foreground">{formatXAF(t.priceXAF)} / projet</span>
                               </div>
                               <div className="text-sm">
                                 <span className="font-semibold">{count}</span>
@@ -498,7 +497,7 @@ export function AdminPortal() {
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="text-right font-medium text-sm">
-                                  {fmtEur(a?.revenue.total ?? 0)}
+                                  {fmtXaf(a?.revenue.total ?? 0)}
                                 </TableCell>
                                 <TableCell className="text-right text-sm">{a?.totals.aiRequests ?? 0}</TableCell>
                                 <TableCell className="text-right text-sm">{a?.totals.exports ?? 0}</TableCell>
@@ -519,10 +518,10 @@ export function AdminPortal() {
             {tab === 'revenue' && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard label="Revenu total" value={fmtEur(stats.totalRevenue)} icon={DollarSign} accent="#10B981" />
-                  <StatCard label="MRR" value={fmtEur(stats.mrr)} sublabel="Revenu mensuel récurrent" icon={TrendingUp} accent="#145DD6" />
-                  <StatCard label="ARR" value={fmtEur(stats.arr)} sublabel="Revenu annualisé" icon={TrendingUp} accent="#6D28D9" />
-                  <StatCard label="ARPU" value={fmtEur(stats.arpu)} sublabel="Par utilisateur" icon={Users} accent="#F59E0B" />
+                  <StatCard label="Revenu total" value={fmtXaf(stats.totalRevenue)} icon={DollarSign} accent="#10B981" />
+                  <StatCard label="30 jours" value={fmtXaf(stats.mrr)} sublabel="Revenu collecté (30j)" icon={TrendingUp} accent="#145DD6" />
+                  <StatCard label="Annualisé" value={fmtXaf(stats.arr)} sublabel="Projection 12 mois" icon={TrendingUp} accent="#6D28D9" />
+                  <StatCard label="ARPU" value={fmtXaf(stats.arpu)} sublabel="Par utilisateur" icon={Users} accent="#F59E0B" />
                 </div>
                 <Card className="p-5">
                   <p className="font-semibold mb-4">Revenus par jour (30 derniers jours)</p>
@@ -542,7 +541,7 @@ export function AdminPortal() {
                             <div className="flex-1 h-6 bg-muted rounded relative overflow-hidden">
                               <div className="absolute inset-y-0 left-0 rounded bg-emerald-500/60" style={{ width: `${pct}%` }} />
                             </div>
-                            <span className="text-sm font-medium w-20 text-right">{fmtEur(p.revenue)}</span>
+                            <span className="text-sm font-medium w-20 text-right">{fmtXaf(p.revenue)}</span>
                           </div>
                         )
                       })}
@@ -567,8 +566,8 @@ export function AdminPortal() {
                         <span className="text-xs text-muted-foreground">{fmtPct(pct)}</span>
                       </div>
                       <div className="text-3xl font-bold mb-1">
-                        {fmtEur(t.priceMonthly * 100)}
-                        <span className="text-sm font-normal text-muted-foreground">/mois</span>
+                        {formatXAF(t.priceXAF)}
+                        <span className="text-sm font-normal text-muted-foreground">/ projet</span>
                       </div>
                       <p className="text-sm text-muted-foreground mb-4">{t.tagline}</p>
                       <div className="space-y-2 mb-4">
@@ -577,8 +576,8 @@ export function AdminPortal() {
                           <span className="font-medium">{count}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Revenu mensuel</span>
-                          <span className="font-medium">{fmtEur(count * t.priceMonthly * 100)}</span>
+                          <span className="text-muted-foreground">Revenu potentiel</span>
+                          <span className="font-medium">{fmtXaf(count * t.priceXAF)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Sections max</span>

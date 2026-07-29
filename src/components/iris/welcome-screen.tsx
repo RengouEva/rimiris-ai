@@ -237,7 +237,7 @@ export function WelcomeScreen() {
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold mb-2">Commencez gratuitement</h2>
           <p className="text-muted-foreground max-w-xl mx-auto mb-5">
-            Découverte gratuite · Pro à 19 €/mois · Premium à 39 €/mois. Annulable à tout moment.
+            Découverte gratuite · Pro à 7 000 XAF par projet (paiement unique). Dissertations et exposés à 2 000 XAF.
           </p>
           <Button
             size="lg"

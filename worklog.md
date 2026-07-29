@@ -767,3 +767,67 @@ Stage Summary:
 - Header de la LoginScreen maintenant identique à celui de la landing (logo RimirisLogo size="lg" withWordmark à gauche, ThemeToggle à droite). Aucun élément ajouté, aucun élément supprimé, aucune modification visuelle.
 - L'auth générale reste en place : landing publique → clic "Démarrer l'entretien" → AuthGate → LoginScreen → onboarding après connexion.
 - Aucune autre surface visuelle touchée (welcome-screen, header app shell, sidebar restent dans leur état d'origine).
+
+---
+Task ID: pricing-model-v2-remove-premium-xaf
+Agent: main (Super Z)
+Task: L'utilisateur demande de supprimer le tier Premium. Garder uniquement Gratuit et Pro. Pro = 7000 XAF par projet (paiement unique, pas d'abonnement). Dissertations et exposés = 2000 XAF par projet. Pas de possibilité de créer plusieurs projets.
+
+Work Log:
+- Refonte complète du modèle de pricing : abonnement mensuel EUR (3 tiers) → paiement unique par projet en XAF (2 tiers).
+- src/lib/iris/tiers.ts (réécriture totale) :
+  * Type `TierId` réduit de `'free' | 'pro' | 'premium'` à `'free' | 'pro'`.
+  * Suppression des champs `priceMonthly`, `priceYearly`, `currency: 'EUR'`. Remplacés par `priceXAF` (prix unique par projet).
+  * Capacité `maxExportsPerMonth` renommée en `maxExportsPerProject`.
+  * Tier Free : 0 XAF, 1 projet, 3 sections max, 1500 mots/section, filigrane, 2 exports/projet.
+  * Tier Pro : 7 000 XAF par projet (paiement unique), 50 sections, 4000 mots/section, sans filigrane, exports illimités, anti-plagiat, audit cohérence, simulation soutenance, guide personnalisé.
+  * Nouvelles constantes exportées : `DEFAULT_PROJECT_PRICE_XAF` (7000), `REDUCED_PROJECT_PRICE_XAF` (2000), `DOC_TYPE_PRICING` (map DocumentTypeId → prix), `getProjectPrice(docTypeId)`.
+  * Doc types à tarif réduit (2000 XAF) : dissertation_philosophique, dissertation_litteraire, essai_court (exposé). Tous les autres = 7000 XAF par défaut.
+  * Nouvelle fonction `migrateLegacyTier(id)` : mappe `'premium'` → `'pro'` pour préserver les sessions existantes.
+  * Nouvelle fonction `formatXAF(amount)` : formatage `fr-FR` + suffixe ` XAF`.
+- src/lib/iris/auth.ts :
+  * Import `migrateLegacyTier` ajouté.
+  * `applySuperAdminRule` : `tier: 'premium'` → `tier: 'pro'`. Toute session avec tier='premium' est migrée en 'pro' à la lecture via `migrateLegacyTier`.
+  * Commentaires et docstring mis à jour (premium → pro).
+  * Comportement : un utilisateur déjà inscrit comme `premium` sera automatiquement migré vers `pro` à sa prochaine visite — pas de perte de privilèges.
+- src/lib/iris/analytics.ts :
+  * Import `migrateLegacyTier` ajouté.
+  * `getCurrentUser()` : `tier` mappé via `migrateLegacyTier(session.tier)` au lieu de `session.tier` direct.
+  * `upgradeToTier(tier, email, name, priceXAFOverride?)` : 4e paramètre optionnel ajouté pour passer un prix XAF personnalisé (utile pour les doc types à tarif réduit). Le montant stocké dans `revenue.history` et `revenue.total` est maintenant en XAF (entier), pas en cents EUR.
+  * `tierDistribution` dans `getGlobalStats` : `Record<TierId, number>` réduit à `{ free: 0, pro: 0 }` (plus de `premium: 0`).
+  * Boucle de stats : `migrateLegacyTier(u.tier)` appliqué avant d'incrémenter `tierDistribution` (au cas où d'anciens enregistrements user portent encore `tier='premium'`).
+  * MRR redéfini : n'est plus une somme de prix mensuels (le modèle n'est plus récurrent), c'est maintenant `recentRevenue30d` = somme des paiements des 30 derniers jours. ARR = MRR × 12 (projection annualisée pour affichage).
+  * Commentaires de type mis à jour (cents/EUR → XAF).
+- src/components/monetization/pricing-view.tsx (réécriture totale) :
+  * Toggle mensuel/annuel supprimé (plus d'abonnement).
+  * Grille `md:grid-cols-3` → `md:grid-cols-2` (2 cartes au lieu de 3).
+  * Carte Free : "Gratuit" à la place du prix mensuel.
+  * Carte Pro : `formatXAF(t.priceXAF)` + ` / projet` à la place de `€/mois`. Sous-titre "Paiement unique · Pas d'abonnement".
+  * Bloc d'info ajouté sous les cartes : "Dissertations et exposés : tarif réduit à 2 000 XAF par projet (dissertation philosophique, dissertation littéraire, essai court / exposé). Le tarif standard de 7 000 XAF s'applique aux mémoires, thèses et monographies."
+  * `ICONS` réduit à `{ free: Sparkles, pro: Zap }` (plus de Crown pour premium).
+  * `UpgradeDialog` : champ "Carte bancaire (simulation)" remplacé par "Numéro Mobile Money (simulation)" + placeholder `+237 6XX XXX XXX` (cohérent avec le contexte XAF/Afrique centrale). Le total affiché utilise `formatXAF(t.priceXAF)` au lieu de `€`. Texte "Paiement unique par projet · Accès à vie pour ce projet".
+  * Note : `getProjectPrice` est exporté depuis tiers.ts et disponible pour futures améliorations (l'UpgradeDialog pourrait l'utiliser pour afficher le prix réduit quand l'utilisateur a sélectionné un doc type dissertation/exposé — pas encore wire car le ProjectInfo actuel n'a pas de champ docType).
+- src/components/admin/admin-portal.tsx :
+  * Import `formatXAF` ajouté (remplace `getTier` seul).
+  * `fmtEur(cents)` supprimé, remplacé par `fmtXaf(amount) = formatXAF(amount)`. Toutes les conversions `cents/100 → EUR` retirées (les montants sont maintenant en XAF entiers, pas en cents).
+  * Toutes les références `fmtEur(...)` → `fmtXaf(...)` (8 sites).
+  * StatCard "Taux de conversion" : sous-label `${stats.tierDistribution.pro + stats.tierDistribution.premium} payants` → `${stats.tierDistribution.pro} payants` (plus de premium).
+  * Répartition par plan : `{formatXAF(t.priceXAF)} / projet` à la place de `{fmtEur(t.priceMonthly * 100)}/mois`.
+  * Onglet Revenue : libellés `MRR/ARR` renommés en `30 jours/Annualisé` (plus adapté au modèle one-time). Sublabels `Revenu mensuel récurrent` → `Revenu collecté (30j)` et `Revenu annualisé` → `Projection 12 mois`.
+  * Onglet Tiers : `{formatXAF(t.priceXAF)} / projet` à la place de `{fmtEur(t.priceMonthly * 100)}/mois`. Label `Revenu mensuel` → `Revenu potentiel` (count × priceXAF = ce que rapporteraient tous les utilisateurs de ce tier s'ils passaient Pro).
+- src/components/auth/login-screen.tsx : texte "accès Premium" → "accès Pro" dans le hint admin.
+- src/components/iris/welcome-screen.tsx : teaser tarif "Découverte gratuite · Pro à 19 €/mois · Premium à 39 €/mois. Annulable à tout moment." → "Découverte gratuite · Pro à 7 000 XAF par projet (paiement unique). Dissertations et exposés à 2 000 XAF."
+- Vérifications :
+  * `npx tsc --noEmit --skipLibCheck` → 0 nouvelle erreur sur les fichiers touchés. Les 12 erreurs préexistantes (agents-view, workspace, onboarding-interview, plan-review, quick-start, examples/websocket, skills/*) sont inchangées.
+  * `curl http://localhost:3000/` → 200 OK, HTML contient "Rimiris vous pose", "Découverte", "Pro", "7 000 XAF", "2 000 XAF" et AUCUNE mention de "Premium".
+  * Grep `premium|Premium|PREMIUM` dans src/ → 6 résultats, tous attendus : 4 commentaires de migration (auth.ts + tiers.ts), 1 ligne fonctionnelle de migration `if (id === 'premium') return 'pro'`, 1 commentaire CSS "premium feel" pour la scrollbar (sans rapport avec le tier).
+
+Stage Summary:
+- Modèle monétaire refondu : 3 tiers (Free/Pro/Premium) mensuel EUR → 2 tiers (Free/Pro) paiement unique par projet en XAF.
+- Pro = 7 000 XAF par projet (mémoires, thèses, monographies, articles, rapports de stage, projets de fin d'études).
+- Dissertations et exposés = 2 000 XAF par projet (dissertation philosophique, dissertation littéraire, essai court). Helper `getProjectPrice(docTypeId)` prêt à l'emploi quand le champ docType sera ajouté au ProjectInfo.
+- `admin@rimiris.com` reste super_admin mais est maintenant auto-pro (au lieu d'auto-premium).
+- Migration transparente : tout compte localStorage existant avec tier='premium' est automatiquement migré en 'pro' à la prochaine lecture (auth.ts + analytics.ts), pas de perte de privilèges.
+- Portail admin : tous les montants en XAF, libellés adaptés au modèle one-time (plus de MRR/ARR au sens subscription — maintenant 30j et annualisé).
+- Login screen et landing page : textes mis à jour (plus de mention de Premium ni d'€/mois).
+- Aucune modification visuelle du header/logo/sidebar (welcome-screen.tsx : seule la ligne de teaser tarifaire a été touchée, le header reste byte-pour-byte identique à l'original).

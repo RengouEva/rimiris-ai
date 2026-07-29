@@ -12,7 +12,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
 import { useIrisStore } from '@/store/iris-store'
-import { TIER_LIST, TIERS, type TierId } from '@/lib/iris/tiers'
+import {
+  TIER_LIST, TIERS, formatXAF, getProjectPrice,
+  REDUCED_PROJECT_PRICE_XAF, type TierId,
+} from '@/lib/iris/tiers'
 import { getCurrentUser, upgradeToTier, track } from '@/lib/iris/analytics'
 import { RimirisLogo } from '@/components/iris/rimiris-logo'
 import { ImmersiveBackground } from '@/components/iris/immersive-background'
@@ -21,12 +24,10 @@ import { toast } from 'sonner'
 const ICONS: Record<TierId, any> = {
   free: Sparkles,
   pro: Zap,
-  premium: Crown,
 }
 
 export function PricingView() {
   const { setView } = useIrisStore()
-  const [billing, setBilling] = React.useState<'monthly' | 'yearly'>('monthly')
   const [upgradeTarget, setUpgradeTarget] = React.useState<TierId | null>(null)
   const [currentUser, setCurrentUser] = React.useState(getCurrentUser())
 
@@ -71,38 +72,15 @@ export function PricingView() {
             <span className="iris-gradient-text">Rédigez sans limites.</span>
           </h1>
           <p className="text-base text-muted-foreground max-w-2xl mx-auto">
-            Commencez gratuitement. Passez à un plan supérieur quand vous êtes prêt.
-            Annulez à tout moment.
+            Commencez gratuitement. Passez à Pro quand vous êtes prêt — paiement unique par projet.
           </p>
-
-          {/* Billing toggle */}
-          <div className="inline-flex items-center gap-1 p-1 rounded-full border border-border bg-card mt-6">
-            <button
-              onClick={() => setBilling('monthly')}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                billing === 'monthly' ? 'iris-gradient text-white' : 'text-muted-foreground'
-              }`}
-            >
-              Mensuel
-            </button>
-            <button
-              onClick={() => setBilling('yearly')}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                billing === 'yearly' ? 'iris-gradient text-white' : 'text-muted-foreground'
-              }`}
-            >
-              Annuel
-              <span className="ml-1.5 text-xs text-emerald-500">−20%</span>
-            </button>
-          </div>
         </motion.div>
 
         {/* Tier cards */}
-        <div className="grid md:grid-cols-3 gap-5">
+        <div className="grid md:grid-cols-2 gap-5 max-w-4xl mx-auto">
           {TIER_LIST.map((t, idx) => {
             const Icon = ICONS[t.id]
             const isCurrent = currentUser.tier === t.id
-            const price = billing === 'monthly' ? t.priceMonthly : t.priceYearly
             const isPopular = t.popular
 
             return (
@@ -139,13 +117,17 @@ export function PricingView() {
                   <p className="text-sm text-muted-foreground mb-4">{t.tagline}</p>
 
                   <div className="mb-4">
-                    <span className="text-4xl font-bold">
-                      {(price * 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                    </span>
-                    <span className="text-sm text-muted-foreground">/mois</span>
-                    {billing === 'yearly' && t.priceMonthly > 0 && (
-                      <p className="text-xs text-emerald-500 mt-1">
-                        Économisez {((t.priceMonthly - t.priceYearly) * 12).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}/an
+                    {t.priceXAF === 0 ? (
+                      <span className="text-4xl font-bold">Gratuit</span>
+                    ) : (
+                      <>
+                        <span className="text-4xl font-bold">{formatXAF(t.priceXAF)}</span>
+                        <span className="text-sm text-muted-foreground"> / projet</span>
+                      </>
+                    )}
+                    {t.priceXAF > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Paiement unique · Pas d'abonnement
                       </p>
                     )}
                   </div>
@@ -182,15 +164,29 @@ export function PricingView() {
           })}
         </div>
 
+        {/* Reduced pricing note for dissertations / exposés */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="mt-8 max-w-4xl mx-auto p-4 rounded-xl border border-primary/20 bg-primary/5 text-sm text-center"
+        >
+          <p>
+            <span className="font-semibold text-primary">Dissertations et exposés :</span>{' '}
+            tarif réduit à <span className="font-semibold">{formatXAF(REDUCED_PROJECT_PRICE_XAF)} par projet</span>{' '}
+            (dissertation philosophique, dissertation littéraire, essai court / exposé).
+            Le tarif standard de {formatXAF(TIERS.pro.priceXAF)} s'applique aux mémoires, thèses et monographies.
+          </p>
+        </motion.div>
+
         <p className="text-center text-xs text-muted-foreground mt-8">
-          Paiements sécurisés · Facture par email · Annulation en 1 clic · Aucune carte requise pour l'essai gratuit
+          Paiements sécurisés · Facture par email · Aucune carte requise pour l'essai gratuit
         </p>
       </main>
 
       {upgradeTarget && (
         <UpgradeDialog
           tier={upgradeTarget}
-          billing={billing}
           onClose={() => setUpgradeTarget(null)}
           onSuccess={(name, email) => {
             upgradeToTier(upgradeTarget, email, name)
@@ -206,21 +202,19 @@ export function PricingView() {
 }
 
 // ============================================================================
-// Upgrade dialog (simulated payment — replace with Stripe in production)
+// Upgrade dialog (simulated payment — replace with real provider in production)
 // ============================================================================
 function UpgradeDialog({
-  tier, billing, onClose, onSuccess,
+  tier, onClose, onSuccess,
 }: {
   tier: TierId
-  billing: 'monthly' | 'yearly'
   onClose: () => void
   onSuccess: (name: string, email: string) => void
 }) {
   const t = TIERS[tier]
-  const price = billing === 'monthly' ? t.priceMonthly : t.priceYearly
   const [name, setName] = React.useState('')
   const [email, setEmail] = React.useState('')
-  const [card, setCard] = React.useState('')
+  const [phone, setPhone] = React.useState('')
   const [loading, setLoading] = React.useState(false)
 
   function submit(e: React.FormEvent) {
@@ -244,7 +238,7 @@ function UpgradeDialog({
             Passer à {t.name}
           </DialogTitle>
           <DialogDescription>
-            {billing === 'yearly' ? 'Facturation annuelle (économisez 20%)' : 'Facturation mensuelle'} · Annulable à tout moment
+            Paiement unique par projet · Accès à vie pour ce projet
           </DialogDescription>
         </DialogHeader>
 
@@ -258,19 +252,18 @@ function UpgradeDialog({
             <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="sarah.martin@univ.fr" />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="card">
+            <Label htmlFor="phone">
               <span className="flex items-center gap-2">
                 <Lock className="h-3 w-3" />
-                Carte bancaire (simulation)
+                Numéro Mobile Money (simulation)
               </span>
             </Label>
             <Input
-              id="card"
+              id="phone"
               required
-              value={card}
-              onChange={(e) => setCard(e.target.value)}
-              placeholder="4242 4242 4242 4242"
-              maxLength={19}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+237 6XX XXX XXX"
             />
             <p className="text-xs text-muted-foreground">
               Mode démo — aucun paiement réel ne sera effectué. Saisissez n'importe quel numéro.
@@ -278,10 +271,8 @@ function UpgradeDialog({
           </div>
 
           <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-            <span className="text-sm text-muted-foreground">Total {billing === 'yearly' ? 'par mois (facturé annuellement)' : 'par mois'}</span>
-            <span className="text-2xl font-bold">
-              {(price * 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-            </span>
+            <span className="text-sm text-muted-foreground">Total (paiement unique)</span>
+            <span className="text-2xl font-bold">{formatXAF(t.priceXAF)}</span>
           </div>
 
           <DialogFooter>

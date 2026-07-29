@@ -13,9 +13,13 @@
  * `admin@rimiris.com` is the reserved super-admin mailbox. Anyone who signs
  * up OR signs in with that email is automatically granted:
  *   - role: 'super_admin'   (full CRM portal access)
- *   - tier: 'premium'       (all features unlocked, no paywall)
+ *   - tier: 'pro'           (all features unlocked, no paywall)
  * The promotion is re-applied on every sign-in so the rule can never be
  * revoked accidentally.
+ *
+ * Migration note (v2 pricing model):
+ * The 'premium' tier no longer exists. Any legacy account with tier='premium'
+ * is migrated to tier='pro' on read (see migrateLegacyTier in tiers.ts).
  *
  * Storage keys
  * ------------
@@ -26,7 +30,7 @@
  * API calls. The shape of `AuthSession` is forward-compatible.
  */
 
-import { TIERS, type TierId } from './tiers'
+import { TIERS, migrateLegacyTier, type TierId } from './tiers'
 
 // ============================================================================
 // Types
@@ -128,23 +132,27 @@ function normalizeEmail(email: string): string {
 }
 
 // ============================================================================
-// Super-admin rule
+// Super-admin rule + legacy tier migration
 // ============================================================================
 function applySuperAdminRule(account: AuthAccount): AuthAccount {
-  if (account.email === ADMIN_EMAIL) {
+  // Migrate legacy 'premium' tier to 'pro' (v2 pricing model — premium removed).
+  const migratedTier = migrateLegacyTier(account.tier)
+  const base: AuthAccount = { ...account, tier: migratedTier }
+
+  if (base.email === ADMIN_EMAIL) {
     return {
-      ...account,
+      ...base,
       role: 'super_admin',
-      tier: 'premium',
+      tier: 'pro',
     }
   }
   // If for some reason a non-admin account was super_admin, demote it
   // (defensive — prevents privilege escalation via manual localStorage edits
   // on non-admin emails).
-  if (account.role === 'super_admin' && account.email !== ADMIN_EMAIL) {
-    return { ...account, role: 'user' }
+  if (base.role === 'super_admin' && base.email !== ADMIN_EMAIL) {
+    return { ...base, role: 'user' }
   }
-  return account
+  return base
 }
 
 // ============================================================================
@@ -173,7 +181,7 @@ export function getCurrentSession(): AuthSession | null {
  * Register a new account.
  * - Email must be valid and not already in use.
  * - Password must be at least 6 chars.
- * - admin@rimiris.com is auto-promoted to super_admin + premium.
+ * - admin@rimiris.com is auto-promoted to super_admin + pro.
  */
 export async function signUp(
   email: string,

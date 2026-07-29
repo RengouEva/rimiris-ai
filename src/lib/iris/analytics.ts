@@ -13,7 +13,7 @@
  * Stored under `rimiris.analytics.*` keys.
  */
 
-import { TIERS, type TierId } from './tiers'
+import { TIERS, migrateLegacyTier, type TierId } from './tiers'
 import { getCurrentSession, ADMIN_EMAIL } from './auth'
 
 // ============================================================================
@@ -60,7 +60,7 @@ export type UserRecord = {
   }
   // Monetization
   revenue: {
-    total: number // in cents (EUR)
+    total: number // in XAF (one-time payments)
     lastPaymentAt?: number
     history: { ts: number; amount: number; tier: TierId }[]
   }
@@ -70,10 +70,10 @@ export type GlobalStats = {
   totalUsers: number
   activeUsers7d: number
   activeUsers30d: number
-  totalRevenue: number // cents
-  mrr: number // monthly recurring revenue, cents
-  arr: number // annual recurring revenue, cents
-  arpu: number // average revenue per user, cents
+  totalRevenue: number // XAF
+  mrr: number // revenue collected over last 30 days (XAF)
+  arr: number // annualized projection (mrr × 12), XAF
+  arpu: number // average revenue per user, XAF
   conversionRate: number // % of users who upgraded
   totalEvents: number
   totalAIRequests: number
@@ -168,7 +168,7 @@ export function getCurrentUser(): UserRecord {
   const existing = users.find((u) => u.email === emailKey)
   if (existing) {
     existing.lastSeenAt = Date.now()
-    existing.tier = session.tier
+    existing.tier = migrateLegacyTier(session.tier)
     existing.name = session.name
     write(K_USERS, users)
     write(K_USER, existing)
@@ -181,7 +181,7 @@ export function getCurrentUser(): UserRecord {
     name: session.name,
     createdAt: Date.now(),
     lastSeenAt: Date.now(),
-    tier: session.tier,
+    tier: migrateLegacyTier(session.tier),
     events: [],
     totals: {
       pageViews: 0,
@@ -282,28 +282,31 @@ export function upgradeToTier(
   tier: TierId,
   email?: string,
   name?: string,
+  /** One-time project price in XAF (defaults to the tier's price). */
+  priceXAFOverride?: number,
 ): { ok: boolean; user: UserRecord } {
   const session = getCurrentSession()
   if (!session) return { ok: false, user: { ...ANON_USER } }
-  // The super-admin email is permanently premium — block downgrades.
-  const finalTier: TierId = session.email === ADMIN_EMAIL ? 'premium' : tier
+  // The super-admin email is permanently pro — block downgrades.
+  const finalTier: TierId = session.email === ADMIN_EMAIL ? 'pro' : migrateLegacyTier(tier)
   const user = getCurrentUser()
   const t = TIERS[finalTier]
-  const amount = t.priceMonthly * 100 // to cents
+  // One-time payment per project (XAF). No more monthly subscription.
+  const amountXAF = priceXAFOverride ?? t.priceXAF
 
   user.tier = finalTier
   if (email) user.email = email
   if (name) user.name = name
-  // Free upgrades (incl. admin auto-premium) do not generate revenue.
-  if (finalTier !== 'free' && session.email !== ADMIN_EMAIL) {
-    user.revenue.total += amount
+  // Free upgrades (incl. admin auto-pro) do not generate revenue.
+  if (finalTier !== 'free' && session.email !== ADMIN_EMAIL && amountXAF > 0) {
+    user.revenue.total += amountXAF
     user.revenue.lastPaymentAt = Date.now()
-    user.revenue.history.push({ ts: Date.now(), amount, tier: finalTier })
+    user.revenue.history.push({ ts: Date.now(), amount: amountXAF, tier: finalTier })
   }
 
   write(K_USER, user)
   upsertUserInIndex(user)
-  track('upgrade_complete', { tier: finalTier, amount })
+  track('upgrade_complete', { tier: finalTier, amount: amountXAF })
 
   return { ok: true, user }
 }
@@ -333,7 +336,6 @@ export function getGlobalStats(): GlobalStats {
   const tierDistribution: Record<TierId, number> = {
     free: 0,
     pro: 0,
-    premium: 0,
   }
   let active7 = 0
   let active30 = 0
@@ -357,8 +359,9 @@ export function getGlobalStats(): GlobalStats {
 
   for (const u of users) {
     totalRevenue += u.revenue.total
-    tierDistribution[u.tier] += 1
-    if (u.tier !== 'free') upgradedUsers += 1
+    const userTier = migrateLegacyTier(u.tier)
+    tierDistribution[userTier] += 1
+    if (userTier !== 'free') upgradedUsers += 1
     if (u.lastSeenAt >= sevenDaysAgo) active7 += 1
     if (u.lastSeenAt >= thirtyDaysAgo) active30 += 1
 
@@ -392,12 +395,17 @@ export function getGlobalStats(): GlobalStats {
     }
   }
 
-  // MRR = sum of monthly tier prices for all paying users
-  let mrr = 0
+  // MRR in this context = revenue collected over the last 30 days
+  // (one-time payments, not true monthly recurring revenue).
+  // ARR is a 12x annualized projection for display only.
+  let recentRevenue30d = 0
   for (const u of users) {
-    if (u.tier === 'pro') mrr += TIERS.pro.priceMonthly * 100
-    if (u.tier === 'premium') mrr += TIERS.premium.priceMonthly * 100
+    for (const p of u.revenue.history) {
+      if (p.ts >= thirtyDaysAgo) recentRevenue30d += p.amount
+    }
   }
+  const mrr = recentRevenue30d
+  const arr = mrr * 12
 
   const arpu = users.length > 0 ? Math.round(totalRevenue / users.length) : 0
   const conversionRate =

@@ -199,7 +199,7 @@ export function LoginScreen() {
                 <Crown className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
                 <p>
                   L'email <code className="bg-muted px-1 py-0.5 rounded">{ADMIN_EMAIL}</code> est
-                  automatiquement promu <strong>super administrateur</strong> avec accès Premium
+                  automatiquement promu <strong>super administrateur</strong> avec accès Pro
                   (toutes les fonctionnalités + portail CRM).
                 </p>
               </div>
