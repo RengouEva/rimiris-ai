@@ -42,9 +42,14 @@ export function Header() {
               <MobileNav onNavigate={() => setMobileOpen(false)} />
             </SheetContent>
           </Sheet>
-          <div className="flex items-center gap-2">
+          <button
+            onClick={() => setView('welcome')}
+            className="flex items-center gap-2 transition-transform hover:scale-105 active:scale-95"
+            aria-label="Rimiris AI — retour à l'accueil"
+            title="Retour à l'accueil"
+          >
             <RimirisLogo size="sm" withWordmark />
-          </div>
+          </button>
         </div>
 
         {/* Project title (center on desktop) */}

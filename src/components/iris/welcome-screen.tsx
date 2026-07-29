@@ -21,9 +21,17 @@ import { Button } from '@/components/ui/button'
 import { ThemeToggle } from './theme-toggle'
 import { RimirisLogo } from './rimiris-logo'
 import { ImmersiveBackground } from './immersive-background'
+import { track, getCurrentUser } from '@/lib/iris/analytics'
 
 export function WelcomeScreen() {
   const { setView, projectInitialized, project, sections, interviewAnswers } = useIrisStore()
+
+  // Track landing page view once per session
+  React.useEffect(() => {
+    track('page_view', { view: 'welcome' })
+    // Ensure user record exists for analytics
+    getCurrentUser()
+  }, [])
 
   function handleStart() {
     // If the student already has a project set up, jump straight to the workspace.
@@ -214,6 +222,31 @@ export function WelcomeScreen() {
           <p className="text-base text-muted-foreground italic max-w-3xl mx-auto">
             « L'IA ne fait jamais le travail à la place de l'étudiant. Elle travaille AVEC lui. »
           </p>
+        </motion.div>
+
+        {/* Pricing teaser */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+          className="mt-12 p-6 sm:p-8 rounded-2xl border border-primary/20 bg-primary/5 text-center"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-background text-primary text-xs font-medium mb-3">
+            <Sparkles className="h-3.5 w-3.5" />
+            Tarifs
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-bold mb-2">Commencez gratuitement</h2>
+          <p className="text-muted-foreground max-w-xl mx-auto mb-5">
+            Découverte gratuite · Pro à 19 €/mois · Premium à 39 €/mois. Annulable à tout moment.
+          </p>
+          <Button
+            size="lg"
+            onClick={() => setView('pricing')}
+            className="rounded-full px-8 h-12 iris-gradient text-white hover:opacity-90"
+          >
+            Voir tous les plans
+            <ArrowRight className="h-5 w-5 ml-2" />
+          </Button>
         </motion.div>
       </main>
 

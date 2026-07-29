@@ -124,6 +124,8 @@ export type ViewMode =
   | 'plagiarism'
   | 'export'
   | 'agents'
+  | 'pricing'
+  | 'admin'
 
 // ============================================================================
 // Simulation de soutenance — Types

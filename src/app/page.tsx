@@ -15,6 +15,8 @@ import { ExportView } from '@/components/iris/export-view'
 import { AgentsView } from '@/components/iris/agents-view'
 import { AuditView } from '@/components/iris/audit-view'
 import { GuideView } from '@/components/iris/guide-view'
+import { AdminPortal } from '@/components/admin/admin-portal'
+import { PricingView } from '@/components/monetization/pricing-view'
 
 // Valid view IDs that can be passed via ?view= for PWA shortcuts.
 const VALID_VIEWS: ViewMode[] = [
@@ -27,6 +29,8 @@ const VALID_VIEWS: ViewMode[] = [
   'plagiarism',
   'export',
   'agents',
+  'admin',
+  'pricing',
 ]
 
 export default function Home() {
@@ -73,6 +77,8 @@ export default function Home() {
           {view === 'plagiarism' && <PlagiarismView />}
           {view === 'export' && <ExportView />}
           {view === 'agents' && <AgentsView />}
+          {view === 'admin' && <AdminPortal />}
+          {view === 'pricing' && <PricingView />}
         </main>
       </div>
     </div>

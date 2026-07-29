@@ -16,12 +16,16 @@ import {
   Users,
   Shield,
   BookOpen,
+  Crown,
+  Settings,
 } from 'lucide-react'
 import { useIrisStore, type ViewMode } from '@/store/iris-store'
 import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { RimirisLogo } from './rimiris-logo'
+import { getCurrentUser } from '@/lib/iris/analytics'
+import { getTier } from '@/lib/iris/tiers'
 
 export const NAV_ITEMS: { id: ViewMode; label: string; icon: any }[] = [
   { id: 'guide', label: 'Guide méthodo', icon: BookOpen },
@@ -41,6 +45,14 @@ export function Sidebar() {
   const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => setMounted(true), [])
 
+  // Current user's tier — for showing a badge + upgrade CTA
+  const [currentUser, setCurrentUser] = React.useState(() => getCurrentUser())
+  React.useEffect(() => {
+    const i = setInterval(() => setCurrentUser(getCurrentUser()), 2000)
+    return () => clearInterval(i)
+  }, [])
+  const tier = getTier(currentUser.tier)
+
   const totalWords = sections.reduce((sum: number, s: any) => sum + s.wordCount, 0)
   const completed = sections.filter((s: any) => s.status === 'completed').length
 
@@ -51,12 +63,13 @@ export function Sidebar() {
         sidebarCollapsed ? 'w-16' : 'w-56'
       )}
     >
-      {/* Brand */}
+      {/* Brand — clickable → landing page */}
       <div className="h-16 flex items-center justify-center px-3 border-b border-sidebar-border">
         <button
-          onClick={() => setView('workspace')}
-          className="flex-shrink-0"
-          aria-label="Rimiris AI — accueil"
+          onClick={() => setView('welcome')}
+          className="flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
+          aria-label="Rimiris AI — retour à l'accueil"
+          title="Retour à l'accueil"
         >
           {sidebarCollapsed ? (
             <RimirisLogo size="md" />
@@ -132,8 +145,72 @@ export function Sidebar() {
         </div>
       )}
 
+      {/* Tier badge + upgrade CTA */}
+      {!sidebarCollapsed && (
+        <div className="p-2 mx-2 mb-2 rounded-lg border border-sidebar-border bg-sidebar-accent/30">
+          <div className="flex items-center gap-2 px-2 py-1">
+            <div className="w-2 h-2 rounded-full" style={{ background: tier.color }} />
+            <span className="text-xs font-medium">Plan {tier.name}</span>
+            {currentUser.tier === 'free' && (
+              <span className="ml-auto text-[10px] text-muted-foreground">Gratuit</span>
+            )}
+          </div>
+          {currentUser.tier === 'free' && (
+            <button
+              onClick={() => setView('pricing')}
+              className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium iris-gradient text-white hover:opacity-90 transition-opacity"
+            >
+              <Crown className="h-3 w-3" />
+              Passer à Pro
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Footer */}
       <div className="p-2 border-t border-sidebar-border space-y-1">
+        {/* Pricing link */}
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setView('pricing')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                  view === 'pricing'
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    : 'text-muted-foreground hover:bg-sidebar-accent',
+                )}
+              >
+                <Crown className="h-4 w-4" />
+                {!sidebarCollapsed && <span>Tarifs & Plans</span>}
+              </button>
+            </TooltipTrigger>
+            {sidebarCollapsed && <TooltipContent side="right">Tarifs & Plans</TooltipContent>}
+          </Tooltip>
+        </TooltipProvider>
+
+        {/* Admin link (subtle — accessible but not loud) */}
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setView('admin')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                  view === 'admin'
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    : 'text-muted-foreground/70 hover:bg-sidebar-accent hover:text-muted-foreground',
+                )}
+              >
+                <Settings className="h-4 w-4" />
+                {!sidebarCollapsed && <span className="text-xs">Portail Admin</span>}
+              </button>
+            </TooltipTrigger>
+            {sidebarCollapsed && <TooltipContent side="right">Portail Admin</TooltipContent>}
+          </Tooltip>
+        </TooltipProvider>
+
         <button
           onClick={toggleSidebar}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent"
