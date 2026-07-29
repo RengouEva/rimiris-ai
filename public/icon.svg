@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 613 553" width="613" height="553">
   <defs>
     <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#0C244F"/>
       <stop offset="100%" stop-color="#145DD6"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="96" fill="url(#g)"/>
-  <text x="256" y="340" font-family="Georgia, serif" font-size="280" font-weight="700"
-        text-anchor="middle" fill="#ffffff">R</text>
+  <text x="306.5" y="370" font-family="Georgia, serif" font-size="320" font-weight="700"
+        text-anchor="middle" fill="url(#g)">R</text>
 </svg>
