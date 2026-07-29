@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>Audit de sécurité — Rimiris AI</title>
+<style>
+  @page { size: 210mm 297mm; margin: 0; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #0f172a;
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    color: #e5e7eb;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .poster {
+    position: relative;
+    width: 210mm; height: 297mm;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at top right, rgba(174, 73, 90, 0.18) 0%, transparent 55%),
+      radial-gradient(ellipse at bottom left, rgba(37, 106, 141, 0.22) 0%, transparent 60%),
+      linear-gradient(160deg, #0b1220 0%, #0f172a 50%, #111a30 100%);
+  }
+
+  /* Decorative grid */
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 56px 56px;
+    pointer-events: none;
+  }
+
+  /* Accent bars */
+  .accent-top {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, #256a8d 0%, #ae495a 100%);
+  }
+  .accent-bottom {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #ae495a 0%, #256a8d 100%);
+  }
+
+  /* Header chip */
+  .header-row {
+    position: absolute;
+    top: 70px; left: 70px; right: 70px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 16px;
+    background: rgba(174, 73, 90, 0.15);
+    border: 1px solid rgba(174, 73, 90, 0.4);
+    border-radius: 999px;
+    font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: #f3c4cb;
+  }
+  .chip-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ae495a;
+    box-shadow: 0 0 12px #ae495a;
+  }
+  .meta-right {
+    text-align: right;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #94a3b8;
+  }
+  .meta-right strong { color: #e5e7eb; font-weight: 600; }
+
+  /* Hero block */
+  .hero {
+    position: absolute;
+    top: 260px; left: 70px; right: 70px;
+  }
+  .eyebrow {
+    font-size: 13px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: #6b9ab5; font-weight: 600;
+    margin-bottom: 18px;
+  }
+  .title {
+    font-family: 'Playfair Display', 'Noto Serif SC', serif;
+    font-size: 76px; line-height: 0.98; font-weight: 900;
+    color: #f8fafc;
+    margin: 0;
+    letter-spacing: -0.02em;
+  }
+  .title .accent {
+    background: linear-gradient(90deg, #6b9ab5 0%, #ae495a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .subtitle {
+    margin-top: 22px;
+    font-size: 19px; line-height: 1.55;
+    color: #cbd5e1; font-weight: 400;
+    max-width: 620px;
+  }
+
+  /* Risk badges */
+  .risks {
+    position: absolute;
+    top: 600px; left: 70px; right: 70px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+  .risk-card {
+    padding: 22px 18px 20px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    backdrop-filter: blur(8px);
+  }
+  .risk-card .count {
+    font-family: 'Playfair Display', serif;
+    font-size: 48px; font-weight: 900;
+    line-height: 1; margin-bottom: 6px;
+  }
+  .risk-card .label {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: #94a3b8; font-weight: 500;
+  }
+  .risk-critical .count { color: #ef4444; }
+  .risk-high .count { color: #f59e0b; }
+  .risk-medium .count { color: #eab308; }
+  .risk-low .count { color: #6b9ab5; }
+
+  /* Stats strip */
+  .stats {
+    position: absolute;
+    top: 770px; left: 70px; right: 70px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    padding: 24px 0;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .stat { text-align: center; border-right: 1px solid rgba(255,255,255,0.06); padding: 0 12px; }
+  .stat:last-child { border-right: 0; }
+  .stat .num {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px; font-weight: 700;
+    color: #f8fafc; line-height: 1;
+  }
+  .stat .lbl {
+    margin-top: 8px;
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: #94a3b8;
+  }
+
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 60px; left: 70px; right: 70px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+  }
+  .footer-left {
+    font-size: 12px; color: #94a3b8; line-height: 1.6;
+  }
+  .footer-left strong { color: #e5e7eb; }
+  .footer-right {
+    text-align: right;
+    font-family: 'Liberation Mono', monospace;
+    font-size: 11px; color: #64748b;
+    letter-spacing: 0.08em;
+  }
+  .footer-right .doc-id {
+    color: #6b9ab5;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+  <div class="poster">
+    <div class="grid"></div>
+    <div class="accent-top"></div>
+
+    <div class="header-row">
+      <div class="chip"><span class="chip-dot"></span>CONFIDENTIEL · AUDIT SÉCURITÉ</div>
+      <div class="meta-right">
+        <div><strong>Rimiris AI</strong> · Next.js 16</div>
+        <div>v0.2.1 · PWA</div>
+      </div>
+    </div>
+
+    <div class="hero">
+      <div class="eyebrow">Rapport d'audit · 30 juillet 2026</div>
+      <h1 class="title">
+        Audit de sécurité<br/>
+        <span class="accent">complet</span>
+      </h1>
+      <p class="subtitle">
+        Analyse exhaustive de la posture de sécurité de la plateforme Rimiris AI —
+        authentification, API, configuration LLM, paiement, code client et
+        infrastructure. 24 vulnérabilités identifiées, classées par sévérité
+        CVSS, avec plan de remédiation chiffré.
+      </p>
+    </div>
+
+    <div class="risks">
+      <div class="risk-card risk-critical">
+        <div class="count">8</div>
+        <div class="label">Critiques</div>
+      </div>
+      <div class="risk-card risk-high">
+        <div class="count">4</div>
+        <div class="label">Élevées</div>
+      </div>
+      <div class="risk-card risk-medium">
+        <div class="count">7</div>
+        <div class="label">Moyennes</div>
+      </div>
+      <div class="risk-card risk-low">
+        <div class="count">5</div>
+        <div class="label">Mineures</div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="num">24</div>
+        <div class="lbl">Vulnérabilités</div>
+      </div>
+      <div class="stat">
+        <div class="num">18</div>
+        <div class="lbl">Endpoints API</div>
+      </div>
+      <div class="stat">
+        <div class="num">~12 h</div>
+        <div class="lbl">Remédiation blocante</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-left">
+        <strong>Audit réalisé par</strong> Super Z · Z.ai Security Review<br/>
+        Périmètre : code source + configuration · Méthode : OWASP Top 10 + ASVS
+      </div>
+      <div class="footer-right">
+        <div class="doc-id">DOC-SEC-2026-0730-RMR</div>
+        <div>Classification : CONFIDENTIEL</div>
+      </div>
+    </div>
+
+    <div class="accent-bottom"></div>
+  </div>
+</body>
+</html>
