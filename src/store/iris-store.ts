@@ -1,4 +1,4 @@
-// Store global IRIS Thesis AI — V3
+// Store global Rimiris AI — V3
 // Workflow obligatoire en 8 phases (0-7).
 // Chaque section passe par : interview → validation → rédaction → humanisation.
 

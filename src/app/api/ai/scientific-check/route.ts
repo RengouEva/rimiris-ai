@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const systemPrompt = `Tu es le Contrôleur qualité d'IRIS Thesis AI. Vérifie la cohérence scientifique globale du mémoire suivant.
+    const systemPrompt = `Tu es le Contrôleur qualité de Rimiris AI. Vérifie la cohérence scientifique globale du mémoire suivant.
 
 PROJET :
 - Titre : ${project.title || 'non précisé'}

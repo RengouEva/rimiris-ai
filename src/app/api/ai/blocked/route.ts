@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       .map((c) => `- ${c.title} : ${(chaptersContent[c.id] || '').slice(0, 200)}...`)
       .join('\n')
 
-    const systemPrompt = `Tu es l'assistant "Je suis bloqué" d'IRIS Thesis AI. L'étudiant vient de cliquer sur le bouton "Je suis bloqué". Ta mission est de le débloquer IMMÉDIATEMENT avec bienveillance.
+    const systemPrompt = `Tu es l'assistant "Je suis bloqué" de Rimiris AI. L'étudiant vient de cliquer sur le bouton "Je suis bloqué". Ta mission est de le débloquer IMMÉDIATEMENT avec bienveillance.
 
 CONTEXTE DU PROJET :
 - Niveau : ${project.level || 'Master'}

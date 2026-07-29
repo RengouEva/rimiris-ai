@@ -1,4 +1,4 @@
-// Agents IA spécialisés d'IRIS Thesis AI — V3
+// Agents IA spécialisés de Rimiris AI — V3
 // 8 agents correspondant aux phases du workflow.
 // Chaque agent a un rôle distinct et un prompt qui l'empêche de sortir de son périmètre.
 

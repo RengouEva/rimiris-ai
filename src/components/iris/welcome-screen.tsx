@@ -222,7 +222,7 @@ export function WelcomeScreen() {
 
       <footer className="border-t border-border/40 py-6">
         <div className="max-w-6xl mx-auto px-4 text-center text-xs text-muted-foreground">
-          IRIS Thesis AI — Plateforme d'accompagnement à la rédaction académique
+          Rimiris AI — Plateforme d'accompagnement à la rédaction académique
         </div>
       </footer>
     </div>

@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Thème requis' }, { status: 400 })
     }
 
-    const systemPrompt = `Tu es le Chercheur documentaire d'IRIS Thesis AI. Analyse le thème suivant et produis une compréhension structurée.
+    const systemPrompt = `Tu es le Chercheur documentaire de Rimiris AI. Analyse le thème suivant et produis une compréhension structurée.
 
 THÈME : "${theme}"
 NIVEAU : ${body.level || 'Master'}

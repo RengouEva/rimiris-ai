@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: 'assistant',
-          content: `Tu es le Contrôleur qualité d'IRIS Thesis AI. Vérifie les réponses collectées pour cette section avant la rédaction.
+          content: `Tu es le Contrôleur qualité de Rimiris AI. Vérifie les réponses collectées pour cette section avant la rédaction.
 
 SECTION : "${body.sectionTitle}"
 ${body.sectionDescription ? `Description : ${body.sectionDescription}` : ''}

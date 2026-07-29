@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       ? `\nL'étudiant souhaite modifier cette hypothèse de base : "${editBase}". Propose 3 reformulations alternatives qui gardent le même sens mais affinent le positionnement.`
       : ''
 
-    const systemPrompt = `Tu es le Coach méthodologique d'IRIS Thesis AI. Tu aides l'étudiant à CONSTRUIRE son problème de recherche.
+    const systemPrompt = `Tu es le Coach méthodologique de Rimiris AI. Tu aides l'étudiant à CONSTRUIRE son problème de recherche.
 
 ${contextStr}
 

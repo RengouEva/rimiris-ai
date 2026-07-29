@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     }
 
     const guideContext = buildGuideContext(project)
-    const systemPrompt = `Tu es le Contrôleur qualité d'IRIS Thesis AI. Réalise l'audit final du mémoire suivant.
+    const systemPrompt = `Tu es le Contrôleur qualité de Rimiris AI. Réalise l'audit final du mémoire suivant.
 
 PROJET :
 - Titre : ${project.title || 'non précisé'}

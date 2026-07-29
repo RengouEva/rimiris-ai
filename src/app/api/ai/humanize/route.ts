@@ -89,7 +89,7 @@ async function runPass(
   filiere: string,
   norme: string
 ): Promise<{ output: string; report: string }> {
-  const systemPrompt = `Tu es l'Humaniseur d'IRIS Thesis AI, passe "${passName}".
+  const systemPrompt = `Tu es l'Humaniseur de Rimiris AI, passe "${passName}".
 
 INSTRUCTION DE CETTE PASSE : ${passInstruction}
 

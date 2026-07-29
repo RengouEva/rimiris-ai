@@ -224,7 +224,7 @@ export function AgentsView() {
             </div>
             <p className="text-xs text-muted-foreground mt-4 italic">
               Cette fonctionnalité nécessite une synchronisation cloud (backend temps réel). Elle
-              sera déployée dans une prochaine version d'IRIS Thesis AI.
+              sera déployée dans une prochaine version de Rimiris AI.
             </p>
           </CardContent>
         </Card>

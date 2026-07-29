@@ -44,7 +44,7 @@
 }
 
 :root {
-  /* IRIS THESIS AI - Identité visuelle : violet académique profond + accents or/ambre */
+  /* RIMIRIS AI - Identité visuelle : violet académique profond + accents or/ambre */
   --radius: 0.75rem;
   --background: oklch(0.99 0.005 280);
   --foreground: oklch(0.18 0.02 280);

@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "IRIS Thesis AI — Directeur de mémoire virtuel",
+  title: "Rimiris AI — Directeur de mémoire virtuel",
   description:
     "Plateforme IA d'accompagnement à la rédaction académique, de l'idée de recherche jusqu'à la soutenance.",
   keywords: [
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     "soutenance",
     "méthodologie",
   ],
-  authors: [{ name: "IRIS Thesis AI" }],
+  authors: [{ name: "Rimiris AI" }],
 };
 
 export default function RootLayout({

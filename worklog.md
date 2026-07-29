@@ -1,9 +1,9 @@
-# IRIS Thesis AI — Worklog
+# Rimiris AI — Worklog
 
 ---
 Task ID: 1
 Agent: main (Super Z)
-Task: Add 3 features to IRIS Thesis AI — (1) enhance existing soutenance view with role-classified questions + Markdown export, (2) add "IRIS rédige toutes les sections vides d'un coup" orchestrator, (3) add PDF methodological guide upload + parsing.
+Task: Add 3 features to Rimiris AI — (1) enhance existing soutenance view with role-classified questions + Markdown export, (2) add "IRIS rédige toutes les sections vides d'un coup" orchestrator, (3) add PDF methodological guide upload + parsing.
 
 Work Log:
 - Verified dev server (Next.js on :3000) was running and answered 200 OK.
@@ -137,7 +137,7 @@ Agent: dissertation-philo-researcher
 Task: Récupérer le contenu de 2 liens Scribd sur la dissertation philosophique
 
 Work Log:
-- Lu le worklog existant (Tasks 1 et 2 du main agent — features IRIS Thesis AI). Pas de conflit avec cette tâche de recherche indépendante.
+- Lu le worklog existant (Tasks 1 et 2 du main agent — features Rimiris AI). Pas de conflit avec cette tâche de recherche indépendante.
 - Tenté curl/wget sur les 2 URLs Scribd → 403 Forbidden (Scribd bloque les UA non-navigateurs). Pages 0 octets.
 - Chargé le skill `web-reader` puis utilisé `z-ai function -n page_reader` sur les 2 URLs → 200 OK, HTML de 1.6 MB récupéré pour chaque page.
 - Page 1 (méthodologie) : le texte du document est protégé par un chiffrement par substitution de glyphes (anti-scraping Scribd). J'ai reverse-engineered la table de substitution en confrontant les motifs avec des mots français connus (INTRODUCTION, CONCLUSION, dissertation, philosophique, etc.). Décodage ~85% réussi — quelques caractères Unicode variants (Cyrillic/Grec look-alikes) restent ambigus mais la structure et 95% du contenu sont récupérés.
@@ -571,3 +571,32 @@ Stage Summary:
 - 6 skills désormais disponibles dans IRIS : Mémoire Licence, Mémoire Master, Thèse Doctorat, Monographie, Dissertation Philosophique, Dissertation Littéraire.
 - Le skill est immédiatement utilisable par l'API AI (buildSkillContext le détectera automatiquement via project.documentType === 'dissertation_litteraire').
 - Aucune régression TypeScript.
+
+---
+Task ID: rename-platform-to-rimiris
+Agent: main (Super Z)
+Task: Renommer la plateforme « IRIS Thesis AI » → « Rimiris AI » partout dans le code source.
+
+Work Log:
+- Recherche des occurrences de "IRIS Thesis AI" (case-insensitive) hors tool-results/ → 13 fichiers source + worklog.md.
+- Mis à jour l'en-tête HTML <title> et les métadonnées authors dans src/app/layout.tsx.
+- Mis à jour le commentaire d'identité visuelle dans src/app/globals.css (RIMIRIS AI).
+- Mis à jour le pied de page de l'écran d'accueil dans src/components/iris/welcome-screen.tsx.
+- Mis à jour la note de version dans src/components/iris/agents-view.tsx.
+- Mis à jour les commentaires d'en-tête de src/store/iris-store.ts et src/lib/iris/agents.ts.
+- Mis à jour les 7 prompts système d'agents IA (Contrôleur qualité, Humaniseur, assistant "Je suis bloqué", Chercheur documentaire, Coach méthodologique) dans :
+  * src/app/api/ai/scientific-check/route.ts
+  * src/app/api/ai/validate/route.ts
+  * src/app/api/ai/humanize/route.ts
+  * src/app/api/ai/blocked/route.ts
+  * src/app/api/ai/understand/route.ts
+  * src/app/api/ai/problem-build/route.ts
+  * src/app/api/ai/audit/route.ts
+  (la formulation passe de "d'IRIS Thesis AI" à "de Rimiris AI" pour respecter l'élision française).
+- Mis à jour l'en-tête du worklog + 2 entrées historiques qui mentionnaient le nom.
+- Vérification finale : aucune occurrence de "IRIS Thesis AI" ne subsiste dans src/ ni dans worklog.md (les seules restantes sont dans tool-results/, qui sont des artefacts historiques auto-générés de sorties de commandes).
+
+Stage Summary:
+- Plateforme renommée « Rimiris AI » dans toute la base de code source.
+- Aucune modification fonctionnelle — uniquement du renommage textuel (titres, prompts, commentaires, métadonnées).
+- L'identifiant interne "IRIS" (noms de dossiers, noms de variables, types TypeScript) reste inchangé pour éviter de casser les imports ; seul le nom affiché aux utilisateurs change.
