@@ -1,18 +1,20 @@
 /**
  * localStorage-based analytics + monetization store.
  *
- * In a real production setup, you'd push these events to a backend
- * (Postgres via Prisma, Stripe webhooks for revenue, etc.). For this
- * iteration, everything lives in localStorage so the admin portal can
- * show realistic stats without a server.
+ * Real auth-aware: events are tied to the current authenticated account
+ * (see src/lib/iris/auth.ts). When no session exists, tracking is a no-op
+ * so anonymous pre-login visits are not counted.
  *
- * The schema is forward-compatible: when you wire up a real backend,
- * you just replace `track()` / `getStats()` to fetch from the API.
+ * In a real production setup, you'd push these events to a backend
+ * (Postgres via Prisma, Stripe webhooks for revenue, etc.). When you wire
+ * one up, replace `track()` / `getStats()` to fetch from the API — the
+ * schema is forward-compatible.
  *
  * Stored under `rimiris.analytics.*` keys.
  */
 
 import { TIERS, type TierId } from './tiers'
+import { getCurrentSession, ADMIN_EMAIL } from './auth'
 
 // ============================================================================
 // Types
@@ -88,10 +90,9 @@ export type GlobalStats = {
 // ============================================================================
 // Storage keys
 // ============================================================================
-const K_USER = 'rimiris.analytics.user'
-const K_EVENTS = 'rimiris.analytics.events' // global event log (capped)
-const K_USERS = 'rimiris.analytics.users' // admin-facing user list (capped)
-const K_SEED = 'rimiris.analytics.seeded' // flag: demo data inserted?
+const K_USER = 'rimiris.analytics.user'        // current user's analytics record (keyed by auth email when logged in)
+const K_EVENTS = 'rimiris.analytics.events'   // global event log (capped)
+const K_USERS = 'rimiris.analytics.users'     // admin-facing user list (capped)
 
 const MAX_EVENTS = 2000
 const MAX_USERS = 500
@@ -131,20 +132,56 @@ function uuid(): string {
 }
 
 // ============================================================================
-// Current user
+// Current user (auth-aware)
 // ============================================================================
+//
+// The analytics user record is keyed by the authenticated account's email.
+// If no session exists, we return a lightweight anonymous record (id="anon")
+// so call sites don't crash, but we do NOT persist it nor track events.
+
+const ANON_USER: UserRecord = {
+  id: 'anon',
+  createdAt: 0,
+  lastSeenAt: 0,
+  tier: 'free',
+  email: undefined,
+  name: undefined,
+  events: [],
+  totals: {
+    pageViews: 0,
+    sectionsDrafted: 0,
+    exports: 0,
+    aiRequests: 0,
+    upgradeClicks: 0,
+  },
+  revenue: { total: 0, history: [] },
+}
+
 export function getCurrentUser(): UserRecord {
-  const existing = read<UserRecord | null>(K_USER, null)
+  const session = getCurrentSession()
+  if (!session) return { ...ANON_USER }
+
+  // Use the auth email as the stable analytics ID — this lets the admin
+  // portal join analytics totals with the auth accounts list.
+  const emailKey = session.email
+  const users = read<UserRecord[]>(K_USERS, [])
+  const existing = users.find((u) => u.email === emailKey)
   if (existing) {
     existing.lastSeenAt = Date.now()
+    existing.tier = session.tier
+    existing.name = session.name
+    write(K_USERS, users)
     write(K_USER, existing)
     return existing
   }
+  // First interaction under this session — create the analytics record.
   const newUser: UserRecord = {
-    id: uuid(),
+    id: session.accountId,
+    email: session.email,
+    name: session.name,
     createdAt: Date.now(),
     lastSeenAt: Date.now(),
-    tier: 'free',
+    tier: session.tier,
     events: [],
     totals: {
       pageViews: 0,
@@ -156,16 +193,31 @@ export function getCurrentUser(): UserRecord {
     revenue: { total: 0, history: [] },
   }
   write(K_USER, newUser)
+  upsertUserInIndex(newUser)
   return newUser
 }
 
 export function updateUser(patch: Partial<UserRecord>): UserRecord {
-  const u = getCurrentUser()
-  const merged = { ...u, ...patch }
+  const session = getCurrentSession()
+  if (!session) return { ...ANON_USER, ...patch }
+  const users = read<UserRecord[]>(K_USERS, [])
+  const idx = users.findIndex((u) => u.email === session.email)
+  const base: UserRecord = idx >= 0 ? users[idx] : {
+    id: session.accountId,
+    email: session.email,
+    name: session.name,
+    createdAt: Date.now(),
+    lastSeenAt: Date.now(),
+    tier: session.tier,
+    events: [],
+    totals: { pageViews: 0, sectionsDrafted: 0, exports: 0, aiRequests: 0, upgradeClicks: 0 },
+    revenue: { total: 0, history: [] },
+  }
+  const merged = { ...base, ...patch }
   merged.lastSeenAt = Date.now()
+  if (idx >= 0) users[idx] = merged; else users.push(merged)
+  write(K_USERS, users)
   write(K_USER, merged)
-  // Also update the users index
-  upsertUserInIndex(merged)
   return merged
 }
 
@@ -185,6 +237,8 @@ function upsertUserInIndex(user: UserRecord) {
 // ============================================================================
 export function track(type: EventType, meta?: Record<string, string | number | boolean>) {
   if (typeof window === 'undefined') return
+  const session = getCurrentSession()
+  if (!session) return // do not track anonymous pre-login visits
   const user = getCurrentUser()
   const event: AnalyticsEvent = { type, ts: Date.now(), meta }
 
@@ -229,20 +283,27 @@ export function upgradeToTier(
   email?: string,
   name?: string,
 ): { ok: boolean; user: UserRecord } {
+  const session = getCurrentSession()
+  if (!session) return { ok: false, user: { ...ANON_USER } }
+  // The super-admin email is permanently premium — block downgrades.
+  const finalTier: TierId = session.email === ADMIN_EMAIL ? 'premium' : tier
   const user = getCurrentUser()
-  const t = TIERS[tier]
+  const t = TIERS[finalTier]
   const amount = t.priceMonthly * 100 // to cents
 
-  user.tier = tier
+  user.tier = finalTier
   if (email) user.email = email
   if (name) user.name = name
-  user.revenue.total += amount
-  user.revenue.lastPaymentAt = Date.now()
-  user.revenue.history.push({ ts: Date.now(), amount, tier })
+  // Free upgrades (incl. admin auto-premium) do not generate revenue.
+  if (finalTier !== 'free' && session.email !== ADMIN_EMAIL) {
+    user.revenue.total += amount
+    user.revenue.lastPaymentAt = Date.now()
+    user.revenue.history.push({ ts: Date.now(), amount, tier: finalTier })
+  }
 
   write(K_USER, user)
   upsertUserInIndex(user)
-  track('upgrade_complete', { tier, amount })
+  track('upgrade_complete', { tier: finalTier, amount })
 
   return { ok: true, user }
 }
@@ -363,110 +424,4 @@ export function getGlobalStats(): GlobalStats {
   }
 }
 
-// ============================================================================
-// Demo seed — populates the admin portal with realistic data on first visit.
-// Idempotent (checks K_SEED flag).
-// ============================================================================
-export function seedDemoData() {
-  if (typeof window === 'undefined') return
-  if (read<boolean>(K_SEED, false)) return
 
-  const users: UserRecord[] = []
-  const countries = ['France', 'Canada', 'Belgique', 'Suisse', 'Cameroun', 'Sénégal', 'Côte d\'Ivoire', 'Maroc']
-  const institutions = [
-    'UQAC', 'Université Paris-Sorbonne', 'Université de Montréal',
-    'ULB', 'Université de Genève', 'ENIEG', 'UCAD', 'Université de Yaoundé I',
-    'Université de Lille', 'Université de Lyon', 'HEC Montréal',
-  ]
-  const names = [
-    'Sarah Martin', 'Mohamed El Idrissi', 'Camille Tremblay', 'Aïcha Diallo',
-    'Thomas Dubois', 'Léa Nguyen', 'Pierre Ouédraogo', 'Marie-Claude Bélanger',
-    'Ibrahim Sow', 'Julie Lefebvre', 'Karim Benali', 'Élodie Gauthier',
-    'Yannick Mbarga', 'Sophie Lambert', 'Ousmane Fall', 'Chloé Roy',
-    'Boubacar Touré', 'Manon Beaulieu', 'Awa Camara', 'Gabriel Caron',
-    'Fatou Mbaye', 'Antoine Bouchard', 'Rachid Mansouri', 'Émilie Fortin',
-    'Cheikh Ndiaye', 'Louis-Philippe Roy', 'Aminata Traoré', 'William Côté',
-    'Ibrahima Sarr', 'Catherine Poirier',
-  ]
-
-  const now = Date.now()
-  const DAY = 86400000
-
-  for (let i = 0; i < 32; i++) {
-    const name = names[i % names.length]
-    const createdAt = now - Math.floor(Math.random() * 90) * DAY - Math.floor(Math.random() * DAY)
-    const lastSeenAt = createdAt + Math.floor(Math.random() * (now - createdAt))
-    const tierRoll = Math.random()
-    const tier: TierId = tierRoll < 0.62 ? 'free' : tierRoll < 0.88 ? 'pro' : 'premium'
-
-    // Revenue history
-    const t = TIERS[tier]
-    const history =
-      tier === 'free'
-        ? []
-        : [
-            {
-              ts: createdAt + Math.floor(Math.random() * DAY),
-              amount: t.priceMonthly * 100,
-              tier,
-            },
-          ]
-
-    // Generate events for this user
-    const events: AnalyticsEvent[] = []
-    const numEvents = Math.floor(Math.random() * 80) + 5
-    for (let j = 0; j < numEvents; j++) {
-      const evtRoll = Math.random()
-      let type: EventType = 'page_view'
-      if (evtRoll < 0.55) type = 'page_view'
-      else if (evtRoll < 0.72) type = 'ai_request'
-      else if (evtRoll < 0.83) type = 'section_drafted'
-      else if (evtRoll < 0.90) type = 'export_run'
-      else if (evtRoll < 0.95) type = 'section_humanized'
-      else type = 'upgrade_click'
-
-      events.push({
-        type,
-        ts: createdAt + Math.floor(Math.random() * (lastSeenAt - createdAt || 1)),
-      })
-    }
-
-    users.push({
-      id: uuid(),
-      createdAt,
-      lastSeenAt,
-      tier,
-      email: `${name.toLowerCase().replace(/[^a-z]+/g, '.')}@gmail.com`,
-      name,
-      country: countries[Math.floor(Math.random() * countries.length)],
-      institution: institutions[Math.floor(Math.random() * institutions.length)],
-      events,
-      totals: {
-        pageViews: events.filter((e) => e.type === 'page_view').length,
-        sectionsDrafted: events.filter((e) => e.type === 'section_drafted').length,
-        exports: events.filter((e) => e.type === 'export_run').length,
-        aiRequests: events.filter((e) => e.type === 'ai_request').length,
-        upgradeClicks: events.filter((e) => e.type === 'upgrade_click').length,
-      },
-      revenue: {
-        total: history.reduce((s, h) => s + h.amount, 0),
-        lastPaymentAt: history[0]?.ts,
-        history,
-      },
-    })
-  }
-
-  write(K_USERS, users)
-
-  // Build a global event log from all users (most recent first)
-  const allEvents: AnalyticsEvent[] = []
-  for (const u of users) {
-    for (const e of u.events) {
-      allEvents.push({ ...e, meta: { _userId: u.id } })
-    }
-  }
-  allEvents.sort((a, b) => b.ts - a.ts)
-  write(K_EVENTS, allEvents.slice(0, MAX_EVENTS))
-
-  write(K_SEED, true)
-}

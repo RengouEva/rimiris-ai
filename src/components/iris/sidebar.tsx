@@ -18,14 +18,18 @@ import {
   BookOpen,
   Crown,
   Settings,
+  LogOut,
 } from 'lucide-react'
 import { useIrisStore, type ViewMode } from '@/store/iris-store'
 import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Badge } from '@/components/ui/badge'
 import { RimirisLogo } from './rimiris-logo'
 import { getCurrentUser } from '@/lib/iris/analytics'
 import { getTier } from '@/lib/iris/tiers'
+import { useAuth } from '@/hooks/use-auth'
+import { signOut, ADMIN_EMAIL } from '@/lib/iris/auth'
 
 export const NAV_ITEMS: { id: ViewMode; label: string; icon: any }[] = [
   { id: 'guide', label: 'Guide méthodo', icon: BookOpen },
@@ -42,6 +46,7 @@ export const NAV_ITEMS: { id: ViewMode; label: string; icon: any }[] = [
 export function Sidebar() {
   const { view, setView, sidebarCollapsed, toggleSidebar, project, sections } = useIrisStore() as any
   const { theme, setTheme } = useTheme()
+  const { session } = useAuth()
   const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => setMounted(true), [])
 
@@ -52,6 +57,7 @@ export function Sidebar() {
     return () => clearInterval(i)
   }, [])
   const tier = getTier(currentUser.tier)
+  const isAdmin = session?.email === ADMIN_EMAIL
 
   const totalWords = sections.reduce((sum: number, s: any) => sum + s.wordCount, 0)
   const completed = sections.filter((s: any) => s.status === 'completed').length
@@ -145,17 +151,29 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Tier badge + upgrade CTA */}
+      {/* Tier badge + upgrade CTA + user identity */}
       {!sidebarCollapsed && (
         <div className="p-2 mx-2 mb-2 rounded-lg border border-sidebar-border bg-sidebar-accent/30">
+          {session && (
+            <div className="px-2 py-1 mb-1.5">
+              <p className="text-xs font-medium truncate" title={session.email}>{session.name}</p>
+              <p className="text-[10px] text-muted-foreground truncate" title={session.email}>{session.email}</p>
+            </div>
+          )}
           <div className="flex items-center gap-2 px-2 py-1">
             <div className="w-2 h-2 rounded-full" style={{ background: tier.color }} />
             <span className="text-xs font-medium">Plan {tier.name}</span>
-            {currentUser.tier === 'free' && (
+            {isAdmin && (
+              <Badge variant="outline" className="ml-auto text-[10px] py-0 px-1 border-primary/40 text-primary">
+                <Crown className="h-2.5 w-2.5 mr-0.5" />
+                Admin
+              </Badge>
+            )}
+            {!isAdmin && currentUser.tier === 'free' && (
               <span className="ml-auto text-[10px] text-muted-foreground">Gratuit</span>
             )}
           </div>
-          {currentUser.tier === 'free' && (
+          {!isAdmin && currentUser.tier === 'free' && (
             <button
               onClick={() => setView('pricing')}
               className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium iris-gradient text-white hover:opacity-90 transition-opacity"
@@ -190,24 +208,45 @@ export function Sidebar() {
           </Tooltip>
         </TooltipProvider>
 
-        {/* Admin link (subtle — accessible but not loud) */}
+        {/* Admin link — super_admin only */}
+        {isAdmin && (
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setView('admin')}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                    view === 'admin'
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                      : 'text-muted-foreground/70 hover:bg-sidebar-accent hover:text-muted-foreground',
+                  )}
+                >
+                  <Settings className="h-4 w-4" />
+                  {!sidebarCollapsed && <span className="text-xs">Portail Admin</span>}
+                </button>
+              </TooltipTrigger>
+              {sidebarCollapsed && <TooltipContent side="right">Portail Admin</TooltipContent>}
+            </Tooltip>
+          </TooltipProvider>
+        )}
+
+        {/* Logout */}
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                onClick={() => setView('admin')}
+                onClick={() => signOut()}
                 className={cn(
                   'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
-                  view === 'admin'
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                    : 'text-muted-foreground/70 hover:bg-sidebar-accent hover:text-muted-foreground',
+                  'text-muted-foreground hover:bg-destructive/10 hover:text-destructive',
                 )}
               >
-                <Settings className="h-4 w-4" />
-                {!sidebarCollapsed && <span className="text-xs">Portail Admin</span>}
+                <LogOut className="h-4 w-4" />
+                {!sidebarCollapsed && <span>Déconnexion</span>}
               </button>
             </TooltipTrigger>
-            {sidebarCollapsed && <TooltipContent side="right">Portail Admin</TooltipContent>}
+            {sidebarCollapsed && <TooltipContent side="right">Déconnexion</TooltipContent>}
           </Tooltip>
         </TooltipProvider>
 

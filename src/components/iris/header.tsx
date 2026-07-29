@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Menu, ChevronLeft } from 'lucide-react'
+import { Menu, ChevronLeft, LogOut, Settings } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,6 +13,8 @@ import {
 import { ThemeToggle } from './theme-toggle'
 import { NAV_ITEMS } from './sidebar'
 import { RimirisLogo } from './rimiris-logo'
+import { useAuth } from '@/hooks/use-auth'
+import { signOut, ADMIN_EMAIL } from '@/lib/iris/auth'
 
 export function Header() {
   const {
@@ -21,7 +23,9 @@ export function Header() {
     view,
     setView,
   } = useIrisStore()
+  const { session } = useAuth()
   const [mobileOpen, setMobileOpen] = React.useState(false)
+  const isAdmin = session?.email === ADMIN_EMAIL
 
   const totalWords = sections.reduce((sum, s) => sum + s.wordCount, 0)
   const completed = sections.filter((s) => s.status === 'completed').length
@@ -39,7 +43,7 @@ export function Header() {
             </SheetTrigger>
             <SheetContent side="left" className="p-0 w-64">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <MobileNav onNavigate={() => setMobileOpen(false)} />
+              <MobileNav onNavigate={() => setMobileOpen(false)} isAdmin={isAdmin} />
             </SheetContent>
           </Sheet>
           <button
@@ -95,6 +99,26 @@ export function Header() {
               <span className="hidden sm:inline">Mémoire</span>
             </Button>
           )}
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setView('admin')}
+              className="rounded-full"
+              title="Portail Admin"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => signOut()}
+            className="rounded-full text-muted-foreground hover:text-destructive"
+            title="Déconnexion"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
           <ThemeToggle />
         </div>
       </div>
@@ -102,7 +126,7 @@ export function Header() {
   )
 }
 
-function MobileNav({ onNavigate }: { onNavigate: () => void }) {
+function MobileNav({ onNavigate, isAdmin }: { onNavigate: () => void; isAdmin: boolean }) {
   const { view, setView } = useIrisStore()
   return (
     <div className="p-3 space-y-1">
@@ -127,6 +151,25 @@ function MobileNav({ onNavigate }: { onNavigate: () => void }) {
           </button>
         )
       })}
+      {isAdmin && (
+        <button
+          onClick={() => { setView('admin'); onNavigate() }}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            view === 'admin' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+          }`}
+        >
+          <Settings className="h-4 w-4" />
+          Portail Admin
+        </button>
+      )}
+      <div className="border-t border-border my-2" />
+      <button
+        onClick={() => { signOut(); onNavigate() }}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+      >
+        <LogOut className="h-4 w-4" />
+        Déconnexion
+      </button>
     </div>
   )
 }

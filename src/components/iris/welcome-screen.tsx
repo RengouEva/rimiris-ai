@@ -15,6 +15,8 @@ import {
   Bot,
   FileText,
   MessageCircle,
+  LogOut,
+  Settings,
 } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { Button } from '@/components/ui/button'
@@ -22,9 +24,13 @@ import { ThemeToggle } from './theme-toggle'
 import { RimirisLogo } from './rimiris-logo'
 import { ImmersiveBackground } from './immersive-background'
 import { track, getCurrentUser } from '@/lib/iris/analytics'
+import { useAuth } from '@/hooks/use-auth'
+import { signOut, ADMIN_EMAIL } from '@/lib/iris/auth'
 
 export function WelcomeScreen() {
   const { setView, projectInitialized, project, sections, interviewAnswers } = useIrisStore()
+  const { session } = useAuth()
+  const isAdmin = session?.email === ADMIN_EMAIL
 
   // Track landing page view once per session
   React.useEffect(() => {
@@ -60,6 +66,31 @@ export function WelcomeScreen() {
             <RimirisLogo size="lg" withWordmark />
           </div>
           <div className="flex items-center gap-2">
+            {session && (
+              <span className="hidden sm:inline text-xs text-muted-foreground">
+                {session.name}
+              </span>
+            )}
+            {isAdmin && (
+              <Button
+                onClick={() => setView('admin')}
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+              >
+                <Settings className="h-4 w-4 mr-1" />
+                Admin
+              </Button>
+            )}
+            <Button
+              onClick={() => signOut()}
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+              title="Déconnexion"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
             <ThemeToggle />
             {projectInitialized && (
               <Button
