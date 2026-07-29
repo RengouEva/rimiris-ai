@@ -4,6 +4,7 @@ import * as React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Download, X, Smartphone, Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { RimirisLogo } from '@/components/iris/rimiris-logo'
 
 // ============================================================================
 // PWAInstallPrompt — listens for `beforeinstallprompt`, shows a dismissable
@@ -124,9 +125,7 @@ export function PWAInstallPrompt() {
           }}
         >
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl iris-gradient flex items-center justify-center flex-shrink-0">
-              <Download className="h-5 w-5 text-white" />
-            </div>
+            <RimirisLogo size="md" />
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm leading-tight">
                 Installer Rimiris AI

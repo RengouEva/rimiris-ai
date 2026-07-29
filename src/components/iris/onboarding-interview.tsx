@@ -25,6 +25,7 @@ import {
   type SectionUnderstanding,
 } from '@/store/iris-store'
 import { Button } from '@/components/ui/button'
+import { RimirisLogo } from './rimiris-logo'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -140,9 +141,7 @@ function OnboardingHeader({ step }: { step: OnboardingStep }) {
     <header className="border-b border-border/40 backdrop-blur-sm bg-background/60 sticky top-0 z-10">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl iris-gradient flex items-center justify-center iris-glow">
-            <GraduationCap className="h-5 w-5 text-white" />
-          </div>
+          <RimirisLogo size="md" />
           <div>
             <p className="font-bold text-base leading-none">Rimiris</p>
             <p className="text-xs text-muted-foreground leading-none mt-0.5">

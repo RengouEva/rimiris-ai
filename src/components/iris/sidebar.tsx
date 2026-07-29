@@ -21,6 +21,7 @@ import { useIrisStore, type ViewMode } from '@/store/iris-store'
 import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { RimirisLogo } from './rimiris-logo'
 
 export const NAV_ITEMS: { id: ViewMode; label: string; icon: any }[] = [
   { id: 'guide', label: 'Guide méthodo', icon: BookOpen },
@@ -54,9 +55,10 @@ export function Sidebar() {
       <div className="h-14 flex items-center gap-2 px-3 border-b border-sidebar-border">
         <button
           onClick={() => setView('workspace')}
-          className="w-9 h-9 rounded-xl iris-gradient flex items-center justify-center flex-shrink-0"
+          className="flex-shrink-0"
+          aria-label="Rimiris AI — accueil"
         >
-          <GraduationCap className="h-5 w-5 text-white" />
+          <RimirisLogo size="md" />
         </button>
         {!sidebarCollapsed && (
           <div className="flex-1 min-w-0">

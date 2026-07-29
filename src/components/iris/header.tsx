@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { GraduationCap, Menu, ChevronLeft } from 'lucide-react'
+import { Menu, ChevronLeft } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/sheet'
 import { ThemeToggle } from './theme-toggle'
 import { NAV_ITEMS } from './sidebar'
+import { RimirisLogo } from './rimiris-logo'
 
 export function Header() {
   const {
@@ -42,9 +43,7 @@ export function Header() {
             </SheetContent>
           </Sheet>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg iris-gradient flex items-center justify-center">
-              <GraduationCap className="h-4 w-4 text-white" />
-            </div>
+            <RimirisLogo size="sm" />
             <span className="font-bold text-sm">Rimiris</span>
           </div>
         </div>
