@@ -12,7 +12,12 @@ export const maxDuration = 120
 //   3. Variation du style (éviter les répétitions)
 //   4. Registre académique
 //   5. Adaptation au niveau universitaire
-// On renvoie le HTML final + un rapport de chaque passe.
+//
+// Deux modes :
+//   - "all" (legacy) : exécute les 5 passes en une fois, renvoie tout.
+//   - "pass" : exécute UNE passe (passIndex 1..5), renvoie le HTML modifié
+//              et le rapport de cette passe. Permet au client d'afficher
+//              une animation par passe (état pending → running → done).
 // ============================================================================
 
 interface HumanizeRequestBody {
@@ -21,7 +26,43 @@ interface HumanizeRequestBody {
   filiere?: string
   norme?: string
   language?: string
+  // Nouveaux champs pour l'exécution par passe :
+  mode?: 'all' | 'pass'
+  passIndex?: number // 1..5 (utilisé seulement si mode === 'pass')
 }
+
+const PASSES = [
+  {
+    key: 'grammar',
+    name: 'Correction grammaticale',
+    instruction:
+      'Corrige toutes les fautes de grammaire, orthographe, accords, conjugaisons et ponctuation. Ne change pas le style.',
+  },
+  {
+    key: 'fluidity',
+    name: 'Fluidité',
+    instruction:
+      'Améliore les transitions entre phrases et paragraphes. Ajoute des connecteurs logiques si nécessaire. Rends la lecture plus fluide.',
+  },
+  {
+    key: 'style',
+    name: 'Variation du style',
+    instruction:
+      'Détecte les répétitions (mots, structures de phrases) et propose des variantes. Évite les tournures robotiques ou trop uniformes.',
+  },
+  {
+    key: 'academic',
+    name: 'Registre académique',
+    instruction:
+      'Élève le registre vers un français académique soutenu. Remplace les tournures familières, évite les anglicismes, précise le vocabulaire.',
+  },
+  {
+    key: 'level',
+    name: 'Adaptation au niveau',
+    instruction:
+      'Adapte le texte au niveau d\'études "{level}". Licence = clarté et rigueur ; Master = analyse et synthèse ; Doctorat = contribution originale et positionnement critique.',
+  },
+] as const
 
 function sanitizeHtml(html: string): string {
   let s = html.trim()
@@ -31,7 +72,10 @@ function sanitizeHtml(html: string): string {
   s = s.replace(/<!--[\s\S]*?-->/g, '')
   s = s.replace(/<\/?(div|span)[^>]*>/gi, '')
   if (!/<(p|h[1-6]|ul|ol|blockquote|table)/i.test(s)) {
-    s = s.split(/\n\s*\n+/).map((p) => `<p>${p.trim().replace(/\n/g, '<br/>')}</p>`).join('')
+    s = s
+      .split(/\n\s*\n+/)
+      .map((p) => `<p>${p.trim().replace(/\n/g, '<br/>')}</p>`)
+      .join('')
   }
   return s.trim()
 }
@@ -79,7 +123,10 @@ RÈGLES :
         role: 'assistant',
         content: `Tu es l'Humaniseur d'IRIS. Résume en 1-2 phrases ce que la passe "${passName}" a modifié dans le texte. Sois concret (ex : "Corrigé 3 accords et 2 ponctuations", "Varié le vocabulaire répétitif", etc.). Ne dépasse pas 30 mots.`,
       },
-      { role: 'user', content: `Texte initial : ${inputHtml.slice(0, 800)}\n\nTexte modifié : ${output.slice(0, 800)}` },
+      {
+        role: 'user',
+        content: `Texte initial : ${inputHtml.slice(0, 800)}\n\nTexte modifié : ${output.slice(0, 800)}`,
+      },
     ],
     thinking: { type: 'disabled' },
     temperature: 0.4,
@@ -93,7 +140,14 @@ RÈGLES :
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as HumanizeRequestBody
-    const { html, level = 'Master', filiere = '', norme = 'APA', language = 'Français' } = body
+    const {
+      html,
+      level = 'Master',
+      filiere = '',
+      norme = 'APA',
+      mode = 'all',
+      passIndex,
+    } = body
 
     if (!html || !html.trim()) {
       return NextResponse.json({ error: 'HTML requis' }, { status: 400 })
@@ -101,55 +155,81 @@ export async function POST(req: NextRequest) {
 
     const zai = await ZAI.create()
 
-    // Pass 1: Grammar
+    // ----------------------------------------------------------------------
+    // Mode "pass" — exécuter une seule passe
+    // ----------------------------------------------------------------------
+    if (mode === 'pass') {
+      const idx = Number(passIndex)
+      if (!Number.isInteger(idx) || idx < 1 || idx > PASSES.length) {
+        return NextResponse.json(
+          { error: `passIndex invalide (1..${PASSES.length})` },
+          { status: 400 }
+        )
+      }
+      const pass = PASSES[idx - 1]
+      const instruction = pass.instruction.replace('{level}', level)
+      const { output, report } = await runPass(
+        zai,
+        pass.name,
+        instruction,
+        html,
+        level,
+        filiere,
+        norme
+      )
+      return NextResponse.json({
+        mode: 'pass',
+        passIndex: idx,
+        passKey: pass.key,
+        passName: pass.name,
+        outputHtml: output,
+        report,
+      })
+    }
+
+    // ----------------------------------------------------------------------
+    // Mode "all" (legacy) — exécuter les 5 passes en une fois
+    // ----------------------------------------------------------------------
     const pass1 = await runPass(
       zai,
-      'Correction grammaticale',
-      'Corrige toutes les fautes de grammaire, orthographe, accords, conjugaisons et ponctuation. Ne change pas le style.',
+      PASSES[0].name,
+      PASSES[0].instruction,
       html,
       level,
       filiere,
       norme
     )
-
-    // Pass 2: Fluidity
     const pass2 = await runPass(
       zai,
-      'Fluidité',
-      'Améliore les transitions entre phrases et paragraphes. Ajoute des connecteurs logiques si nécessaire. Rends la lecture plus fluide.',
+      PASSES[1].name,
+      PASSES[1].instruction,
       pass1.output,
       level,
       filiere,
       norme
     )
-
-    // Pass 3: Style variation
     const pass3 = await runPass(
       zai,
-      'Variation du style',
-      'Détecte les répétitions (mots, structures de phrases) et propose des variantes. Évite les tournures robotiques ou trop uniformes.',
+      PASSES[2].name,
+      PASSES[2].instruction,
       pass2.output,
       level,
       filiere,
       norme
     )
-
-    // Pass 4: Academic register
     const pass4 = await runPass(
       zai,
-      'Registre académique',
-      'Élève le registre vers un français académique soutenu. Remplace les tournures familières, évite les anglicismes, précise le vocabulaire.',
+      PASSES[3].name,
+      PASSES[3].instruction,
       pass3.output,
       level,
       filiere,
       norme
     )
-
-    // Pass 5: Level adaptation
     const pass5 = await runPass(
       zai,
-      'Adaptation au niveau',
-      `Adapte le texte au niveau d'études "${level}". Licence = clarté et rigueur ; Master = analyse et synthèse ; Doctorat = contribution originale et positionnement critique.`,
+      PASSES[4].name,
+      PASSES[4].instruction.replace('{level}', level),
       pass4.output,
       level,
       filiere,

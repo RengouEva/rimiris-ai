@@ -33,6 +33,8 @@ export interface A4EditorHandle {
   insertHtml: (html: string) => void
   replaceHtml: (html: string) => void
   focus: () => void
+  /** Returns the current number of A4 pages based on actual content height */
+  getPageCount: () => number
 }
 
 interface A4EditorProps {
@@ -40,12 +42,38 @@ interface A4EditorProps {
   onChange: (html: string) => void
   editable?: boolean
   showToolbar?: boolean
+  /** Optional callback invoked whenever the page count changes (1, 2, 3, …). */
+  onPageCountChange?: (count: number) => void
 }
 
+// 297mm in CSS pixels at 96dpi: 297 * 96 / 25.4 ≈ 1122.52px
+// We use this to compute page count from scrollHeight.
+const A4_PAGE_HEIGHT_PX = 1122.52
+
 export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
-  function A4Editor({ value, onChange, editable = true, showToolbar = true }, ref) {
+  function A4Editor({ value, onChange, editable = true, showToolbar = true, onPageCountChange }, ref) {
     const editorRef = React.useRef<HTMLDivElement>(null)
     const lastValueRef = React.useRef<string>(value)
+    const lastPageCountRef = React.useRef<number>(1)
+    // Local state for re-rendering page markers when page count changes
+    const [pageCountState, setPageCountState] = React.useState<number>(1)
+
+    // ----------------------------------------------------------------------
+    // Pagination : measure content height, derive page count, notify parent
+    // ----------------------------------------------------------------------
+    function recomputePageCount() {
+      const el = editorRef.current
+      if (!el) return
+      // Total content height = scrollHeight (includes padding)
+      // A4 page = 297mm. We use ceil to count a partially-filled page as full.
+      const px = el.scrollHeight
+      const count = Math.max(1, Math.ceil(px / A4_PAGE_HEIGHT_PX))
+      if (count !== lastPageCountRef.current) {
+        lastPageCountRef.current = count
+        setPageCountState(count)
+        onPageCountChange?.(count)
+      }
+    }
 
     // Expose imperative API
     React.useImperativeHandle(ref, () => ({
@@ -88,9 +116,39 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
         lastValueRef.current = html || ''
         onChange(html || '')
         el.focus()
+        // Recompute page count synchronously after a replace
+        requestAnimationFrame(() => recomputePageCount())
       },
       focus: () => editorRef.current?.focus(),
+      getPageCount: () => lastPageCountRef.current,
     }))
+
+    // ----------------------------------------------------------------------
+    // Recompute page count when value changes (external updates, e.g., AI draft)
+    // ----------------------------------------------------------------------
+    React.useEffect(() => {
+      recomputePageCount()
+    }, [value])
+
+    React.useEffect(() => {
+      // Also recompute on window resize (page zoom, responsive changes)
+      const onResize = () => recomputePageCount()
+      window.addEventListener('resize', onResize)
+      // Use ResizeObserver to catch content growth from typing
+      const el = editorRef.current
+      let ro: ResizeObserver | null = null
+      if (el && typeof ResizeObserver !== 'undefined') {
+        ro = new ResizeObserver(() => recomputePageCount())
+        ro.observe(el)
+      }
+      // Initial computation after mount
+      requestAnimationFrame(() => recomputePageCount())
+      return () => {
+        window.removeEventListener('resize', onResize)
+        ro?.disconnect()
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     // Sync external value -> editor (only when it really changed externally)
     React.useEffect(() => {
@@ -119,6 +177,7 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
       const html = el.innerHTML
       lastValueRef.current = html
       onChange(html)
+      recomputePageCount()
     }
 
     function exec(command: string, val?: string) {
@@ -202,6 +261,7 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             className="shadow-xl"
+            pageCount={pageCountState}
           />
         </div>
       </div>
@@ -211,6 +271,8 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
 
 // ============================================================================
 // A4 page surface — the white sheet
+// Now applies the `a4-paginated` class so the CSS background-image renders
+// page boundaries every 297mm (visual auto page-break indicator).
 // ============================================================================
 
 const A4Page = React.forwardRef<
@@ -221,34 +283,50 @@ const A4Page = React.forwardRef<
     onKeyDown: (e: React.KeyboardEvent) => void
     onPaste: (e: React.ClipboardEvent) => void
     className?: string
+    pageCount?: number
   }
->(function A4Page({ editable, onInput, onKeyDown, onPaste, className }, ref) {
+>(function A4Page({ editable, onInput, onKeyDown, onPaste, className, pageCount = 1 }, ref) {
   return (
-    <div
-      ref={ref}
-      contentEditable={editable}
-      suppressContentEditableWarning
-      spellCheck
-      onInput={onInput}
-      onKeyDown={onKeyDown}
-      onPaste={onPaste}
-      className={cn(
-        'a4-page',
-        'bg-white text-black',
-        'mx-auto',
-        'outline-none',
-        'prose-iris',
-        editable && 'cursor-text',
-        className
-      )}
-      style={{
-        // A4 dimensions, scalable. Use min-height so it grows with content.
-        width: '210mm',
-        minHeight: '297mm',
-        padding: '25mm 25mm 30mm 25mm',
-      }}
-      data-placeholder="Commencez à écrire ici, ou demandez à IRIS de générer un brouillon formaté…"
-    />
+    <div className="relative" style={{ width: '210mm' }}>
+      <div
+        ref={ref}
+        contentEditable={editable}
+        suppressContentEditableWarning
+        spellCheck
+        onInput={onInput}
+        onKeyDown={onKeyDown}
+        onPaste={onPaste}
+        className={cn(
+          'a4-page',
+          'a4-paginated',
+          'bg-white text-black',
+          'mx-auto',
+          'outline-none',
+          'prose-iris',
+          editable && 'cursor-text',
+          className
+        )}
+        style={{
+          width: '210mm',
+          minHeight: '297mm',
+          padding: '25mm 25mm 30mm 25mm',
+        }}
+        data-placeholder="Commencez à écrire ici, ou demandez à IRIS de générer un brouillon formaté…"
+      />
+      {/* Page markers — small "Page N" labels in the bottom margin of each A4 page.
+          Only rendered in the editor (hidden in print via CSS). */}
+      {Array.from({ length: pageCount }, (_, i) => (
+        <span
+          key={i}
+          className="a4-page-marker"
+          style={{
+            top: `calc(${(i + 1) * 297}mm - 18mm)`,
+          }}
+        >
+          — {i + 1} —
+        </span>
+      ))}
+    </div>
   )
 })
 

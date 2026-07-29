@@ -31,6 +31,7 @@ import {
   ListTree as ListTreeIcon,
   Check,
   Printer,
+  FileDown,
 } from 'lucide-react'
 import { useIrisStore, type Section, type SectionStatus, htmlToPlainText } from '@/store/iris-store'
 import { AGENTS } from '@/lib/iris/agents'
@@ -140,6 +141,11 @@ export function Workspace() {
                 total={sections.length}
                 active={section.id === activeSection?.id}
                 onSelect={() => setActiveSection(section.id)}
+                onOpenAI={() => {
+                  // Sélectionne la section ET ouvre le panel IA pour elle
+                  setActiveSection(section.id)
+                  setAIPanel(true)
+                }}
                 onRename={(title) => renameSection(section.id, title)}
                 onDelete={() => {
                   if (sections.length === 1) {
@@ -215,6 +221,7 @@ export function Workspace() {
               setBlockedMode(true)
               setAIPanel(true)
             }}
+            onExport={() => setView('export')}
           />
         ) : (
           <EmptyState
@@ -255,6 +262,7 @@ function SectionItem({
   total,
   active,
   onSelect,
+  onOpenAI,
   onRename,
   onDelete,
   onDuplicate,
@@ -267,6 +275,7 @@ function SectionItem({
   total: number
   active: boolean
   onSelect: () => void
+  onOpenAI: () => void
   onRename: (title: string) => void
   onDelete: () => void
   onDuplicate: () => void
@@ -339,6 +348,25 @@ function SectionItem({
           </div>
         </div>
 
+        {/* Bouton IA — ouvre le workflow de section (rédaction / humanisation / validation).
+            Apparaît toujours, se met en évidence au survol.
+            C'est le seul point d'entrée pour "Rediger avec IA" sur cette section. */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpenAI()
+          }}
+          title="Rédiger cette section avec IRIS"
+          className={cn(
+            'flex-shrink-0 p-1.5 rounded-md transition-all',
+            active
+              ? 'iris-gradient text-white shadow-sm'
+              : 'opacity-60 group-hover:opacity-100 text-primary hover:bg-primary/10'
+          )}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+        </button>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -399,6 +427,7 @@ function EditorView({
   onUpdateContent,
   onOpenAI,
   onOpenBlocked,
+  onExport,
 }: {
   section: Section
   project: any
@@ -406,8 +435,11 @@ function EditorView({
   onUpdateContent: (content: string) => void
   onOpenAI: () => void
   onOpenBlocked: () => void
+  onExport: () => void
 }) {
   const [showAIHint, setShowAIHint] = React.useState(false)
+  // Real page count, measured from the editor's content height
+  const [pageCount, setPageCount] = React.useState<number>(1)
 
   const isEmpty = section.wordCount === 0
 
@@ -419,13 +451,6 @@ function EditorView({
       setShowAIHint(false)
     }
   }, [section.wordCount, section.messages.length])
-
-  // Compute "page count" (A4 = ~500 words/page)
-  const pageCount = Math.max(1, Math.ceil(section.wordCount / 500))
-
-  function handlePrint() {
-    window.print()
-  }
 
   return (
     <div className="flex-1 flex flex-col min-w-0 relative">
@@ -444,16 +469,6 @@ function EditorView({
         <div className="flex items-center gap-1.5">
           <Button
             size="sm"
-            variant="ghost"
-            onClick={handlePrint}
-            className="rounded-full text-muted-foreground"
-            title="Imprimer / Exporter en PDF"
-          >
-            <Printer className="h-3.5 w-3.5 mr-1" />
-            <span className="hidden sm:inline">Imprimer</span>
-          </Button>
-          <Button
-            size="sm"
             variant="outline"
             onClick={onOpenBlocked}
             className="rounded-full border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
@@ -461,13 +476,16 @@ function EditorView({
             <HelpCircle className="h-3.5 w-3.5 mr-1" />
             <span className="hidden sm:inline">Bloqué ?</span>
           </Button>
+          {/* Exporter — remplace "Imprimer" et le bouton "IRIS".
+              Stylé comme le bouton gradient précédent, mène à la page Export. */}
           <Button
             size="sm"
-            onClick={onOpenAI}
+            onClick={onExport}
             className="rounded-full iris-gradient text-white"
+            title="Exporter le mémoire (PDF, Word, HTML…)"
           >
-            <Sparkles className="h-3.5 w-3.5 mr-1" />
-            IRIS
+            <FileDown className="h-3.5 w-3.5 mr-1" />
+            <span className="hidden sm:inline">Exporter</span>
           </Button>
         </div>
       </div>
@@ -491,9 +509,8 @@ function EditorView({
                   IRIS peut rédiger cette section avec vous
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Cliquez pour lancer la rédaction. IRIS pose une question ciblée pour
-                  clarifier votre intention, puis produit un brouillon structuré et déjà
-                  formaté aux normes académiques. Vous l'éditerez ensuite librement.
+                  Cliquez sur l'icône <Sparkles className="inline h-3 w-3" /> à côté du titre de la section
+                  (à gauche) pour lancer la rédaction. Par défaut, vous pouvez aussi écrire librement ci-dessous.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2 justify-center pt-1">
                   <Button
@@ -525,6 +542,7 @@ function EditorView({
         ref={editorRef}
         value={section.content}
         onChange={onUpdateContent}
+        onPageCountChange={setPageCount}
       />
 
       {/* AI hint as a floating bottom-right toast */}

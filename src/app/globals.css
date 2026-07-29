@@ -206,6 +206,7 @@
   border-radius: 2px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 10px 30px -10px rgba(0, 0, 0, 0.15);
   transition: box-shadow 0.2s ease;
+  position: relative;
 }
 .a4-page:hover {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 14px 40px -10px rgba(0, 0, 0, 0.22);
@@ -213,6 +214,44 @@
 .a4-page:focus {
   outline: none;
   box-shadow: 0 0 0 2px oklch(0.42 0.18 285 / 0.5), 0 14px 40px -10px rgba(0, 0, 0, 0.22);
+}
+
+/* =========================================================================
+   PAGINATION AUTOMATIQUE — Visualisation des sauts de page A4
+   =========================================================================
+   La page A4 fait 297mm de haut, marges 25mm en haut + 30mm en bas
+   = 242mm de zone éditable. On dessine une ligne de séparation tous les
+   297mm (bord de page) pour que l'utilisateur voie où le contenu passe
+   sur la page suivante. Le navigateur gère le vrai saut de page à l'impression.
+   ========================================================================= */
+
+.a4-page.a4-paginated {
+  /* Dessine un séparateur visuel à chaque bord de page A4 (297mm)
+     sous forme d'ombre en bas de chaque "page" virtuelle. */
+  background-image:
+    /* Ombre douce en haut de chaque page suivante (effet de tranche) */
+    linear-gradient(to bottom, rgba(0,0,0,0.04) 0px, rgba(0,0,0,0) 6px),
+    /* Ligne fine marquant le bord bas de la marge de page (272mm = 297mm - 25mm) */
+    linear-gradient(to bottom, transparent calc(100% - 30mm), rgba(124, 58, 237, 0.12) calc(100% - 30mm), rgba(124, 58, 237, 0.12) calc(100% - 30mm + 1px), transparent calc(100% - 30mm + 1px));
+  background-repeat: repeat-y;
+  background-size: 100% 297mm;
+  background-position: 0 0;
+}
+
+/* Numéro de page affiché en filigrane dans la marge inférieure
+   (seulement visible dans l'éditeur, masqué à l'impression) */
+.a4-page-marker {
+  position: absolute;
+  right: 8mm;
+  font-family: 'Inter', sans-serif;
+  font-size: 8pt;
+  color: rgba(124, 58, 237, 0.35);
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+@media print {
+  .a4-page-marker { display: none !important; }
 }
 
 /* Placeholder when empty */
@@ -389,5 +428,54 @@
     padding: 0 !important;
     margin: 0 !important;
     border-radius: 0 !important;
+  }
+
+  /* Quand on imprime depuis la page Export, on cache tout sauf
+     le rendu imprimable (.printable-memoire). */
+  aside, header { display: none !important; }
+  main { overflow: visible !important; }
+  /* Cache tout le contenu interactif de l'export-view (cards, boutons, etc.) */
+  main > div:not(.printable-memoire) { display: none !important; }
+  .printable-memoire { display: block !important; }
+
+  /* Typographie du mémoire imprimable */
+  .printable-title-page {
+    text-align: center;
+    padding-top: 6cm;
+    page-break-after: always;
+  }
+  .printable-title-page h1 {
+    font-family: 'Inter', Arial, sans-serif;
+    font-size: 24pt;
+    text-transform: uppercase;
+    margin-bottom: 1.5cm;
+  }
+  .printable-title-page p {
+    font-size: 14pt;
+    color: #333;
+    margin: 4pt 0;
+  }
+  .printable-title-page .subtitle { font-weight: 600; }
+  .printable-title-page .norm { font-size: 11pt; color: #666; margin-top: 1cm; }
+
+  .printable-section { page-break-inside: auto; }
+  .printable-section h2 {
+    font-family: 'Inter', Arial, sans-serif;
+    font-size: 16pt;
+    margin-top: 24pt;
+    margin-bottom: 12pt;
+    page-break-after: avoid;
+  }
+  .printable-section h3 {
+    font-family: 'Inter', Arial, sans-serif;
+    font-size: 13pt;
+    page-break-after: avoid;
+  }
+  .printable-section p {
+    font-family: 'Times New Roman', Georgia, serif;
+    font-size: 12pt;
+    line-height: 1.6;
+    text-align: justify;
+    margin: 0 0 10pt 0;
   }
 }

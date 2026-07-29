@@ -1016,6 +1016,14 @@ function DraftStep({
 // STEP 4 — Humanization (5-engine pipeline)
 // ============================================================================
 
+type PassState = 'pending' | 'running' | 'done' | 'error'
+
+interface PassRuntime {
+  state: PassState
+  report?: string
+  error?: string
+}
+
 function HumanizationStep({
   section,
   project,
@@ -1029,52 +1037,116 @@ function HumanizationStep({
   onSkip: () => void
   onBack: () => void
 }) {
-  const [loading, setLoading] = React.useState(false)
-  const [step, setStep] = React.useState<string | null>(null)
-  const [result, setResult] = React.useState<HumanizationResult | null>(section.humanization || null)
-  const [error, setError] = React.useState<string | null>(null)
+  // État par passe — chaque passe a son propre état indépendant
+  // 'pending' → 'running' → 'done' (ou 'error' si échec)
+  const [passesState, setPassesState] = React.useState<Record<string, PassRuntime>>(
+    () => {
+      // Si la section a déjà une humanisation complète, on marque les 5 passes comme 'done'
+      if (section.humanization) {
+        return {
+          grammar: { state: 'done' as PassState, report: section.humanization.grammar },
+          fluidity: { state: 'done' as PassState, report: section.humanization.fluidity },
+          style: { state: 'done' as PassState, report: section.humanization.style },
+          academic: { state: 'done' as PassState, report: section.humanization.academic },
+          level: { state: 'done' as PassState, report: section.humanization.level },
+        }
+      }
+      return {} as Record<string, PassRuntime>
+    }
+  )
+
+  // HTML courant au fil des passes (on enchaîne passe 1 → 2 → 3 → 4 → 5)
+  const currentHtmlRef = React.useRef<string>(section.content)
+  // HTML final (après passe 5) — utilisé pour mettre à jour l'éditeur
+  const [finalHtml, setFinalHtml] = React.useState<string | null>(null)
+  const [globalError, setGlobalError] = React.useState<string | null>(null)
+  const [isRunning, setIsRunning] = React.useState(false)
 
   const passes = [
-    { name: 'Correction grammaticale', key: 'grammar' },
-    { name: 'Fluidité', key: 'fluidity' },
-    { name: 'Variation du style', key: 'style' },
-    { name: 'Registre académique', key: 'academic' },
-    { name: 'Adaptation au niveau', key: 'level' },
+    { name: 'Correction grammaticale', key: 'grammar', desc: 'Orthographe, accords, ponctuation' },
+    { name: 'Fluidité', key: 'fluidity', desc: 'Transitions et connecteurs logiques' },
+    { name: 'Variation du style', key: 'style', desc: 'Éviter les répétitions' },
+    { name: 'Registre académique', key: 'academic', desc: 'Vocabulaire soutenu' },
+    { name: 'Adaptation au niveau', key: 'level', desc: `${project.level || 'Master'}` },
   ]
 
-  async function runPipeline() {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/ai/humanize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          html: section.content,
-          level: project.level,
-          filiere: project.filiere,
-          norme: project.norme,
-          language: project.language,
-        }),
-      })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      const h: HumanizationResult = {
-        grammar: data.grammar || '',
-        fluidity: data.fluidity || '',
-        style: data.style || '',
-        academic: data.academic || '',
-        level: data.level || '',
-        finalHtml: data.finalHtml || section.content,
-      }
-      setResult(h)
-      onHumanized(h)
-    } catch (e: any) {
-      setError(e.message || 'Connexion impossible.')
-    } finally {
-      setLoading(false)
-    }
+  function setPassState(key: string, state: PassState, extra?: Partial<PassRuntime>) {
+    setPassesState((prev) => ({
+      ...prev,
+      [key]: { ...(prev[key] || { state: 'pending' }), state, ...extra },
+    }))
   }
+
+  async function runPipeline() {
+    if (isRunning) return
+    setIsRunning(true)
+    setGlobalError(null)
+    currentHtmlRef.current = section.content
+
+    // Marquer toutes les passes non 'done' comme 'pending' (réinitialiser)
+    const initial: Record<string, PassRuntime> = {}
+    passes.forEach((p) => {
+      const prev = passesState[p.key]
+      initial[p.key] = prev && prev.state === 'done' ? prev : { state: 'pending' }
+    })
+    setPassesState(initial)
+
+    // Exécuter les passes une par une (sequenciellement)
+    for (let i = 0; i < passes.length; i++) {
+      const p = passes[i]
+      // Si déjà fait (relance partielle), on garde le résultat
+      if (passesState[p.key]?.state === 'done' && passesState[p.key]?.report) {
+        // On ne relance pas — mais il faut quand même avancer le HTML courant
+        // On ne peut pas reconstruire le HTML intermédiaire, donc on relance
+        // réellement pour être sûr de l'enchaînement.
+      }
+      setPassState(p.key, 'running')
+      try {
+        const res = await fetch('/api/ai/humanize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            html: currentHtmlRef.current,
+            level: project.level,
+            filiere: project.filiere,
+            norme: project.norme,
+            language: project.language,
+            mode: 'pass',
+            passIndex: i + 1,
+          }),
+        })
+        const data = await res.json()
+        if (data.error) throw new Error(data.error)
+
+        currentHtmlRef.current = data.outputHtml
+        setPassState(p.key, 'done', { report: data.report || '' })
+
+        // Petite pause pour laisser l'animation se voir
+        await new Promise((r) => setTimeout(r, 250))
+      } catch (e: any) {
+        setPassState(p.key, 'error', { error: e.message || 'Échec' })
+        setGlobalError(e.message || 'Connexion impossible.')
+        setIsRunning(false)
+        return
+      }
+    }
+
+    // Toutes les passes sont done — construire le HumanizationResult final
+    const h: HumanizationResult = {
+      grammar: passesState.grammar?.report || '',
+      fluidity: passesState.fluidity?.report || '',
+      style: passesState.style?.report || '',
+      academic: passesState.academic?.report || '',
+      level: passesState.level?.report || '',
+      finalHtml: currentHtmlRef.current,
+    }
+    setFinalHtml(currentHtmlRef.current)
+    onHumanized(h)
+    setIsRunning(false)
+  }
+
+  // Vrai état "terminé" : les 5 passes sont 'done'
+  const allDone = passes.every((p) => passesState[p.key]?.state === 'done')
 
   return (
     <div className="p-4 space-y-4">
@@ -1085,65 +1157,130 @@ function HumanizationStep({
         <p className="text-sm font-semibold">Pipeline en 5 passes</p>
         <p className="text-xs text-muted-foreground mt-1">
           L'Humaniseur passe le brouillon dans 5 moteurs successifs pour produire un texte naturel,
-          fluide, académique et adapté à votre niveau d'études.
+          fluide, académique et adapté à votre niveau d'études. Chaque passe s'affiche en temps réel.
         </p>
       </div>
 
+      {/* Liste des passes avec état individuel */}
       <div className="space-y-1.5">
-        {passes.map((p, idx) => (
-          <div
-            key={p.key}
-            className={cn(
-              'flex items-center gap-2 p-2 rounded-lg border text-xs',
-              result
-                ? 'border-emerald-500/30 bg-emerald-500/5'
-                : loading
-                ? 'border-primary/30 bg-primary/5'
-                : 'border-border bg-card'
-            )}
-          >
-            <div
+        {passes.map((p, idx) => {
+          const st = passesState[p.key]?.state || 'pending'
+          const report = passesState[p.key]?.report
+          const err = passesState[p.key]?.error
+          return (
+            <motion.div
+              key={p.key}
+              layout
+              initial={false}
+              animate={{
+                backgroundColor:
+                  st === 'done'
+                    ? 'rgba(16,185,129,0.05)'
+                    : st === 'running'
+                    ? 'rgba(124,58,237,0.08)'
+                    : st === 'error'
+                    ? 'rgba(239,68,68,0.05)'
+                    : 'rgba(0,0,0,0)',
+              }}
               className={cn(
-                'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold',
-                result
-                  ? 'bg-emerald-500 text-white'
-                  : loading
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground'
+                'flex items-start gap-2 p-2.5 rounded-lg border text-xs transition-colors',
+                st === 'done'
+                  ? 'border-emerald-500/30'
+                  : st === 'running'
+                  ? 'border-primary/40'
+                  : st === 'error'
+                  ? 'border-red-500/40'
+                  : 'border-border bg-card'
               )}
             >
-              {result ? <Check className="h-3 w-3" /> : idx + 1}
-            </div>
-            <span className="font-medium">{p.name}</span>
-            {result && (
-              <span className="ml-auto text-[10px] text-muted-foreground italic truncate max-w-[150px]">
-                {(result as any)[p.key]}
-              </span>
-            )}
-          </div>
-        ))}
+              {/* Indicateur d'état — change selon st */}
+              <div
+                className={cn(
+                  'w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0 mt-0.5',
+                  st === 'done'
+                    ? 'bg-emerald-500 text-white'
+                    : st === 'running'
+                    ? 'bg-primary text-primary-foreground'
+                    : st === 'error'
+                    ? 'bg-red-500 text-white'
+                    : 'bg-muted text-muted-foreground'
+                )}
+              >
+                {st === 'done' ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : st === 'running' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : st === 'error' ? (
+                  <AlertCircle className="h-3.5 w-3.5" />
+                ) : (
+                  idx + 1
+                )}
+              </div>
+
+              {/* Texte de la passe */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium">{p.name}</span>
+                  {st === 'running' && (
+                    <motion.span
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-[10px] text-primary italic"
+                    >
+                      traitement…
+                    </motion.span>
+                  )}
+                  {st === 'done' && report && (
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 italic truncate">
+                      · {report}
+                    </span>
+                  )}
+                  {st === 'error' && err && (
+                    <span className="text-[10px] text-red-500 italic truncate">· {err}</span>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{p.desc}</p>
+              </div>
+            </motion.div>
+          )
+        })}
       </div>
 
-      {loading && (
-        <div className="flex flex-col items-center justify-center py-4 gap-2">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <p className="text-xs text-muted-foreground italic">
-            Les 5 passes s'enchaînent, cela peut prendre 30-60 secondes...
-          </p>
+      {/* Barre de progression globale */}
+      {isRunning && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+            <span>Progression</span>
+            <span>
+              {passes.filter((p) => passesState[p.key]?.state === 'done').length}/{passes.length}
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+            <motion.div
+              className="h-full iris-gradient"
+              initial={{ width: 0 }}
+              animate={{
+                width: `${(passes.filter((p) => passesState[p.key]?.state === 'done').length / passes.length) * 100}%`,
+              }}
+              transition={{ duration: 0.4 }}
+            />
+          </div>
         </div>
       )}
 
-      {error && (
+      {/* Erreur globale */}
+      {globalError && !isRunning && (
         <div className="rounded-lg border border-red-500/40 bg-red-500/5 p-2.5 text-xs text-red-700 dark:text-red-400 flex items-center gap-2">
           <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-          <span className="flex-1">{error}</span>
+          <span className="flex-1">{globalError}</span>
           <Button size="sm" variant="ghost" onClick={runPipeline} className="h-6 text-xs">
             Réessayer
           </Button>
         </div>
       )}
 
-      {!loading && !result && (
+      {/* Bouton de lancement */}
+      {!isRunning && !allDone && (
         <Button
           onClick={runPipeline}
           className="w-full iris-gradient text-white rounded-full"
@@ -1153,7 +1290,21 @@ function HumanizationStep({
         </Button>
       )}
 
-      {result && (
+      {/* Bouton relancer si déjà fini */}
+      {!isRunning && allDone && (
+        <Button
+          onClick={runPipeline}
+          variant="outline"
+          className="w-full rounded-full"
+          size="sm"
+        >
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+          Relancer l'humanisation
+        </Button>
+      )}
+
+      {/* Succès */}
+      {allDone && finalHtml && (
         <motion.div
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1173,7 +1324,7 @@ function HumanizationStep({
       )}
 
       <div className="flex gap-1.5 pt-2 border-t">
-        <Button variant="ghost" size="sm" onClick={onBack} className="text-xs">
+        <Button variant="ghost" size="sm" onClick={onBack} className="text-xs" disabled={isRunning}>
           ← Revenir à la rédaction
         </Button>
         <Button
@@ -1181,6 +1332,7 @@ function HumanizationStep({
           size="sm"
           onClick={onSkip}
           className="text-xs ml-auto"
+          disabled={isRunning}
         >
           Passer l'humanisation →
         </Button>

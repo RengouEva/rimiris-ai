@@ -1,10 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { GraduationCap, Menu, HelpCircle, Sparkles, Moon, Sun, ChevronLeft } from 'lucide-react'
+import { GraduationCap, Menu, HelpCircle, ChevronLeft } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   Sheet,
   SheetContent,
@@ -12,7 +11,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { ThemeToggle } from './theme-toggle'
-import { useTheme } from 'next-themes'
 import { NAV_ITEMS } from './sidebar'
 
 export function Header() {
@@ -25,9 +23,6 @@ export function Header() {
     setView,
   } = useIrisStore()
   const [mobileOpen, setMobileOpen] = React.useState(false)
-  const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = React.useState(false)
-  React.useEffect(() => setMounted(true), [])
 
   const totalWords = sections.reduce((sum, s) => sum + s.wordCount, 0)
   const completed = sections.filter((s) => s.status === 'completed').length
@@ -82,9 +77,13 @@ export function Header() {
           )}
         </div>
 
-        {/* Right actions */}
+        {/* Right actions
+            - Sur Mon Mémoire : on garde juste "Bloqué ?" (point d'aide) et le toggle thème.
+              L'IA se lance désormais via l'icône Sparkles sur chaque section (sidebar gauche),
+              et l'export se lance via le bouton "Exporter" dans la barre d'outils de l'éditeur.
+            - Sur les autres vues : bouton "Retour au mémoire". */}
         <div className="flex items-center gap-1.5">
-          {view !== 'workspace' && (
+          {view !== 'workspace' && view !== 'export' && (
             <Button
               size="sm"
               variant="ghost"
@@ -96,28 +95,19 @@ export function Header() {
             </Button>
           )}
           {view === 'workspace' && (
-            <>
-              <Button
-                onClick={() => {
-                  setBlockedMode(true)
-                  setAIPanel(true)
-                }}
-                size="sm"
-                variant="outline"
-                className="rounded-full border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
-              >
-                <HelpCircle className="h-4 w-4" />
-                <span className="hidden sm:inline ml-1">Bloqué</span>
-              </Button>
-              <Button
-                onClick={() => setAIPanel(true)}
-                size="sm"
-                className="rounded-full iris-gradient text-white"
-              >
-                <Sparkles className="h-4 w-4" />
-                <span className="hidden sm:inline ml-1">IRIS</span>
-              </Button>
-            </>
+            <Button
+              onClick={() => {
+                setBlockedMode(true)
+                setAIPanel(true)
+              }}
+              size="sm"
+              variant="outline"
+              className="rounded-full border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+              title="Besoin d'aide pour avancer ?"
+            >
+              <HelpCircle className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Bloqué ?</span>
+            </Button>
           )}
           <ThemeToggle />
         </div>
