@@ -78,14 +78,6 @@ export function Sidebar() {
           )}
         </button>
       </div>
-      {!sidebarCollapsed && (
-        <div className="px-3 py-2 border-b border-sidebar-border">
-          <p className="text-xs text-muted-foreground truncate text-center">
-            {project.title || 'Nouveau mémoire'}
-          </p>
-        </div>
-      )}
-
       {/* Nav */}
       <nav className="flex-1 p-2 space-y-1">
         {NAV_ITEMS.map((item) => {
