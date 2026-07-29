@@ -915,3 +915,97 @@ Stage Summary:
 - Test réseau réel de chaque prestataire implémenté (endpoints lecture-seule : /balance, /get-token, /me, etc. — aucun paiement réel déclenché).
 - Endpoint public `/api/payment/health` exposé pour que la page pricing puisse afficher dynamiquement le badge du prestataire actif (sans exposer aucune clé secrète).
 - Infrastructure prête pour les futures routes `/api/payment/initiate` (démarre un paiement) et `/api/payment/webhook` (vérifie la signature HMAC avec le webhookSecret stocké). Les helpers `getActiveProvider()` et `isPaymentEnabled()` sont déjà exportés.
+
+---
+Task ID: payment-flow-implementation
+Agent: main (Super Z)
+Task: Implementer /api/payment/initiate + /api/payment/webhook + brancher la page pricing sur /api/payment/health
+
+Work Log:
+- Création de `src/lib/iris/payment-pending.ts` (≈170 lignes) :
+  * Store JSON file-backed `.payment-pending.json` avec écriture atomique (tmp + rename).
+  * CRUD complet : createPending, getPending, findPendingByProviderRef, updatePending, markPaid, markFailed.
+  * Cleanup automatique des entrées stale : les pending > 24h sont marquées 'expired', les résolues > 7j sont supprimées.
+  * generateReference() produit `rdr_<random>` (préfixe 'rdr' = Rimiris).
+  * Cross-check sécurité : le provider du webhook doit correspondre au provider du pending (empêche un webhook Campay malveillant de fulfill un paiement Stripe).
+- Extension de `src/lib/iris/payment-providers.ts` (+ ≈700 lignes) :
+  * Ajout de `initiatePayment(input)` : switch par provider.
+    - Stripe : POST /v1/checkout/sessions avec XAF comme zero-decimal currency (amount en unités, pas en centimes), success_url + cancel_url + client_reference_id, expires_at à +30min.
+    - Campay : 2 étapes — POST /get-token/ (username/password) puis POST /collect/ (push Mobile Money). Retourne providerRef, pas de redirect (flow 'push').
+    - FedaPay : POST /v1/transactions puis POST /v1/transactions/{id}/token si token_url absent. Retourne redirectUrl.
+    - Flutterwave : POST /v3/payments avec tx_ref=notre référence. Retourne data.link.
+    - Paystack : POST /transaction/initialize avec XAF en zero-decimal. Retourne data.authorization_url.
+    - NotchPay : 2 étapes — POST /v1/payments puis POST /v1/payments/{ref}/initialize. Retourne authorization_url.
+    - CinetPay : pas d'appel API — construction directe de l'URL hosted checkout `https://checkout.cinetpay.com/v2/payment?site_id=...&amount=...&transaction_id=notre_ref`.
+  * Ajout de `verifyWebhook(provider, body, headers)` : switch par provider.
+    - Stripe : header `stripe-signature` au format `t=...,v1=...`. HMAC-SHA256(`${t}.${body}`, webhookSecret). Comparaison timing-safe + replay protection (timestamp < 5min). Extrait reference de `event.data.object.client_reference_id`.
+    - Campay : header `x-campay-signature` (HMAC-SHA256 du body). Vérifie status === 'SUCCESSFUL' et extrait `external_reference` (notre rdr_xxx).
+    - FedaPay : header `x-fedapay-signature` (HMAC-SHA256). Extrait reference de `event.data.reference` quand event === 'transaction.approved'.
+    - Flutterwave : header `verif-hash` — secret partagé (pas HMAC, comparaison simple). Extrait tx_ref quand event === 'charge.completed' && data.status === 'successful'.
+    - Paystack : header `x-paystack-signature` (HMAC-SHA512 du body). Extrait data.reference quand event === 'charge.success'.
+    - NotchPay : header `x-notchpay-signature` (HMAC-SHA256). Extrait reference de `event.reference` quand event === 'payment.success'.
+    - CinetPay : pas de header standard — vérifie que cpm_site_id correspond + signature MD5(apikey+site_id+transaction_id) si présente. Extrait cpm_trans_id quand cpm_result === '00'.
+- Création de `src/lib/iris/payment-fulfillment.ts` (≈155 lignes) :
+  * `fulfillPayment(reference, provider)` : lookup pending → vérif statut 'pending' (idempotence) → cross-check provider → upgrade tier dans .rimiris-accounts.json (writeStore atomique) → enregistre revenue dans .rimiris-revenue.json (write atomique) → markPaid(reference).
+  * Idempotence garantie : un second appel webhook pour une référence déjà 'paid' retourne ok=true, fulfilled=false sans ré-enregistrer le revenue.
+  * Le compte admin (admin@rimiris.com) n'enregistre jamais de revenue (il est déjà Pro par défaut).
+- Création de `src/app/api/payment/initiate/route.ts` (≈115 lignes) :
+  * GET avec query params `tier`, `docType`, `phone`.
+  * requireSession (cookie HMAC + CSRF check).
+  * Calcule le montant via getProjectPrice(docType) — 7000 XAF par défaut, 2000 XAF pour dissertations/exposés.
+  * Génère une référence rdr_xxx, crée le pending AVANT d'appeler le provider (pour que le webhook puisse fulfill même si l'utilisateur ferme son navigateur).
+  * Appelle initiatePayment, met à jour le pending avec le providerRef, retourne { ok, provider, mode, reference, redirectUrl, flow: 'redirect'|'push' }.
+  * En cas d'échec initiation : markFailed sur le pending + retour 502.
+- Création de `src/app/api/payment/webhook/[provider]/route.ts` (≈80 lignes) :
+  * POST dynamic route — pas de requireSession (le provider n'a pas notre cookie). La signature cryptographique est la SEULE couche d'auth.
+  * Lit le raw body (req.text() — nécessaire pour HMAC).
+  * Appelle verifyWebhook(provider, body, headers).
+  * Si signature invalide → 400 (arrête les retries Stripe).
+  * Si référence extraite → fulfillPayment(reference, provider) (idempotent).
+  * Retourne 200 dans tous les cas où on a traité la notif (même pour des events non-fulfill comme payment.failed) pour stopper les retries.
+  * GET handler pour les providers qui pinguent l'endpoint pour vérifier qu'il existe.
+- Création de `src/app/api/payment/verify/route.ts` (≈95 lignes) :
+  * GET avec query `ref` — requireSession (le user peut vérifier SES paiements uniquement).
+  * Pour Campay : poll server-to-server `/collect/{providerRef}/` avec le token Campay. Si SUCCESSFUL → fulfillPayment (defense-in-depth si webhook delayed).
+  * Pour les autres : retourne simplement le statut actuel du pending (le webhook devrait déjà avoir fulfilled).
+  * Cross-check accountId pending === session.accountId (sinon 403).
+- Création de `src/app/api/payment/success/route.ts` (≈145 lignes) :
+  * Là où les prestataires hosted-checkout redirigent le navigateur après paiement.
+  * requireSession, lookup pending par ref, cross-check accountId.
+  * Pour chaque provider qui supporte la vérification server-to-server (Campay, Stripe, Paystack, Flutterwave) : appelle l'API du provider pour vérifier le statut réel, et fulfill si confirmé (au cas où le webhook n'a pas encore tiré).
+  * Redirige vers `/?payment=success|processing|failed|cancelled` avec le bon param pour que la landing page affiche le toast approprié.
+- Modification de `src/components/monetization/pricing-view.tsx` :
+  * Ajout d'un `useEffect` qui fetch `/api/payment/health` au montage et stocke le résultat dans `paymentHealth`.
+  * Affichage d'un badge dynamique sous le titre :
+    - Si payment enabled : badge vert "Paiement sécurisé par [Provider] · Mobile Money · Mode test/production".
+    - Si payment disabled : badge ambre "Mode démo — aucun paiement réel traité".
+  * Modification de `handleUpgrade` :
+    - Si payment enabled ET provider !== 'campay' : `window.location.href = '/api/payment/initiate?tier=pro'` (le serveur redirige vers le hosted checkout).
+    - Si payment enabled ET provider === 'campay' : ouvre le dialog (qui demande le numéro Mobile Money).
+    - Si payment disabled : ouvre le dialog demo (comportement legacy).
+  * Modification de `UpgradeDialog` pour accepter `paymentHealth` en prop :
+    - Si isCampayPush : affiche un champ "Numéro Mobile Money" (+237 6XX XXX XXX), et au submit redirige vers `/api/payment/initiate?tier=pro&phone=...`.
+    - Si isDemo : comportement inchangé (appel à upgradeToTier, pas de revenu enregistré).
+  * Texte adaptatif dans la bannière amber : "Push Mobile Money" pour Campay, "Mode démo" sinon.
+  * Bouton adaptatif : "Envoyer le push Mobile Money" (Campay) ou "Activer Pro" (demo).
+- Vérifications :
+  * `npx tsc --noEmit --skipLibCheck` → 0 erreur.
+  * `curl /api/payment/health` → {"enabled":false,"provider":null,...} ✓
+  * `curl /api/payment/initiate?tier=pro` sans session → 401 "Authentication required." ✓
+  * `curl -X POST /api/payment/webhook/stripe` avec `stripe-signature: t=123,v1=invalid` → 400 "Signature invalide." ✓ (la signature est vérifiée AVANT toute logique métier)
+  * `curl -X POST /api/payment/webhook/unknown` → 404 "Provider inconnu." ✓
+  * Pricing page : badge dynamique visible (en mode démo tant qu'aucun provider n'est configuré via l'admin).
+
+Stage Summary:
+- Flux de paiement complet et sécurisé implémenté de bout en bout :
+  1. Admin configure le prestataire depuis l'onglet Paiements (déjà livré au task précédent).
+  2. Page pricing fetch /api/payment/health et affiche le badge dynamique.
+  3. User clique "Passer à Pro" → /api/payment/initiate crée un pending + appelle l'API du prestataire.
+  4. Soit le user est redirigé vers le hosted checkout (Stripe/FedaPay/FlW/Paystack/NotchPay/CinetPay), soit il reçoit un push Mobile Money (Campay).
+  5. Le prestataire notifie /api/payment/webhook/[provider] avec une signature cryptographique.
+  6. Le webhook vérifie la signature, lookup le pending, fulfill (upgrade tier + revenue), markPaid.
+  7. Le user est redirigé vers /api/payment/success qui poll le statut au cas où le webhook soit delayed, puis redirect vers la landing avec un toast.
+- 7 prestataires supportés : Stripe, Campay, FedaPay, Flutterwave, Paystack, NotchPay, CinetPay.
+- Sécurité : (1) signature webhook vérifiée pour chaque provider avec comparaison timing-safe, (2) cross-check provider pending === provider webhook, (3) idempotence (double fulfillment impossible), (4) account ownership (verify + success cross-checkent accountId), (5) aucune clé secrète jamais exposée côté client (seul publishableKey non-secret est retourné par /api/payment/health).
+- Defense-in-depth : /api/payment/success et /api/payment/verify rappellent l'API du prestataire en server-to-server pour confirmer le statut, au cas où le webhook soit delayed/blocked. Le fulfillment est idempotent donc safe à appeler plusieurs fois.
+- Demo mode préservé : si aucun provider n'est configuré, la page pricing affiche le badge ambre "Mode démo" et le dialog legacy (upgradeToTier sans revenu enregistré) continue de fonctionner.

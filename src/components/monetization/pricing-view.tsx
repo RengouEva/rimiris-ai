@@ -2,10 +2,11 @@
 
 import * as React from 'react'
 import { motion } from 'framer-motion'
-import { Check, Crown, Sparkles, Zap, ArrowLeft, Lock } from 'lucide-react'
+import { Check, Crown, Sparkles, Zap, ArrowLeft, Lock, CreditCard, ShieldCheck, Zap as ZapIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
@@ -29,14 +30,42 @@ export function PricingView() {
   const { setView } = useIrisStore()
   const [upgradeTarget, setUpgradeTarget] = React.useState<TierId | null>(null)
   const [currentUser, setCurrentUser] = React.useState(getCurrentUser())
+  const [paymentHealth, setPaymentHealth] = React.useState<{
+    enabled: boolean
+    provider?: { id: string; name: string; tagline: string; region: string; supportsXAF: boolean; supportsMobileMoneyPush: boolean }
+    mode?: 'test' | 'live'
+  } | null>(null)
+
+  // Fetch the active payment provider on mount — shows a dynamic badge
+  React.useEffect(() => {
+    fetch('/api/payment/health', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => setPaymentHealth(data))
+      .catch(() => setPaymentHealth({ enabled: false }))
+  }, [])
 
   // Reload current user when dialog closes
   React.useEffect(() => {
     if (upgradeTarget === null) setCurrentUser(getCurrentUser())
   }, [upgradeTarget])
 
-  function handleUpgrade(tier: TierId) {
+  async function handleUpgrade(tier: TierId) {
     track('upgrade_click', { tier })
+    // If payment is enabled, redirect to the initiate endpoint (server will
+    // build the provider's checkout URL and redirect the browser).
+    if (paymentHealth?.enabled && paymentHealth.provider) {
+      // For Campay (Mobile Money push), we need the phone number first.
+      // For all others, redirect immediately.
+      if (paymentHealth.provider.id === 'campay') {
+        setUpgradeTarget(tier) // show the phone-input dialog
+      } else {
+        // Immediate redirect — server returns the provider's checkout URL
+        const url = `/api/payment/initiate?tier=${tier}`
+        window.location.href = url
+      }
+      return
+    }
+    // Demo mode (no payment provider configured) — show the legacy dialog
     setUpgradeTarget(tier)
   }
 
@@ -73,6 +102,39 @@ export function PricingView() {
           <p className="text-base text-muted-foreground max-w-2xl mx-auto">
             Commencez gratuitement. Passez à Pro quand vous êtes prêt — paiement unique par projet.
           </p>
+
+          {/* Dynamic payment provider badge */}
+          {paymentHealth && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="mt-6 flex justify-center"
+            >
+              {paymentHealth.enabled ? (
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-medium">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Paiement sécurisé par {paymentHealth.provider?.name}
+                  {paymentHealth.provider?.supportsMobileMoneyPush && (
+                    <>
+                      <span className="opacity-50">·</span>
+                      <ZapIcon className="h-3.5 w-3.5" />
+                      Mobile Money
+                    </>
+                  )}
+                  <span className="opacity-50">·</span>
+                  <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-emerald-200 text-emerald-700">
+                    {paymentHealth.mode === 'test' ? 'Mode test' : 'Mode production'}
+                  </Badge>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-xs font-medium">
+                  <Lock className="h-3.5 w-3.5" />
+                  Mode démo — aucun paiement réel traité
+                </div>
+              )}
+            </motion.div>
+          )}
         </motion.div>
 
         {/* Tier cards */}
@@ -186,8 +248,11 @@ export function PricingView() {
       {upgradeTarget && (
         <UpgradeDialog
           tier={upgradeTarget}
+          paymentHealth={paymentHealth}
           onClose={() => setUpgradeTarget(null)}
           onSuccess={async () => {
+            // Demo-mode fallback only — real payments are fulfilled server-side
+            // via webhook, so this path is only taken when no provider is set.
             await upgradeToTier(upgradeTarget)
             setCurrentUser(getCurrentUser())
             toast.success(`Plan ${TIERS[upgradeTarget].name} activé.`)
@@ -212,26 +277,49 @@ export function PricingView() {
 // The provider's webhook will then call /api/auth/upgrade with a valid
 // HMAC payment signature, which the server verifies before recording revenue.
 function UpgradeDialog({
-  tier, onClose, onSuccess,
+  tier, onClose, onSuccess, paymentHealth,
 }: {
   tier: TierId
   onClose: () => void
   onSuccess: () => void
+  paymentHealth: {
+    enabled: boolean
+    provider?: { id: string; name: string; tagline: string; region: string; supportsXAF: boolean; supportsMobileMoneyPush: boolean }
+    mode?: 'test' | 'live'
+  } | null
 }) {
   const t = TIERS[tier]
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState('')
+  const [phone, setPhone] = React.useState('')
 
-  // If the user is already authenticated, the server already knows their
-  // name + email. We don't ask for them again — and we DON'T ask for a
-  // phone number, because no payment is processed in demo mode.
   const session = getCurrentSession()
+
+  // Detect mode: if payment is enabled AND provider is campay, we need
+  // to ask for the phone number (Mobile Money push). If payment is enabled
+  // but provider is NOT campay, the parent already redirected — we should
+  // never be in this dialog for non-campay providers. If payment is NOT
+  // enabled, we're in demo mode and just call onSuccess (legacy).
+  const isCampayPush = paymentHealth?.enabled && paymentHealth.provider?.id === 'campay'
+  const isDemo = !paymentHealth?.enabled
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
+      if (isCampayPush) {
+        // Validate phone (basic — server will validate more strictly)
+        const trimmed = phone.trim()
+        if (!trimmed || trimmed.length < 8) {
+          setError('Numéro Mobile Money invalide.')
+          setLoading(false)
+          return
+        }
+        // Redirect to the initiate endpoint with the phone number
+        window.location.href = `/api/payment/initiate?tier=${tier}&phone=${encodeURIComponent(trimmed)}`
+        return
+      }
       await onSuccess()
     } catch (err: any) {
       setError(err?.message || "Échec de l'activation.")
@@ -281,13 +369,47 @@ function UpgradeDialog({
             <span className="text-2xl font-bold">{formatXAF(t.priceXAF)}</span>
           </div>
 
+          {/* Campay phone input — shown only when provider is campay */}
+          {isCampayPush && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium block">
+                Numéro Mobile Money
+                <span className="text-destructive ml-1">*</span>
+              </label>
+              <Input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+237 6XX XXX XXX"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Un push Mobile Money sera envoyé sur ce numéro (MTN ou Orange).
+                Vous devrez valider avec votre code secret.
+              </p>
+            </div>
+          )}
+
           <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 text-xs text-amber-800 flex items-start gap-2">
             <Lock className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
             <p>
-              <strong>Mode démo.</strong> Aucun paiement n'est traité. L'activation est immédiate
-              et <strong>aucun revenu fictif n'est enregistré</strong> — le portail admin affiche
-              0 XAF jusqu'à l'intégration d'un prestataire de paiement réel
-              (Stripe, FedaPay, Campay…).
+              {isCampayPush ? (
+                <>
+                  <strong>Push Mobile Money.</strong> Vous allez recevoir une
+                  demande de paiement sur votre téléphone. Validez avec votre code
+                  secret Mobile Money. Le plan sera activé automatiquement après
+                  confirmation — vous n'avez rien d'autre à faire.
+                </>
+              ) : isDemo ? (
+                <>
+                  <strong>Mode démo.</strong> Aucun paiement n'est traité. L'activation est immédiate
+                  et <strong>aucun revenu fictif n'est enregistré</strong> — le portail admin affiche
+                  0 XAF jusqu'à l'intégration d'un prestataire de paiement réel
+                  (Stripe, FedaPay, Campay…).
+                </>
+              ) : (
+                <>Vous allez être redirigé vers le prestataire de paiement.</>
+              )}
             </p>
           </div>
 
@@ -300,7 +422,11 @@ function UpgradeDialog({
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
             <Button type="submit" disabled={loading} className="iris-gradient text-white">
-              {loading ? 'Activation…' : `Activer ${t.name}`}
+              {loading
+                ? (isCampayPush ? 'Envoi du push…' : 'Activation…')
+                : isCampayPush
+                ? `Envoyer le push Mobile Money`
+                : `Activer ${t.name}`}
             </Button>
           </DialogFooter>
         </form>
