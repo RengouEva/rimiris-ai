@@ -31,6 +31,7 @@ import {
   Check,
   Printer,
   FileDown,
+  PanelLeft,
 } from 'lucide-react'
 import { useIrisStore, type Section, type SectionStatus, htmlToPlainText } from '@/store/iris-store'
 import { AGENTS } from '@/lib/iris/agents'
@@ -42,6 +43,12 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,6 +92,7 @@ export function Workspace() {
 
   const editorRef = React.useRef<A4EditorHandle>(null)
   const activeSection = sections.find((s) => s.id === activeSectionId) || sections[0] || null
+  const [mobileSectionsOpen, setMobileSectionsOpen] = React.useState(false)
 
   const totalWords = sections.reduce((sum, s) => sum + s.wordCount, 0)
   const completedCount = sections.filter((s) => s.status === 'completed').length
@@ -111,98 +119,66 @@ export function Workspace() {
     }
   }, [project, sections.length, themeUnderstanding, problemContext, setView])
 
+  // Sidebar content — shared between desktop aside and mobile Sheet
+  const sidebarContent = (
+    <SectionsSidebarContent
+      sections={sections}
+      totalWords={totalWords}
+      completedCount={completedCount}
+      activeSectionId={activeSection?.id}
+      onSelectSection={(id) => {
+        setActiveSection(id)
+        setMobileSectionsOpen(false)
+      }}
+      onOpenAI={(id) => {
+        setActiveSection(id)
+        setAIPanel(true)
+        setMobileSectionsOpen(false)
+      }}
+      onRename={renameSection}
+      onDelete={(id) => {
+        if (sections.length === 1) {
+          toast.error("Vous devez garder au moins une section.")
+          return
+        }
+        deleteSection(id)
+        toast.success("Section supprimée")
+      }}
+      onDuplicate={(id) => {
+        duplicateSection(id)
+        toast.success("Section dupliquée")
+      }}
+      onMoveUp={(id) => moveSection(id, 'up')}
+      onMoveDown={(id) => moveSection(id, 'down')}
+      onMarkCompleted={(id, status) =>
+        setSectionStatus(id, status === 'completed' ? 'draft' : 'completed')
+      }
+      onAddSection={() => {
+        addSection()
+        setMobileSectionsOpen(false)
+      }}
+      onImportTemplate={() => {
+        importTemplate()
+        toast.success('Template académique (15 chapitres) importé')
+        setMobileSectionsOpen(false)
+      }}
+    />
+  )
+
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
-      {/* Sidebar with sections */}
-      <aside className="w-72 border-r border-border bg-muted/20 flex flex-col flex-shrink-0">
-        <div className="p-3 border-b border-border space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
-            Mon mémoire
-          </p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
-            <span>{sections.length} sections</span>
-            <span>·</span>
-            <span>{totalWords} mots</span>
-            <span>·</span>
-            <span className="text-emerald-500">{completedCount} terminées</span>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          <AnimatePresence>
-            {sections.map((section, idx) => (
-              <SectionItem
-                key={section.id}
-                section={section}
-                index={idx}
-                total={sections.length}
-                active={section.id === activeSection?.id}
-                onSelect={() => setActiveSection(section.id)}
-                onOpenAI={() => {
-                  // Sélectionne la section ET ouvre le panel IA pour elle
-                  setActiveSection(section.id)
-                  setAIPanel(true)
-                }}
-                onRename={(title) => renameSection(section.id, title)}
-                onDelete={() => {
-                  if (sections.length === 1) {
-                    toast.error("Vous devez garder au moins une section.")
-                    return
-                  }
-                  deleteSection(section.id)
-                  toast.success("Section supprimée")
-                }}
-                onDuplicate={() => {
-                  duplicateSection(section.id)
-                  toast.success("Section dupliquée")
-                }}
-                onMoveUp={() => moveSection(section.id, 'up')}
-                onMoveDown={() => moveSection(section.id, 'down')}
-                onMarkCompleted={() =>
-                  setSectionStatus(
-                    section.id,
-                    section.status === 'completed' ? 'draft' : 'completed'
-                  )
-                }
-              />
-            ))}
-          </AnimatePresence>
-
-          {sections.length === 0 && (
-            <div className="text-center py-8 px-4">
-              <p className="text-sm text-muted-foreground mb-3">
-                Aucune section pour le moment.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Bottom actions */}
-        <div className="p-2 border-t border-border space-y-1.5">
-          <DraftAllButton compact />
-          <Button
-            onClick={() => addSection()}
-            variant="outline"
-            size="sm"
-            className="w-full justify-start rounded-lg"
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            Nouvelle section
-          </Button>
-          <Button
-            onClick={() => {
-              importTemplate()
-              toast.success('Template académique (15 chapitres) importé')
-            }}
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start rounded-lg text-muted-foreground"
-          >
-            <Library className="h-4 w-4 mr-1.5" />
-            Importer le template académique
-          </Button>
-        </div>
+    <div className="flex h-[calc(100dvh-3.5rem)] overflow-hidden">
+      {/* Desktop sidebar with sections — hidden on mobile */}
+      <aside className="hidden md:flex w-72 border-r border-border bg-muted/20 flex-col flex-shrink-0">
+        {sidebarContent}
       </aside>
+
+      {/* Mobile sections drawer */}
+      <Sheet open={mobileSectionsOpen} onOpenChange={setMobileSectionsOpen}>
+        <SheetContent side="left" className="p-0 w-80 max-w-[85vw]">
+          <SheetTitle className="sr-only">Sections du mémoire</SheetTitle>
+          {sidebarContent}
+        </SheetContent>
+      </Sheet>
 
       {/* Editor area */}
       <main className="flex-1 flex flex-col min-w-0">
@@ -214,6 +190,7 @@ export function Workspace() {
             onUpdateContent={(c) => updateSectionContent(activeSection.id, c)}
             onOpenAI={() => setAIPanel(true)}
             onExport={() => setView('export')}
+            onOpenMobileSections={() => setMobileSectionsOpen(true)}
           />
         ) : (
           <EmptyState
@@ -226,7 +203,7 @@ export function Workspace() {
         )}
       </main>
 
-      {/* AI Workflow Panel — slides in from the right */}
+      {/* AI Workflow Panel — slides in from the right (full-screen overlay on mobile) */}
       <AnimatePresence>
         {aiPanelOpen && activeSection && (
           <SectionWorkflowPanel
@@ -240,6 +217,112 @@ export function Workspace() {
         )}
       </AnimatePresence>
     </div>
+  )
+}
+
+// ============================================================================
+// Sections sidebar content — used both in desktop aside and mobile Sheet
+// ============================================================================
+
+function SectionsSidebarContent({
+  sections,
+  totalWords,
+  completedCount,
+  activeSectionId,
+  onSelectSection,
+  onOpenAI,
+  onRename,
+  onDelete,
+  onDuplicate,
+  onMoveUp,
+  onMoveDown,
+  onMarkCompleted,
+  onAddSection,
+  onImportTemplate,
+}: {
+  sections: Section[]
+  totalWords: number
+  completedCount: number
+  activeSectionId?: string
+  onSelectSection: (id: string) => void
+  onOpenAI: (id: string) => void
+  onRename: (id: string, title: string) => void
+  onDelete: (id: string) => void
+  onDuplicate: (id: string) => void
+  onMoveUp: (id: string) => void
+  onMoveDown: (id: string) => void
+  onMarkCompleted: (id: string, status: SectionStatus) => void
+  onAddSection: () => void
+  onImportTemplate: () => void
+}) {
+  return (
+    <>
+      <div className="p-3 border-b border-border space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
+          Mon mémoire
+        </p>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground px-1 flex-wrap">
+          <span>{sections.length} sections</span>
+          <span>·</span>
+          <span>{totalWords} mots</span>
+          <span>·</span>
+          <span className="text-emerald-500">{completedCount} terminées</span>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <AnimatePresence>
+          {sections.map((section, idx) => (
+            <SectionItem
+              key={section.id}
+              section={section}
+              index={idx}
+              total={sections.length}
+              active={section.id === activeSectionId}
+              onSelect={() => onSelectSection(section.id)}
+              onOpenAI={() => onOpenAI(section.id)}
+              onRename={(title) => onRename(section.id, title)}
+              onDelete={() => onDelete(section.id)}
+              onDuplicate={() => onDuplicate(section.id)}
+              onMoveUp={() => onMoveUp(section.id)}
+              onMoveDown={() => onMoveDown(section.id)}
+              onMarkCompleted={() => onMarkCompleted(section.id, section.status)}
+            />
+          ))}
+        </AnimatePresence>
+
+        {sections.length === 0 && (
+          <div className="text-center py-8 px-4">
+            <p className="text-sm text-muted-foreground mb-3">
+              Aucune section pour le moment.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom actions */}
+      <div className="p-2 border-t border-border space-y-1.5">
+        <DraftAllButton compact />
+        <Button
+          onClick={onAddSection}
+          variant="outline"
+          size="sm"
+          className="w-full justify-start rounded-lg"
+        >
+          <Plus className="h-4 w-4 mr-1.5" />
+          Nouvelle section
+        </Button>
+        <Button
+          onClick={onImportTemplate}
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start rounded-lg text-muted-foreground"
+        >
+          <Library className="h-4 w-4 mr-1.5" />
+          Importer le template académique
+        </Button>
+      </div>
+    </>
   )
 }
 
@@ -418,6 +501,7 @@ function EditorView({
   onUpdateContent,
   onOpenAI,
   onExport,
+  onOpenMobileSections,
 }: {
   section: Section
   project: any
@@ -425,6 +509,7 @@ function EditorView({
   onUpdateContent: (content: string) => void
   onOpenAI: () => void
   onExport: () => void
+  onOpenMobileSections: () => void
 }) {
   const [showAIHint, setShowAIHint] = React.useState(false)
   // Real page count, measured from the editor's content height
@@ -444,15 +529,29 @@ function EditorView({
   return (
     <div className="flex-1 flex flex-col min-w-0 relative">
       {/* Section header — toolbar above the A4 page */}
-      <div className="border-b border-border bg-background/80 backdrop-blur-sm px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+      <div className="border-b border-border bg-background/80 backdrop-blur-sm px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2 sm:gap-3 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
+          {/* Mobile sections drawer trigger */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden h-8 w-8 flex-shrink-0"
+            onClick={onOpenMobileSections}
+            title="Afficher les sections"
+          >
+            <PanelLeft className="h-4 w-4" />
+          </Button>
           <Badge variant="outline" className={STATUS_CONFIG[section.status].color}>
             <span className={cn('w-1.5 h-1.5 rounded-full mr-1', STATUS_CONFIG[section.status].dot)} />
             {STATUS_CONFIG[section.status].label}
           </Badge>
-          <span className="text-xs text-muted-foreground whitespace-nowrap">
+          <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
             {section.wordCount} mots · {pageCount} page{pageCount > 1 ? 's' : ''} A4
             {section.lastEdited && ` · modifié ${timeAgo(section.lastEdited)}`}
+          </span>
+          {/* Compact stats on mobile */}
+          <span className="text-xs text-muted-foreground whitespace-nowrap sm:hidden">
+            {section.wordCount} mots
           </span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -464,7 +563,7 @@ function EditorView({
             className="rounded-full iris-gradient text-white"
             title="Exporter le mémoire (PDF, Word, HTML…)"
           >
-            <FileDown className="h-3.5 w-3.5 mr-1" />
+            <FileDown className="h-3.5 w-3.5 sm:mr-1" />
             <span className="hidden sm:inline">Exporter</span>
           </Button>
         </div>
@@ -479,7 +578,7 @@ function EditorView({
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="border-b border-border bg-gradient-to-r from-primary/5 via-accent/5 to-primary/5 px-6 py-6">
+            <div className="border-b border-border bg-gradient-to-r from-primary/5 via-accent/5 to-primary/5 px-4 sm:px-6 py-6">
               <div className="max-w-2xl mx-auto text-center space-y-3">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-background/80 text-primary text-xs font-medium">
                   <Sparkles className="h-3.5 w-3.5" />

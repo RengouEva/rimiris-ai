@@ -26,11 +26,18 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  PanelLeft,
 } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -80,86 +87,64 @@ const SIDEBAR_ITEMS: {
 export function ExportView() {
   const { project, sections, setView } = useIrisStore()
   const [activeSection, setActiveSection] = React.useState<ExportSection>('overview')
+  const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false)
 
   const totalWords = sections.reduce((sum, s) => sum + s.wordCount, 0)
   const draftedCount = sections.filter((s) => s.wordCount > 100).length
   const completedCount = sections.filter((s) => s.status === 'completed').length
 
+  // Sidebar content — shared between desktop aside and mobile Sheet
+  const sidebarContent = (
+    <ExportSidebarContent
+      sectionsCount={sections.length}
+      totalWords={totalWords}
+      draftedCount={draftedCount}
+      completedCount={completedCount}
+      activeSection={activeSection}
+      onSelectSection={(id) => {
+        setActiveSection(id)
+        setMobileSidebarOpen(false)
+      }}
+      onBackToMemoire={() => {
+        setView('workspace')
+        setMobileSidebarOpen(false)
+      }}
+    />
+  )
+
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
-      {/* ====== Sidebar propre à l'Export ====== */}
-      <aside className="w-64 border-r border-border bg-muted/20 flex flex-col flex-shrink-0">
-        {/* Header de la sidebar */}
-        <div className="p-4 border-b border-border">
-          <button
-            onClick={() => setView('workspace')}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            Retour au mémoire
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg iris-gradient flex items-center justify-center">
-              <FileDown className="h-4 w-4 text-white" />
-            </div>
-            <div>
-              <p className="font-bold text-sm leading-none">Exporter</p>
-              <p className="text-[10px] text-muted-foreground mt-1 leading-none">
-                {sections.length} sections · {totalWords} mots
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation par groupe */}
-        <nav className="flex-1 overflow-y-auto p-2 space-y-4">
-          <SidebarGroup title="Formats">
-            {SIDEBAR_ITEMS.filter((i) => i.group === 'formats').map((item) => (
-              <SidebarItem
-                key={item.id}
-                item={item}
-                active={activeSection === item.id}
-                onClick={() => setActiveSection(item.id)}
-              />
-            ))}
-          </SidebarGroup>
-          <SidebarGroup title="Outils">
-            {SIDEBAR_ITEMS.filter((i) => i.group === 'tools').map((item) => (
-              <SidebarItem
-                key={item.id}
-                item={item}
-                active={activeSection === item.id}
-                onClick={() => setActiveSection(item.id)}
-              />
-            ))}
-          </SidebarGroup>
-          <SidebarGroup title="Configuration">
-            {SIDEBAR_ITEMS.filter((i) => i.group === 'config').map((item) => (
-              <SidebarItem
-                key={item.id}
-                item={item}
-                active={activeSection === item.id}
-                onClick={() => setActiveSection(item.id)}
-              />
-            ))}
-          </SidebarGroup>
-        </nav>
-
-        {/* Stats en bas */}
-        <div className="p-3 border-t border-border space-y-1.5">
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="text-muted-foreground">Rédigées</span>
-            <span className="font-semibold">{draftedCount}/{sections.length}</span>
-          </div>
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="text-muted-foreground">Terminées</span>
-            <span className="font-semibold text-emerald-500">{completedCount}/{sections.length}</span>
-          </div>
-        </div>
+    <div className="flex h-[calc(100dvh-3.5rem)] overflow-hidden">
+      {/* Desktop sidebar — hidden on mobile */}
+      <aside className="hidden md:flex w-64 border-r border-border bg-muted/20 flex-col flex-shrink-0">
+        {sidebarContent}
       </aside>
 
+      {/* Mobile sidebar drawer */}
+      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+        <SheetContent side="left" className="p-0 w-72 max-w-[85vw]">
+          <SheetTitle className="sr-only">Menu d'export</SheetTitle>
+          {sidebarContent}
+        </SheetContent>
+      </Sheet>
+
       {/* ====== Zone principale ====== */}
-      <main className="flex-1 overflow-y-auto bg-background">
+      <main className="flex-1 overflow-y-auto bg-background min-w-0">
+        {/* Mobile toolbar — section switcher trigger */}
+        <div className="md:hidden sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm px-3 py-2 flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setMobileSidebarOpen(true)}
+            className="flex-shrink-0"
+          >
+            <PanelLeft className="h-4 w-4 mr-1.5" />
+            <span className="text-xs">Menu</span>
+          </Button>
+          <span className="text-sm font-medium truncate flex-1">
+            {SIDEBAR_ITEMS.find((i) => i.id === activeSection)?.label || 'Exporter'}
+          </span>
+        </div>
+
         {/* Aperçu plein écran — pagination A4 avec zoom */}
         {activeSection === 'preview' && (
           <PreviewPanel project={project} sections={sections} />
@@ -167,7 +152,7 @@ export function ExportView() {
 
         {/* Les autres panneaux dans un conteneur centré max-w-4xl */}
         {activeSection !== 'preview' && (
-          <div className="max-w-4xl mx-auto px-6 py-8">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
             {activeSection === 'overview' && (
               <OverviewPanel
                 project={project}
@@ -281,7 +266,7 @@ function PreviewPanel({ project, sections }: { project: any; sections: any[] }) 
   return (
     <div className="flex flex-col h-full">
       {/* Barre de zoom — collée en haut, ne défile pas */}
-      <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm px-4 py-2 flex items-center justify-between gap-3">
+      <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm px-3 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <Eye className="h-4 w-4 text-primary flex-shrink-0" />
           <div className="min-w-0">
@@ -434,6 +419,97 @@ function PreviewPage({ children }: { children: React.ReactNode }) {
 // ============================================================================
 // Sidebar components
 // ============================================================================
+
+// Reusable sidebar content — used both in desktop aside and mobile Sheet
+function ExportSidebarContent({
+  sectionsCount,
+  totalWords,
+  draftedCount,
+  completedCount,
+  activeSection,
+  onSelectSection,
+  onBackToMemoire,
+}: {
+  sectionsCount: number
+  totalWords: number
+  draftedCount: number
+  completedCount: number
+  activeSection: ExportSection
+  onSelectSection: (id: ExportSection) => void
+  onBackToMemoire: () => void
+}) {
+  return (
+    <>
+      {/* Header de la sidebar */}
+      <div className="p-4 border-b border-border">
+        <button
+          onClick={onBackToMemoire}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Retour au mémoire
+        </button>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg iris-gradient flex items-center justify-center">
+            <FileDown className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <p className="font-bold text-sm leading-none">Exporter</p>
+            <p className="text-[10px] text-muted-foreground mt-1 leading-none">
+              {sectionsCount} sections · {totalWords} mots
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation par groupe */}
+      <nav className="flex-1 overflow-y-auto p-2 space-y-4">
+        <SidebarGroup title="Formats">
+          {SIDEBAR_ITEMS.filter((i) => i.group === 'formats').map((item) => (
+            <SidebarItem
+              key={item.id}
+              item={item}
+              active={activeSection === item.id}
+              onClick={() => onSelectSection(item.id)}
+            />
+          ))}
+        </SidebarGroup>
+        <SidebarGroup title="Outils">
+          {SIDEBAR_ITEMS.filter((i) => i.group === 'tools').map((item) => (
+            <SidebarItem
+              key={item.id}
+              item={item}
+              active={activeSection === item.id}
+              onClick={() => onSelectSection(item.id)}
+            />
+          ))}
+        </SidebarGroup>
+        <SidebarGroup title="Configuration">
+          {SIDEBAR_ITEMS.filter((i) => i.group === 'config').map((item) => (
+            <SidebarItem
+              key={item.id}
+              item={item}
+              active={activeSection === item.id}
+              onClick={() => onSelectSection(item.id)}
+            />
+          ))}
+        </SidebarGroup>
+      </nav>
+
+      {/* Stats en bas */}
+      <div className="p-3 border-t border-border space-y-1.5">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-muted-foreground">Rédigées</span>
+          <span className="font-semibold">{draftedCount}/{sectionsCount}</span>
+        </div>
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-muted-foreground">Terminées</span>
+          <span className="font-semibold text-emerald-500">{completedCount}/{sectionsCount}</span>
+        </div>
+      </div>
+    </>
+  )
+}
 
 function SidebarGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -858,15 +934,15 @@ function FormatPanel({
               Aperçu
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-5xl max-h-[90vh] p-0">
-            <DialogHeader className="px-6 pt-6 pb-3 border-b">
-              <DialogTitle className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-2">
-                  <Icon className="h-4 w-4" />
-                  Aperçu — {project.title || 'Mémoire sans titre'}
+          <DialogContent className="max-w-5xl max-h-[90vh] p-0 w-[95vw] sm:w-auto">
+            <DialogHeader className="px-3 sm:px-6 pt-4 sm:pt-6 pb-3 border-b">
+              <DialogTitle className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="flex items-center gap-2 text-sm sm:text-base min-w-0">
+                  <Icon className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">Aperçu — {project.title || 'Mémoire sans titre'}</span>
                 </span>
                 {/* Mini-barre de zoom dans le dialog — défaut 100% */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <Button
                     variant="outline"
                     size="sm"

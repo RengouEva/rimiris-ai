@@ -83,14 +83,23 @@ export function SectionWorkflowPanel({
   const allSections = sections.map((s) => ({ title: s.title, content: s.content }))
 
   return (
-    <motion.aside
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="w-full sm:w-[460px] flex-shrink-0 border-l border-border bg-background flex flex-col h-[calc(100vh-3.5rem)]"
-    >
-      <PanelHeader step={step} section={section} onClose={onClose} />
+    <>
+      {/* Backdrop on mobile — fades out the editor behind the panel */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+        onClick={onClose}
+      />
+      <motion.aside
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="fixed sm:relative inset-y-0 right-0 z-50 sm:z-auto w-full sm:w-[460px] sm:flex-shrink-0 border-l border-border bg-background flex flex-col h-[calc(100dvh-3.5rem)] sm:h-[calc(100dvh-3.5rem)] max-h-[100dvh] sm:max-h-none"
+      >
+        <PanelHeader step={step} section={section} onClose={onClose} />
 
       <div className="flex-1 overflow-y-auto">
         <AnimatePresence mode="wait">
@@ -195,6 +204,7 @@ export function SectionWorkflowPanel({
         </AnimatePresence>
       </div>
     </motion.aside>
+    </>
   )
 }
 

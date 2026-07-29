@@ -19,8 +19,8 @@ export function GuideView() {
   const hasGuide = Boolean(project.guideText && project.guideText.trim())
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-background">
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+    <div className="h-[calc(100dvh-3.5rem)] overflow-y-auto bg-background">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         {/* Header */}
         <div>
           <button

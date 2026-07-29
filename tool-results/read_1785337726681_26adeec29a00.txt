@@ -1,0 +1,842 @@
+     1→@import "tailwindcss";
+     2→@import "tw-animate-css";
+     3→
+     4→@custom-variant dark (&:is(.dark *));
+     5→
+     6→@theme inline {
+     7→  --color-background: var(--background);
+     8→  --color-foreground: var(--foreground);
+     9→  --font-sans: var(--font-geist-sans);
+    10→  --font-mono: var(--font-geist-mono);
+    11→  --color-sidebar-ring: var(--sidebar-ring);
+    12→  --color-sidebar-border: var(--sidebar-border);
+    13→  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    14→  --color-sidebar-accent: var(--sidebar-accent);
+    15→  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    16→  --color-sidebar-primary: var(--sidebar-primary);
+    17→  --color-sidebar-foreground: var(--sidebar-foreground);
+    18→  --color-sidebar: var(--sidebar);
+    19→  --color-chart-5: var(--chart-5);
+    20→  --color-chart-4: var(--chart-4);
+    21→  --color-chart-3: var(--chart-3);
+    22→  --color-chart-2: var(--chart-2);
+    23→  --color-chart-1: var(--chart-1);
+    24→  --color-ring: var(--ring);
+    25→  --color-input: var(--input);
+    26→  --color-border: var(--border);
+    27→  --color-destructive: var(--destructive);
+    28→  --color-accent-foreground: var(--accent-foreground);
+    29→  --color-accent: var(--accent);
+    30→  --color-muted-foreground: var(--muted-foreground);
+    31→  --color-muted: var(--muted);
+    32→  --color-secondary-foreground: var(--secondary-foreground);
+    33→  --color-secondary: var(--secondary);
+    34→  --color-primary-foreground: var(--primary-foreground);
+    35→  --color-primary: var(--primary);
+    36→  --color-popover-foreground: var(--popover-foreground);
+    37→  --color-popover: var(--popover);
+    38→  --color-card-foreground: var(--card-foreground);
+    39→  --color-card: var(--card);
+    40→  --radius-sm: calc(var(--radius) - 4px);
+    41→  --radius-md: calc(var(--radius) - 2px);
+    42→  --radius-lg: var(--radius);
+    43→  --radius-xl: calc(var(--radius) + 4px);
+    44→}
+    45→
+    46→:root {
+    47→  /* RIMIRIS AI - Identité visuelle : violet académique profond + accents or/ambre */
+    48→  --radius: 0.75rem;
+    49→  --background: oklch(0.99 0.005 280);
+    50→  --foreground: oklch(0.18 0.02 280);
+    51→  --card: oklch(1 0 0);
+    52→  --card-foreground: oklch(0.18 0.02 280);
+    53→  --popover: oklch(1 0 0);
+    54→  --popover-foreground: oklch(0.18 0.02 280);
+    55→  --primary: oklch(0.42 0.18 285);
+    56→  --primary-foreground: oklch(0.99 0 0);
+    57→  --secondary: oklch(0.96 0.015 280);
+    58→  --secondary-foreground: oklch(0.25 0.04 285);
+    59→  --muted: oklch(0.96 0.01 280);
+    60→  --muted-foreground: oklch(0.52 0.025 280);
+    61→  --accent: oklch(0.72 0.15 75);
+    62→  --accent-foreground: oklch(0.22 0.05 75);
+    63→  --destructive: oklch(0.58 0.22 25);
+    64→  --border: oklch(0.91 0.01 280);
+    65→  --input: oklch(0.94 0.008 280);
+    66→  --ring: oklch(0.42 0.18 285);
+    67→  --chart-1: oklch(0.42 0.18 285);
+    68→  --chart-2: oklch(0.72 0.15 75);
+    69→  --chart-3: oklch(0.65 0.18 165);
+    70→  --chart-4: oklch(0.62 0.22 305);
+    71→  --chart-5: oklch(0.78 0.14 45);
+    72→  --sidebar: oklch(0.985 0.005 280);
+    73→  --sidebar-foreground: oklch(0.18 0.02 280);
+    74→  --sidebar-primary: oklch(0.42 0.18 285);
+    75→  --sidebar-primary-foreground: oklch(0.99 0 0);
+    76→  --sidebar-accent: oklch(0.95 0.02 280);
+    77→  --sidebar-accent-foreground: oklch(0.25 0.04 285);
+    78→  --sidebar-border: oklch(0.91 0.01 280);
+    79→  --sidebar-ring: oklch(0.42 0.18 285);
+    80→}
+    81→
+    82→.dark {
+    83→  --background: oklch(0.14 0.015 285);
+    84→  --foreground: oklch(0.97 0.005 280);
+    85→  --card: oklch(0.19 0.02 285);
+    86→  --card-foreground: oklch(0.97 0.005 280);
+    87→  --popover: oklch(0.19 0.02 285);
+    88→  --popover-foreground: oklch(0.97 0.005 280);
+    89→  --primary: oklch(0.65 0.2 285);
+    90→  --primary-foreground: oklch(0.14 0.015 285);
+    91→  --secondary: oklch(0.24 0.025 285);
+    92→  --secondary-foreground: oklch(0.97 0.005 280);
+    93→  --muted: oklch(0.24 0.02 285);
+    94→  --muted-foreground: oklch(0.68 0.02 280);
+    95→  --accent: oklch(0.78 0.16 75);
+    96→  --accent-foreground: oklch(0.18 0.04 75);
+    97→  --destructive: oklch(0.7 0.19 22);
+    98→  --border: oklch(1 0 0 / 10%);
+    99→  --input: oklch(1 0 0 / 12%);
+   100→  --ring: oklch(0.65 0.2 285);
+   101→  --chart-1: oklch(0.65 0.2 285);
+   102→  --chart-2: oklch(0.78 0.16 75);
+   103→  --chart-3: oklch(0.7 0.18 165);
+   104→  --chart-4: oklch(0.7 0.22 305);
+   105→  --chart-5: oklch(0.82 0.14 45);
+   106→  --sidebar: oklch(0.17 0.02 285);
+   107→  --sidebar-foreground: oklch(0.97 0.005 280);
+   108→  --sidebar-primary: oklch(0.65 0.2 285);
+   109→  --sidebar-primary-foreground: oklch(0.14 0.015 285);
+   110→  --sidebar-accent: oklch(0.24 0.025 285);
+   111→  --sidebar-accent-foreground: oklch(0.97 0.005 280);
+   112→  --sidebar-border: oklch(1 0 0 / 10%);
+   113→  --sidebar-ring: oklch(0.65 0.2 285);
+   114→}
+   115→
+   116→@layer base {
+   117→  * {
+   118→    @apply border-border outline-ring/50;
+   119→  }
+   120→  body {
+   121→    @apply bg-background text-foreground;
+   122→  }
+   123→}
+   124→
+   125→/* Custom scrollbar for premium feel */
+   126→::-webkit-scrollbar {
+   127→  width: 8px;
+   128→  height: 8px;
+   129→}
+   130→::-webkit-scrollbar-track {
+   131→  background: transparent;
+   132→}
+   133→::-webkit-scrollbar-thumb {
+   134→  background: var(--muted-foreground);
+   135→  border-radius: 4px;
+   136→  opacity: 0.3;
+   137→}
+   138→::-webkit-scrollbar-thumb:hover {
+   139→  background: var(--primary);
+   140→}
+   141→
+   142→/* IRIS branded gradient utilities */
+   143→.iris-gradient {
+   144→  background: linear-gradient(135deg, oklch(0.42 0.18 285) 0%, oklch(0.55 0.2 305) 50%, oklch(0.72 0.15 75) 100%);
+   145→}
+   146→.iris-gradient-text {
+   147→  background: linear-gradient(135deg, oklch(0.42 0.18 285) 0%, oklch(0.55 0.2 305) 60%, oklch(0.72 0.15 75) 100%);
+   148→  -webkit-background-clip: text;
+   149→  background-clip: text;
+   150→  -webkit-text-fill-color: transparent;
+   151→  color: transparent;
+   152→}
+   153→.dark .iris-gradient-text {
+   154→  background: linear-gradient(135deg, oklch(0.7 0.2 285) 0%, oklch(0.75 0.2 305) 60%, oklch(0.82 0.16 75) 100%);
+   155→  -webkit-background-clip: text;
+   156→  background-clip: text;
+   157→  -webkit-text-fill-color: transparent;
+   158→}
+   159→
+   160→.iris-glow {
+   161→  box-shadow: 0 0 0 1px oklch(0.42 0.18 285 / 0.1), 0 8px 32px -8px oklch(0.42 0.18 285 / 0.3);
+   162→}
+   163→.dark .iris-glow {
+   164→  box-shadow: 0 0 0 1px oklch(0.65 0.2 285 / 0.2), 0 8px 32px -8px oklch(0.65 0.2 285 / 0.4);
+   165→}
+   166→
+   167→/* Animation for chat messages */
+   168→@keyframes message-in {
+   169→  from { opacity: 0; transform: translateY(8px); }
+   170→  to { opacity: 1; transform: translateY(0); }
+   171→}
+   172→.animate-message-in {
+   173→  animation: message-in 0.3s ease-out;
+   174→}
+   175→
+   176→/* Typing indicator */
+   177→@keyframes typing-dot {
+   178→  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+   179→  30% { opacity: 1; transform: translateY(-3px); }
+   180→}
+   181→.typing-dot {
+   182→  animation: typing-dot 1.4s infinite ease-in-out;
+   183→}
+   184→.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+   185→.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+   186→
+   187→/* Pulse glow for active agents */
+   188→@keyframes pulse-glow {
+   189→  0%, 100% { box-shadow: 0 0 0 0 oklch(0.72 0.15 75 / 0.4); }
+   190→  50% { box-shadow: 0 0 0 6px oklch(0.72 0.15 75 / 0); }
+   191→}
+   192→.pulse-glow {
+   193→  animation: pulse-glow 2s infinite;
+   194→}
+   195→
+   196→/* ====================================================================== */
+   197→/* A4 EDITOR — page blanche format A4 avec marges académiques 25 mm        */
+   198→/* ====================================================================== */
+   199→
+   200→.a4-page {
+   201→  font-family: 'Times New Roman', 'Liberation Serif', 'Noto Serif', Georgia, serif;
+   202→  font-size: 12pt;
+   203→  line-height: 1.6;
+   204→  color: #111;
+   205→  background: #fff;
+   206→  border-radius: 2px;
+   207→  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 10px 30px -10px rgba(0, 0, 0, 0.15);
+   208→  transition: box-shadow 0.2s ease;
+   209→  position: relative;
+   210→  z-index: 1; /* au-dessus du calque filigrane (.a4-watermark-layer à z-index:0) */
+   211→}
+   212→.a4-page:hover {
+   213→  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 14px 40px -10px rgba(0, 0, 0, 0.22);
+   214→}
+   215→.a4-page:focus {
+   216→  outline: none;
+   217→  box-shadow: 0 0 0 2px oklch(0.42 0.18 285 / 0.5), 0 14px 40px -10px rgba(0, 0, 0, 0.22);
+   218→}
+   219→
+   220→/* =========================================================================
+   221→   PAGINATION AUTOMATIQUE — Visualisation des sauts de page A4
+   222→   =========================================================================
+   223→   La page A4 fait 297mm de haut, marges 25mm en haut + 30mm en bas
+   224→   = 242mm de zone éditable. On dessine une ligne de séparation tous les
+   225→   297mm (bord de page) pour que l'utilisateur voie où le contenu passe
+   226→   sur la page suivante. Le navigateur gère le vrai saut de page à l'impression.
+   227→   ========================================================================= */
+   228→
+   229→.a4-page.a4-paginated {
+   230→  /* Dessine un séparateur visuel à chaque bord de page A4 (297mm)
+   231→     et une BANDE de diagonales d'avertissement dans la marge inférieure
+   232→     (30mm) pour bien montrer que le contenu ne doit PAS déborder dedans.
+   233→     Répète tous les 297mm. */
+   234→  background-image:
+   235→    /* 1) Bande diagonale d'avertissement dans la marge inférieure (de 267mm à 297mm) :
+   236→          indique visuellement la zone INTERDITE au texte. Motif hachuré rouge/violet. */
+   237→    repeating-linear-gradient(
+   238→      135deg,
+   239→      transparent 0,
+   240→      transparent 6px,
+   241→      oklch(0.58 0.22 25 / 0.06) 6px,
+   242→      oklch(0.58 0.22 25 / 0.06) 12px),
+   243→    /* 1b) Fond teinté violet sous les hachures pour la marge inférieure */
+   244→    linear-gradient(to bottom,
+   245→      transparent 0,
+   246→      transparent calc(100% - 30mm),
+   247→      oklch(0.42 0.18 285 / 0.04) calc(100% - 30mm),
+   248→      oklch(0.42 0.18 285 / 0.08) calc(100% - 30mm + 1px),
+   249→      oklch(0.42 0.18 285 / 0.08) 100%),
+   250→    /* 2) Ligne ÉPAISSE marquant le bord bas de la zone de texte (à 267mm du haut) */
+   251→    linear-gradient(to bottom,
+   252→      transparent calc(100% - 30mm),
+   253→      oklch(0.58 0.22 25 / 0.55) calc(100% - 30mm),
+   254→      oklch(0.58 0.22 25 / 0.55) calc(100% - 30mm + 2px),
+   255→      transparent calc(100% - 30mm + 2px)),
+   256→    /* 3) Ombre douce en haut de chaque page suivante (effet de tranche) */
+   257→    linear-gradient(to bottom, rgba(0,0,0,0.08) 0px, rgba(0,0,0,0) 10px),
+   258→    /* 4) Ligne fine à 25mm du haut (limite de la marge supérieure) */
+   259→    linear-gradient(to bottom,
+   260→      transparent 25mm,
+   261→      oklch(0.42 0.18 285 / 0.15) 25mm,
+   262→      oklch(0.42 0.18 285 / 0.15) calc(25mm + 1px),
+   263→      transparent calc(25mm + 1px));
+   264→  background-repeat: repeat-y;
+   265→  background-size: 100% 297mm;
+   266→  background-position: 0 0;
+   267→}
+   268→
+   269→/* Étiquette "MARGE — 30 mm" répétée dans la zone de marge inférieure de chaque page.
+   270→   Utilise un pseudo-élément sur le conteneur parent (la div .relative qui enveloppe
+   271→   la page A4). On ne peut pas mettre un ::after sur .a4-page car son contenu est
+   272→   éditable ; on l'applique donc via la classe .a4-page-wrap adjacente. */
+   273→.a4-page-wrap::after {
+   274→  content: '';
+   275→  position: absolute;
+   276→  inset: 0;
+   277→  pointer-events: none;
+   278→  background-image:
+   279→    /* Petit texte "MARGE" répété tous les 297mm, à 282mm du haut de chaque page */
+   280→    linear-gradient(to bottom, transparent 0, transparent 0);
+   281→  background-repeat: repeat-y;
+   282→  background-size: 100% 297mm;
+   283→  z-index: 0;
+   284→}
+   285→
+   286→/* Étiquettes de marge — petites pastilles "MARGE 30 mm" placées dans la marge
+   287→   inférieure de chaque page A4. Générées en JS par le composant A4Page. */
+   288→.a4-margin-label {
+   289→  position: absolute;
+   290→  left: 50%;
+   291→  transform: translateX(-50%);
+   292→  font-family: 'Inter', sans-serif;
+   293→  font-size: 7pt;
+   294→  font-weight: 600;
+   295→  color: oklch(0.58 0.22 25 / 0.5);
+   296→  letter-spacing: 0.15em;
+   297→  text-transform: uppercase;
+   298→  pointer-events: none;
+   299→  user-select: none;
+   300→  z-index: 0;
+   301→  white-space: nowrap;
+   302→}
+   303→@media print {
+   304→  .a4-margin-label { display: none !important; }
+   305→}
+   306→
+   307→/* Règles de coupure de page pour l'impression — empêchent les éléments
+   308→   de bloc d'être coupés en plein milieu d'une page. */
+   309→.prose-iris p,
+   310→.prose-iris li,
+   311→.prose-iris blockquote,
+   312→.prose-iris tr,
+   313→.prose-iris .iris-footnotes p {
+   314→  break-inside: avoid;
+   315→  page-break-inside: avoid;
+   316→}
+   317→.prose-iris h1,
+   318→.prose-iris h2,
+   319→.prose-iris h3,
+   320→.prose-iris h4 {
+   321→  break-after: avoid;
+   322→  page-break-after: avoid;
+   323→}
+   324→.prose-iris table,
+   325→.prose-iris .iris-table,
+   326→.prose-iris .iris-spreadsheet {
+   327→  break-inside: avoid;
+   328→  page-break-inside: avoid;
+   329→}
+   330→
+   331→
+   332→/* Calque filigrane — placé derrière le contenu de la page A4.
+   333→   Ne capture pas les clics (pointer-events: none) pour ne pas bloquer
+   334→   l'édition. Répété sur toute la hauteur.
+   335→   Note : `.a4-page` a déjà `position: relative` (défini plus haut) donc le
+   336→   calque absolu se positionne par rapport à elle. */
+   337→.a4-watermark-layer {
+   338→  position: absolute;
+   339→  inset: 0;
+   340→  pointer-events: none;
+   341→  user-select: none;
+   342→  z-index: 0;
+   343→}
+   344→
+   345→/* Numéro de page affiché en filigrane dans la marge inférieure
+   346→   (seulement visible dans l'éditeur, masqué à l'impression) */
+   347→.a4-page-marker {
+   348→  position: absolute;
+   349→  right: 8mm;
+   350→  font-family: 'Inter', sans-serif;
+   351→  font-size: 8pt;
+   352→  color: rgba(124, 58, 237, 0.35);
+   353→  pointer-events: none;
+   354→  user-select: none;
+   355→  z-index: 0;
+   356→}
+   357→@media print {
+   358→  .a4-page-marker { display: none !important; }
+   359→}
+   360→
+   361→/* Placeholder when empty */
+   362→.a4-page:empty::before,
+   363→.a4-page[data-empty="true"]::before {
+   364→  content: attr(data-placeholder);
+   365→  color: #9ca3af;
+   366→  font-style: italic;
+   367→  pointer-events: none;
+   368→}
+   369→
+   370→/* ====================================================================== */
+   371→/* prose-iris — typographie académique à l'intérieur de la page A4         */
+   372→/* ====================================================================== */
+   373→
+   374→.prose-iris {
+   375→  color: #111;
+   376→}
+   377→.prose-iris:focus {
+   378→  outline: none;
+   379→}
+   380→
+   381→/* Headings — sans-serif, hiérarchie académique claire */
+   382→.prose-iris h1 {
+   383→  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+   384→  font-size: 22pt;
+   385→  font-weight: 700;
+   386→  line-height: 1.2;
+   387→  margin: 0 0 18pt 0;
+   388→  color: #1a1a2e;
+   389→  text-align: center;
+   390→  text-transform: uppercase;
+   391→  letter-spacing: 0.02em;
+   392→  page-break-after: avoid;
+   393→}
+   394→.prose-iris h2 {
+   395→  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+   396→  font-size: 16pt;
+   397→  font-weight: 700;
+   398→  line-height: 1.3;
+   399→  margin: 24pt 0 12pt 0;
+   400→  color: #1a1a2e;
+   401→  page-break-after: avoid;
+   402→}
+   403→.prose-iris h3 {
+   404→  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+   405→  font-size: 13pt;
+   406→  font-weight: 600;
+   407→  line-height: 1.3;
+   408→  margin: 18pt 0 8pt 0;
+   409→  color: #2a2a3e;
+   410→  page-break-after: avoid;
+   411→}
+   412→.prose-iris h4 {
+   413→  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+   414→  font-size: 12pt;
+   415→  font-weight: 600;
+   416→  margin: 14pt 0 6pt 0;
+   417→  color: #2a2a3e;
+   418→  page-break-after: avoid;
+   419→}
+   420→
+   421→/* Paragraphs — justifiés, indentés selon la norme académique */
+   422→.prose-iris p {
+   423→  margin: 0 0 10pt 0;
+   424→  text-align: justify;
+   425→  text-indent: 0;
+   426→  orphans: 2;
+   427→  widows: 2;
+   428→  hyphens: auto;
+   429→}
+   430→
+   431→/* First paragraph after a heading: no indent */
+   432→.prose-iris h1 + p,
+   433→.prose-iris h2 + p,
+   434→.prose-iris h3 + p,
+   435→.prose-iris h4 + p {
+   436→  text-indent: 0;
+   437→}
+   438→
+   439→/* Lists */
+   440→.prose-iris ul,
+   441→.prose-iris ol {
+   442→  margin: 0 0 10pt 0;
+   443→  padding-left: 20mm;
+   444→  text-align: justify;
+   445→}
+   446→.prose-iris ul { list-style: disc; }
+   447→.prose-iris ol { list-style: decimal; }
+   448→.prose-iris li {
+   449→  margin-bottom: 4pt;
+   450→  line-height: 1.6;
+   451→}
+   452→.prose-iris li::marker {
+   453→  color: #6b21a8;
+   454→  font-weight: 600;
+   455→}
+   456→
+   457→/* Blockquote — citation académique avec barre à gauche */
+   458→.prose-iris blockquote {
+   459→  margin: 12pt 0;
+   460→  padding: 8pt 16pt;
+   461→  border-left: 3px solid oklch(0.42 0.18 285);
+   462→  background: #faf8ff;
+   463→  color: #444;
+   464→  font-style: italic;
+   465→  text-align: justify;
+   466→}
+   467→.prose-iris blockquote p {
+   468→  margin: 0;
+   469→  text-align: justify;
+   470→}
+   471→
+   472→/* Inline styles */
+   473→.prose-iris strong, .prose-iris b { font-weight: 700; color: #1a1a2e; }
+   474→.prose-iris em, .prose-iris i { font-style: italic; }
+   475→.prose-iris u { text-decoration: underline; text-underline-offset: 2px; }
+   476→.prose-iris a {
+   477→  color: oklch(0.42 0.18 285);
+   478→  text-decoration: underline;
+   479→  text-underline-offset: 2px;
+   480→}
+   481→
+   482→/* Tables (in case the AI includes them) */
+   483→.prose-iris table {
+   484→  width: 100%;
+   485→  border-collapse: collapse;
+   486→  margin: 12pt 0;
+   487→  font-size: 11pt;
+   488→}
+   489→.prose-iris th,
+   490→.prose-iris td {
+   491→  border: 1px solid #cbd5e1;
+   492→  padding: 6pt 8pt;
+   493→  text-align: left;
+   494→  vertical-align: top;
+   495→}
+   496→.prose-iris th {
+   497→  background: #f1f5f9;
+   498→  font-weight: 600;
+   499→  font-family: 'Inter', sans-serif;
+   500→}
+   501→.prose-iris tr:nth-child(even) td {
+   502→  background: #f8fafc;
+   503→}
+   504→
+   505→/* Caption-like paragraphs (e.g. Figure/Table legends) */
+   506→.prose-iris .caption {
+   507→  font-family: 'Inter', sans-serif;
+   508→  font-size: 10pt;
+   509→  text-align: center;
+   510→  color: #555;
+   511→  margin-top: 4pt;
+   512→  font-style: italic;
+   513→}
+   514→
+   515→/* Citation inline — (Auteur, année) */
+   516→.prose-iris .citation {
+   517→  color: oklch(0.42 0.18 285);
+   518→  font-weight: 500;
+   519→}
+   520→
+   521→/* Print — pagination A4 réelle */
+   522→@media print {
+   523→  @page {
+   524→    size: A4;
+   525→    margin: 25mm;
+   526→  }
+   527→  body { background: white !important; }
+   528→  .a4-page {
+   529→    box-shadow: none !important;
+   530→    width: auto !important;
+   531→    min-height: auto !important;
+   532→    padding: 0 !important;
+   533→    margin: 0 !important;
+   534→    border-radius: 0 !important;
+   535→  }
+   536→
+   537→  /* Quand on imprime depuis la page Export, on cache tout sauf
+   538→     le rendu imprimable (.printable-memoire). */
+   539→  aside, header { display: none !important; }
+   540→  main { overflow: visible !important; }
+   541→  /* Cache tout le contenu interactif de l'export-view (cards, boutons, etc.) */
+   542→  main > div:not(.printable-memoire) { display: none !important; }
+   543→  .printable-memoire { display: block !important; }
+   544→
+   545→  /* Typographie du mémoire imprimable */
+   546→  .printable-title-page {
+   547→    text-align: center;
+   548→    padding-top: 6cm;
+   549→    page-break-after: always;
+   550→  }
+   551→  .printable-title-page h1 {
+   552→    font-family: 'Inter', Arial, sans-serif;
+   553→    font-size: 24pt;
+   554→    text-transform: uppercase;
+   555→    margin-bottom: 1.5cm;
+   556→  }
+   557→  .printable-title-page p {
+   558→    font-size: 14pt;
+   559→    color: #333;
+   560→    margin: 4pt 0;
+   561→  }
+   562→  .printable-title-page .subtitle { font-weight: 600; }
+   563→  .printable-title-page .norm { font-size: 11pt; color: #666; margin-top: 1cm; }
+   564→
+   565→  .printable-section { page-break-inside: auto; }
+   566→  .printable-section h2 {
+   567→    font-family: 'Inter', Arial, sans-serif;
+   568→    font-size: 16pt;
+   569→    margin-top: 24pt;
+   570→    margin-bottom: 12pt;
+   571→    page-break-after: avoid;
+   572→  }
+   573→  .printable-section h3 {
+   574→    font-family: 'Inter', Arial, sans-serif;
+   575→    font-size: 13pt;
+   576→    page-break-after: avoid;
+   577→  }
+   578→  .printable-section p {
+   579→    font-family: 'Times New Roman', Georgia, serif;
+   580→    font-size: 12pt;
+   581→    line-height: 1.6;
+   582→    text-align: justify;
+   583→    margin: 0 0 10pt 0;
+   584→  }
+   585→}
+   586→
+   587→/* =========================================================================
+   588→   ENRICHED EDITOR — tables, spreadsheets, page breaks, footnotes, borders
+   589→   ========================================================================= */
+   590→
+   591→/* iris-table — academic table with caption + zebra rows (extends .prose-iris table) */
+   592→.prose-iris table.iris-table {
+   593→  border: 1px solid #1f2937;
+   594→  font-size: 11pt;
+   595→}
+   596→.prose-iris table.iris-table caption {
+   597→  caption-side: top;
+   598→  font-family: 'Inter', sans-serif;
+   599→  font-size: 10pt;
+   600→  font-style: italic;
+   601→  color: #4b5563;
+   602→  margin-bottom: 4pt;
+   603→  text-align: left;
+   604→}
+   605→.prose-iris table.iris-table th {
+   606→  background: #1f2937;
+   607→  color: #ffffff;
+   608→  font-family: 'Inter', sans-serif;
+   609→  font-weight: 600;
+   610→  border: 1px solid #1f2937;
+   611→  text-align: left;
+   612→  padding: 6pt 8pt;
+   613→}
+   614→.prose-iris table.iris-table td {
+   615→  border: 1px solid #cbd5e1;
+   616→  padding: 6pt 8pt;
+   617→  vertical-align: top;
+   618→}
+   619→.prose-iris table.iris-table tbody tr:nth-child(even) td {
+   620→  background: #f8fafc;
+   621→}
+   622→
+   623→/* iris-spreadsheet — Excel-like table with row numbers (1, 2, 3…) and column headers (A, B, C…) */
+   624→.prose-iris table.iris-spreadsheet {
+   625→  border-collapse: collapse;
+   626→  width: auto;
+   627→  margin: 8pt 0;
+   628→  font-family: 'Inter', 'Segoe UI', sans-serif;
+   629→  font-size: 10pt;
+   630→  table-layout: fixed;
+   631→}
+   632→.prose-iris table.iris-spreadsheet th,
+   633→.prose-iris table.iris-spreadsheet td {
+   634→  border: 1px solid #d1d5db;
+   635→  padding: 3pt 6pt;
+   636→  min-width: 60px;
+   637→  vertical-align: middle;
+   638→  text-align: left;
+   639→}
+   640→.prose-iris table.iris-spreadsheet th.iris-corner {
+   641→  background: #f3f4f6;
+   642→  font-weight: 600;
+   643→  color: #4b5563;
+   644→  text-align: center;
+   645→  width: 32px;
+   646→}
+   647→.prose-iris table.iris-spreadsheet th.iris-col-h {
+   648→  background: #f3f4f6;
+   649→  font-weight: 600;
+   650→  color: #4b5563;
+   651→  text-align: center;
+   652→  font-family: 'Inter', sans-serif;
+   653→}
+   654→.prose-iris table.iris-spreadsheet th.iris-row-h {
+   655→  background: #f3f4f6;
+   656→  font-weight: 600;
+   657→  color: #4b5563;
+   658→  text-align: center;
+   659→  font-family: 'Inter', sans-serif;
+   660→  width: 32px;
+   661→}
+   662→.prose-iris table.iris-spreadsheet td {
+   663→  background: #ffffff;
+   664→}
+   665→.prose-iris table.iris-spreadsheet td:focus {
+   666→  background: #eff6ff;
+   667→  outline: 2px solid #7c3aed;
+   668→  outline-offset: -2px;
+   669→}
+   670→
+   671→/* iris-img — inserted image with consistent margin + max-width */
+   672→.prose-iris img.iris-img {
+   673→  max-width: 100%;
+   674→  height: auto;
+   675→  display: block;
+   676→  margin: 8pt 0;
+   677→  border-radius: 2px;
+   678→}
+   679→.prose-iris img.iris-img:hover {
+   680→  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+   681→}
+   682→
+   683→/* iris-page-break — manual page break (visual bar in editor, real page break on print) */
+   684→.prose-iris .iris-page-break {
+   685→  display: flex;
+   686→  align-items: center;
+   687→  justify-content: center;
+   688→  margin: 12pt 0;
+   689→  padding: 4pt 0;
+   690→  background: linear-gradient(90deg, transparent 0%, rgba(124,58,237,0.08) 20%, rgba(124,58,237,0.12) 50%, rgba(124,58,237,0.08) 80%, transparent 100%);
+   691→  border-top: 1px dashed rgba(124,58,237,0.45);
+   692→  border-bottom: 1px dashed rgba(124,58,237,0.45);
+   693→  user-select: none;
+   694→  cursor: default;
+   695→  position: relative;
+   696→}
+   697→.prose-iris .iris-page-break span {
+   698→  font-family: 'Inter', sans-serif;
+   699→  font-size: 9pt;
+   700→  font-weight: 600;
+   701→  text-transform: uppercase;
+   702→  letter-spacing: 0.1em;
+   703→  color: #7c3aed;
+   704→  background: #ffffff;
+   705→  padding: 2pt 8pt;
+   706→  border-radius: 10pt;
+   707→  border: 1px solid rgba(124,58,237,0.3);
+   708→}
+   709→@media print {
+   710→  .prose-iris .iris-page-break {
+   711→    border: none !important;
+   712→    background: none !important;
+   713→    margin: 0 !important;
+   714→    padding: 0 !important;
+   715→    break-after: page;
+   716→    page-break-after: always;
+   717→    height: 0;
+   718→    overflow: hidden;
+   719→  }
+   720→  .prose-iris .iris-page-break span { display: none !important; }
+   721→}
+   722→
+   723→/* iris-page-break-auto — auto-inserted by the pagination engine.
+   724→   Unlike manual breaks (a slim bar), the auto-break is a transparent
+   725→   "pusher" with a fixed min-height that fills the remaining space
+   726→   until the next A4 page boundary (297mm), so text NEVER enters
+   727→   the bottom margin of the current page. The visible label sits at
+   728→   the BOTTOM of the pusher (right where the next page starts). */
+   729→.prose-iris .iris-page-break.iris-page-break-auto {
+   730→  display: flex;
+   731→  flex-direction: column;
+   732→  align-items: center;
+   733→  justify-content: flex-end;
+   734→  margin: 0;
+   735→  padding: 0 0 4pt 0;
+   736→  background:
+   737→    /* Diagonal hatching to mark the unused bottom-margin zone (visual cue). */
+   738→    repeating-linear-gradient(
+   739→      135deg,
+   740→      transparent 0,
+   741→      transparent 6px,
+   742→      rgba(124,58,237,0.05) 6px,
+   743→      rgba(124,58,237,0.05) 12px);
+   744→  border-top: 1px dashed rgba(124,58,237,0.45);
+   745→  border-bottom: none;
+   746→  /* min-height is set inline by the JS pagination engine, computed as
+   747→     (297mm - <offset of the next block within the current page>). */
+   748→}
+   749→.prose-iris .iris-page-break.iris-page-break-auto span {
+   750→  font-family: 'Inter', sans-serif;
+   751→  font-size: 8pt;
+   752→  font-weight: 600;
+   753→  text-transform: uppercase;
+   754→  letter-spacing: 0.12em;
+   755→  color: #7c3aed;
+   756→  background: #ffffff;
+   757→  padding: 2pt 8pt;
+   758→  border-radius: 10pt;
+   759→  border: 1px solid rgba(124,58,237,0.3);
+   760→  opacity: 0.85;
+   761→}
+   762→@media print {
+   763→  .prose-iris .iris-page-break.iris-page-break-auto {
+   764→    background: none !important;
+   765→    border: none !important;
+   766→    margin: 0 !important;
+   767→    padding: 0 !important;
+   768→    min-height: 0 !important;
+   769→    height: 0 !important;
+   770→    overflow: hidden;
+   771→    break-after: page;
+   772→    page-break-after: always;
+   773→  }
+   774→  .prose-iris .iris-page-break.iris-page-break-auto span { display: none !important; }
+   775→}
+   776→
+   777→/* iris-fn — footnote marker (superscript) */
+   778→.prose-iris sup.iris-fn {
+   779→  font-family: 'Inter', sans-serif;
+   780→  font-size: 8pt;
+   781→  font-weight: 600;
+   782→  color: #7c3aed;
+   783→  vertical-align: super;
+   784→  line-height: 0;
+   785→}
+   786→.prose-iris sup.iris-fn a {
+   787→  color: inherit;
+   788→  text-decoration: none;
+   789→}
+   790→.prose-iris sup.iris-fn a:hover {
+   791→  text-decoration: underline;
+   792→}
+   793→
+   794→/* iris-footnotes — footnotes section appended at the end of the editor content */
+   795→.prose-iris .iris-footnotes {
+   796→  margin-top: 24pt;
+   797→  padding-top: 8pt;
+   798→  border-top: 1px solid #cbd5e1;
+   799→  font-size: 10pt;
+   800→  color: #4b5563;
+   801→  font-family: 'Inter', 'Times New Roman', sans-serif;
+   802→}
+   803→.prose-iris .iris-footnotes p {
+   804→  margin: 0 0 4pt 0;
+   805→  font-size: 10pt;
+   806→  line-height: 1.4;
+   807→  font-family: 'Inter', 'Times New Roman', sans-serif;
+   808→  color: #4b5563;
+   809→}
+   810→.prose-iris .iris-footnotes .iris-fn-text {
+   811→  color: #4b5563;
+   812→}
+   813→
+   814→/* Hyperlinks inside the editor — make them look clickable */
+   815→.prose-iris a {
+   816→  color: #2563eb;
+   817→  text-decoration: underline;
+   818→  text-underline-offset: 2px;
+   819→  cursor: pointer;
+   820→}
+   821→.prose-iris a:hover {
+   822→  color: #1d4ed8;
+   823→  text-decoration-thickness: 2px;
+   824→}
+   825→
+   826→/* Subtle indicator when a block has a border applied (so the user sees it's intentional) */
+   827→.prose-iris p[style*="border"],
+   828→.prose-iris h1[style*="border"],
+   829→.prose-iris h2[style*="border"],
+   830→.prose-iris h3[style*="border"],
+   831→.prose-iris blockquote[style*="border"] {
+   832→  border-radius: 2px;
+   833→}
+   834→
+   835→/* Subtle indicator when a block has a background (trame) applied */
+   836→.prose-iris p[style*="background-color"],
+   837→.prose-iris h1[style*="background-color"],
+   838→.prose-iris h2[style*="background-color"],
+   839→.prose-iris h3[style*="background-color"] {
+   840→  border-radius: 2px;
+   841→}
+   842→

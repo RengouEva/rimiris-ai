@@ -1273,7 +1273,7 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
           />
         )}
 
-        <div className="flex-1 overflow-y-auto bg-muted/30 p-4 sm:p-8 flex justify-center">
+        <div className="flex-1 overflow-y-auto overflow-x-auto bg-muted/30 p-2 sm:p-4 lg:p-8 flex justify-center iris-a4-scroll">
           <A4Page
             ref={editorRef}
             editable={editable}
@@ -1505,7 +1505,7 @@ function Toolbar(props: ToolbarProps) {
     <TooltipProvider delayDuration={300}>
       <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
         {/* ====================== Row 1 ====================== */}
-        <div className="flex items-center gap-1 px-2 py-1.5 flex-nowrap overflow-x-hidden">
+        <div className="flex items-center gap-1 px-2 py-1.5 flex-nowrap overflow-x-auto iris-toolbar-scroll">
           <ToolbarButton onClick={onUndo} label="Annuler (Ctrl+Z)">
             <Undo2 className="h-4 w-4" />
           </ToolbarButton>
@@ -1606,7 +1606,7 @@ function Toolbar(props: ToolbarProps) {
         </div>
 
         {/* ====================== Row 2 ====================== */}
-        <div className="flex items-center gap-1 px-2 pb-1.5 pt-0.5 flex-nowrap overflow-x-hidden border-t border-border/50">
+        <div className="flex items-center gap-1 px-2 pb-1.5 pt-0.5 flex-nowrap overflow-x-auto iris-toolbar-scroll border-t border-border/50">
           {/* Block format */}
           <ToolbarToggle onClick={onP} label="Paragraphe" active={active.block === 'p'}>
             <Pilcrow className="h-4 w-4" />
@@ -1707,7 +1707,7 @@ function Toolbar(props: ToolbarProps) {
         </div>
 
         {/* ====================== Row 3 — Insertion ====================== */}
-        <div className="flex items-center gap-1 px-2 pb-1.5 pt-0.5 flex-nowrap overflow-x-hidden border-t border-border/50">
+        <div className="flex items-center gap-1 px-2 pb-1.5 pt-0.5 flex-nowrap overflow-x-auto iris-toolbar-scroll border-t border-border/50">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pr-1">
             Insérer
           </span>

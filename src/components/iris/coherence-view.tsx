@@ -88,7 +88,7 @@ export function CoherenceView() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="border-red-500/20">
           <CardContent className="p-4 flex items-center justify-between">
             <div>

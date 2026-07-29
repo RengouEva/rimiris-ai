@@ -1,0 +1,74 @@
+{
+  "name": "Rimiris AI — Directeur de mémoire virtuel",
+  "short_name": "Rimiris",
+  "description": "Plateforme IA d'accompagnement à la rédaction académique, de l'idée de recherche jusqu'à la soutenance.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "theme_color": "#6D28D9",
+  "background_color": "#FFFFFF",
+  "lang": "fr",
+  "dir": "ltr",
+  "categories": ["education", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mon mémoire",
+      "short_name": "Mémoire",
+      "description": "Accéder directement à l'éditeur de sections",
+      "url": "/?view=workspace",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Guide méthodologique",
+      "short_name": "Guide",
+      "description": "Gérer le guide méthodologique de votre université",
+      "url": "/?view=guide",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Exporter",
+      "short_name": "Exporter",
+      "description": "Exporter le mémoire (PDF, Word, HTML, Markdown)",
+      "url": "/?view=export",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false,
+  "related_applications": []
+}

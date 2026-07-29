@@ -375,7 +375,7 @@ function CollectStep({ onDone }: { onDone: () => void }) {
             <RadioGroup
               value={form.norme}
               onValueChange={(v) => update('norme', v as any)}
-              className="grid grid-cols-5 gap-1.5"
+              className="grid grid-cols-3 sm:grid-cols-5 gap-1.5"
             >
               {(['APA', 'Vancouver', 'IEEE', 'ISO 690', 'Harvard'] as const).map((n) => (
                 <Label

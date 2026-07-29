@@ -653,3 +653,34 @@ Stage Summary:
 - Rebranding "IRIS Thesis AI" → "Rimiris AI" COMPLETE cette fois pour toutes les surfaces visibles.
 - L'utilisateur verra désormais "Rimiris" dans : le titre navigateur, le logo wordmark (landing + sidebar + header + onboarding + plan-review), tous les textes descriptifs, tous les boutons/CTA, tous les tooltips, tous les messages d'erreur, tous les toasts, le placeholder de l'éditeur, et l'IA s'auto-présentera comme "Pr. Rimiris" au lieu de "Pr. IRIS".
 - Les identifiants internes (IrisState, /lib/iris/, .iris-* CSS) restent intacts pour préserver les imports et les données sauvegardées — pas d'impact utilisateur.
+
+---
+Task ID: 8
+Agent: main (Super Z)
+Task: Rendre toute l'app Rimiris AI responsive (mobile-first ultra-responsive) + créer l'installation PWA.
+
+Work Log:
+- Audit complet des 14 composants IRIS via sous-agent Explore. Conclusion : 3 zones desktop-only (export-view sidebar, a4-editor toolbars, section-workflow-panel) + 3 fixes mineurs (coherence grid-cols-3, onboarding grid-cols-5, guide px-6).
+- Workspace (`workspace.tsx`) : extrait `SectionsSidebarContent` réutilisable, masqué sous `md:flex` sur l'aside desktop, ouvert via Sheet (drawer gauche) sur mobile. Ajout d'un bouton `PanelLeft` dans le header de l'éditeur pour ouvrir ce drawer. Stats condensées sur mobile.
+- A4 Editor (`a4-editor.tsx`) : 3 lignes de toolbar `flex-nowrap overflow-x-hidden` → `flex-nowrap overflow-x-auto iris-toolbar-scroll` (les boutons restent accessibles via scroll horizontal sur mobile). Conteneur de la page A4 : `overflow-x-auto` ajouté + padding réduit sur mobile (`p-2 sm:p-4 lg:p-8`).
+- Section workflow panel (`section-workflow-panel.tsx`) : converti en overlay `fixed inset-y-0 right-0 z-50` sur mobile (avec backdrop `bg-black/40 sm:hidden`), redevient `sm:relative` sur desktop. Garde l'animation spring.
+- Export view (`export-view.tsx`) : extrait `ExportSidebarContent`, aside desktop `hidden md:flex`, drawer Sheet sur mobile avec barre supérieure sticky qui affiche le nom de la section active + bouton `PanelLeft`. Dialog d'aperçu `w-[95vw] sm:w-auto` + header `flex-wrap` + padding responsive.
+- Coherence view (`coherence-view.tsx`) : `grid-cols-3` → `grid-cols-1 sm:grid-cols-3`.
+- Onboarding (`onboarding-interview.tsx`) : `grid-cols-5` (normes de citation) → `grid-cols-3 sm:grid-cols-5`.
+- Guide view (`guide-view.tsx`) : `px-6` → `px-4 sm:px-6`.
+- Page shell (`page.tsx`) : `min-h-screen` → `min-h-[100dvh]` (dynamic viewport height pour iOS Safari). Ajout du handler `?view=` pour les raccourcis PWA (valide les 9 vues, nettoie l'URL après).
+- Toutes les hauteurs `calc(100vh-3.5rem)` remplacées par `calc(100dvh-3.5rem)` (workspace, export-view, guide-view, section-workflow-panel).
+- `globals.css` : ajouté `.iris-toolbar-scroll` (scrollbar thin custom), `.iris-a4-scroll`, safe-area insets `env(safe-area-inset-*)` sur body, font-size ≥ 16px sur inputs mobile (évite le zoom iOS au focus), `display-mode: standalone` (désactive overscroll), min-height 32px sur boutons mobile, `scrollbar-gutter: stable`.
+- PWA — Icônes : script `scripts/generate-pwa-icons.js` (sharp) qui convertit `public/logo.svg` en `icon-192.png`, `icon-512.png`, `maskable-192.png`, `maskable-512.png`, `apple-touch-icon.png` (180×180), `favicon.png` (32×32), `favicon-16.png` (16×16), `icon.svg` (alias). Toutes posées dans `public/` et `public/icons/`. Fond violet `#6D28D9` pour les icônes pleines.
+- PWA — Manifest : `public/manifest.json` avec name/short_name, start_url `/`, display standalone, theme_color `#6D28D9`, background_color `#FFFFFF`, lang fr, 5 icônes (any + maskable + svg), 3 shortcuts (Mon mémoire, Guide méthodo, Exporter) qui mènent à `/?view=...`.
+- PWA — Service Worker : `public/sw.js` v1.0.0 — precache du shell (/, /manifest.json, /icon.svg, /icons/*, /offline.html), stratégies : navigations network-first + fallback cache + offline page, static assets stale-while-revalidate, API routes network-only (réponses IA dynamiques), cross-origin ignoré, message `SKIP_WAITING` pour updates.
+- PWA — Offline fallback : `public/offline.html` page standalone avec gradient violet, logo, bouton "Réessayer".
+- PWA — Composants React : `src/components/pwa/register-sw.tsx` (registration en production uniquement, deferred après `load`, controllerchange reload, update toutes les 60 min), `src/components/pwa/install-prompt.tsx` (banner `beforeinstallprompt` + détection iOS + standalone + dismiss 7 jours localStorage), `src/components/pwa/use-pwa.ts` (hooks `useIsStandalone` et `useIsIOS`).
+- Layout (`layout.tsx`) : ajout `manifest`, `appleWebApp` (capable + title), `icons` (icon/shortcut/apple), `formatDetection` (désactive détection tel/email/address). Export `viewport` séparé avec `viewportFit: "cover"` pour notches, themeColor media-query (light/dark), colorScheme. Tags `<link rel="apple-touch-icon">`, `<meta name="apple-mobile-web-app-*">` dans `<head>`. Mount de `<ServiceWorkerRegistration />` et `<PWAInstallPrompt />` dans le body.
+
+Stage Summary:
+- App 100% responsive mobile-first : 7 composants corrigés, tous les layouts à 2 panneaux ont maintenant un drawer Sheet sur mobile, les toolbars défilent horizontalement, la page A4 défile aussi, toutes les hauteurs utilisent `dvh` pour iOS.
+- PWA installable : manifest complet, service worker offline-first, 8 icônes générées (any/maskable/apple-touch/favicon × 2 tailles), 3 raccourcis, page offline, banner d'installation intelligent (avec workaround iOS).
+- 0 nouvelle dépendance npm (sharp déjà présent).
+- Fichiers créés : scripts/generate-pwa-icons.js, public/manifest.json, public/sw.js, public/offline.html, public/icons/{icon-192,icon-512,maskable-192,maskable-512,apple-touch-icon}.png, public/{favicon,favicon-16}.png, public/icon.svg, src/components/pwa/{register-sw,install-prompt,use-pwa}.tsx.
+- Fichiers modifiés : src/app/page.tsx, src/app/layout.tsx, src/app/globals.css, src/components/iris/{workspace,a4-editor,section-workflow-panel,export-view,coherence-view,onboarding-interview,guide-view}.tsx.
