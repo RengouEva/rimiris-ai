@@ -207,6 +207,7 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 10px 30px -10px rgba(0, 0, 0, 0.15);
   transition: box-shadow 0.2s ease;
   position: relative;
+  z-index: 1; /* au-dessus du calque filigrane (.a4-watermark-layer à z-index:0) */
 }
 .a4-page:hover {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 14px 40px -10px rgba(0, 0, 0, 0.22);
@@ -227,15 +228,48 @@
 
 .a4-page.a4-paginated {
   /* Dessine un séparateur visuel à chaque bord de page A4 (297mm)
-     sous forme d'ombre en bas de chaque "page" virtuelle. */
+     et une BANDE colorée dans la marge inférieure (30mm) pour bien montrer
+     que le contenu ne doit PAS déborder dedans.
+     Repète tous les 297mm. */
   background-image:
-    /* Ombre douce en haut de chaque page suivante (effet de tranche) */
-    linear-gradient(to bottom, rgba(0,0,0,0.04) 0px, rgba(0,0,0,0) 6px),
-    /* Ligne fine marquant le bord bas de la marge de page (272mm = 297mm - 25mm) */
-    linear-gradient(to bottom, transparent calc(100% - 30mm), rgba(124, 58, 237, 0.12) calc(100% - 30mm), rgba(124, 58, 237, 0.12) calc(100% - 30mm + 1px), transparent calc(100% - 30mm + 1px));
+    /* 1) Bande teintée dans la marge inférieure (de 267mm à 297mm) :
+          indique visuellement la zone interdite au texte. */
+    linear-gradient(to bottom,
+      transparent 0,
+      transparent calc(100% - 30mm),
+      oklch(0.42 0.18 285 / 0.05) calc(100% - 30mm),
+      oklch(0.42 0.18 285 / 0.08) calc(100% - 30mm + 1px),
+      oklch(0.42 0.18 285 / 0.08) 100%),
+    /* 2) Ligne marquant le bord bas de la zone de texte (à 267mm du haut de page) */
+    linear-gradient(to bottom,
+      transparent calc(100% - 30mm),
+      oklch(0.42 0.18 285 / 0.45) calc(100% - 30mm),
+      oklch(0.42 0.18 285 / 0.45) calc(100% - 30mm + 1.5px),
+      transparent calc(100% - 30mm + 1.5px)),
+    /* 3) Ombre douce en haut de chaque page suivante (effet de tranche) */
+    linear-gradient(to bottom, rgba(0,0,0,0.06) 0px, rgba(0,0,0,0) 8px),
+    /* 4) Ligne fine à 25mm du haut (limite de la marge supérieure) */
+    linear-gradient(to bottom,
+      transparent 25mm,
+      oklch(0.42 0.18 285 / 0.15) 25mm,
+      oklch(0.42 0.18 285 / 0.15) calc(25mm + 1px),
+      transparent calc(25mm + 1px));
   background-repeat: repeat-y;
   background-size: 100% 297mm;
   background-position: 0 0;
+}
+
+/* Calque filigrane — placé derrière le contenu de la page A4.
+   Ne capture pas les clics (pointer-events: none) pour ne pas bloquer
+   l'édition. Répété sur toute la hauteur.
+   Note : `.a4-page` a déjà `position: relative` (défini plus haut) donc le
+   calque absolu se positionne par rapport à elle. */
+.a4-watermark-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
 }
 
 /* Numéro de page affiché en filigrane dans la marge inférieure

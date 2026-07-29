@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   Users,
   Shield,
+  BookOpen,
 } from 'lucide-react'
 import { useIrisStore, type ViewMode } from '@/store/iris-store'
 import { cn } from '@/lib/utils'
@@ -22,6 +23,7 @@ import { useTheme } from 'next-themes'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export const NAV_ITEMS: { id: ViewMode; label: string; icon: any }[] = [
+  { id: 'guide', label: 'Guide méthodo', icon: BookOpen },
   { id: 'workspace', label: 'Mon mémoire', icon: PenLine },
   { id: 'plagiarism', label: 'Anti-plagiat', icon: Shield },
   { id: 'audit', label: 'Audit final', icon: ClipboardCheck },
@@ -71,6 +73,8 @@ export function Sidebar() {
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon
           const active = view === item.id
+          // Petite pastille verte sur "Guide méthodo" quand un guide est actif
+          const guideActive = item.id === 'guide' && project?.guideText && project.guideText.trim().length > 0
           return (
             <TooltipProvider key={item.id} delayDuration={200}>
               <Tooltip>
@@ -78,14 +82,23 @@ export function Sidebar() {
                   <button
                     onClick={() => setView(item.id)}
                     className={cn(
-                      'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                      'relative w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                       active
                         ? 'bg-sidebar-primary text-sidebar-primary-foreground'
                         : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                     )}
                   >
                     <Icon className="h-4 w-4 flex-shrink-0" />
-                    {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                    {!sidebarCollapsed && <span className="truncate flex-1 text-left">{item.label}</span>}
+                    {guideActive && !sidebarCollapsed && (
+                      <span
+                        className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50 flex-shrink-0"
+                        title="Guide actif"
+                      />
+                    )}
+                    {guideActive && sidebarCollapsed && (
+                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50" />
+                    )}
                   </button>
                 </TooltipTrigger>
                 {sidebarCollapsed && <TooltipContent side="right">{item.label}</TooltipContent>}

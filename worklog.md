@@ -260,3 +260,82 @@ Stage Summary:
   - `src/components/iris/export-view.tsx` (réécriture complète : sidebar + 6 panneaux + vrais générateurs + printable memoire)
 - L'utilisateur demande maintenant un workflow clair : sur "Mon mémoire", chaque section a son icône Sparkles (le seul point d'entrée IA). Le bouton "Exporter" mène à une page indépendante avec sa propre sidebar (Formats / Outils / Configuration) où l'utilisateur choisit PDF / Word / HTML / Markdown / Impression / Aperçu / Paramètres. Les vrais fichiers .doc / .html / .md sont générés (vs. l'ancien fake .txt). Les 5 passes d'humanisation montrent chacune leur état individuel (pending → running → done) avec animation.
 - La pagination A4 est maintenant visible dans l'éditeur (lignes violettes + numéros de page en filigrane) et le compteur "X pages A4" dans la toolbar est précis (basé sur scrollHeight réel, pas sur wordCount/500).
+
+---
+Task ID: 4
+Agent: main (Super Z)
+Task: Enrichir l'éditeur A4 (barre d'outils riche, filigrane, disposition, actions sur sélection, police/taille, majuscule/minuscule, sélection d'objet, voyants lumineux), corriger la marge du bas, déplacer le guide méthodologique dans la sidebar principale avant "Mon mémoire", barre d'outils non-scrollable sur 2 lignes, aperçu Export par défaut à 100% de zoom
+
+Work Log:
+
+## 1. Barre d'outils enrichie (a4-editor.tsx — réécriture complète)
+- Réécrit `src/components/iris/a4-editor.tsx` (481 → 1201 lignes).
+- **Layout 2 lignes, non-scrollable** : `flex-nowrap overflow-x-hidden` sur chaque ligne pour empêcher le scroll horizontal, tous les outils visibles d'un coup.
+  - **Ligne 1** : Annuler/Rétablir | Police (8 familles) | Taille (8 tailles) | Gras/Italique/Souligné/Barré | Indice/Exposant | MAJUSCULES/minuscules/Titre | Couleur/Surlignage
+  - **Ligne 2** : Paragraphe/H1/H2/H3 | Listes/Citation | Alignement (gauche/centre/droite/justifier) | Filigrane | Sélection d'objet (tout sélectionner / désélectionner) | Effacer la mise en forme
+- **Voyants lumineux (active state indicators)** : ajout d'un composant `ToolbarToggle` qui, quand l'état est actif pour la sélection courante, affiche un fond `bg-primary text-primary-foreground` ET un point vert (`w-1.5 h-1.5 rounded-full bg-emerald-400`) en bas à droite. Implémente le "voyant lumineux" demandé.
+- **Tracking de l'état actif** : nouvel état `activeState` mis à jour via `document.addEventListener('selectionchange', ...)` et par `refreshActiveState()` qui appelle `document.queryCommandState('bold'|'italic'|'underline'|'strikeThrough'|'subscript'|'superscript'|'insertUnorderedList'|'insertOrderedList'|'justifyLeft'|'justifyCenter'|'justifyRight'|'justifyFull')` + inspection du bloc ancêtre pour `formatBlock`.
+- **Police et taille de police** : deux `<Select>` (Radix) avec 8 familles (Times New Roman, Arial, Calibri, Courier, Georgia, Garamond, Verdana, Inter) et 7 tailles. Appliqués via `execCommand('fontName', css)` et `execCommand('fontSize', n)`.
+- **Majuscule/minuscule/Titre** : `convertCase('upper'|'lower'|'title')` opère sur la sélection courante. Si la sélection est collapsed, message console. Raccourcis : `Ctrl+B/I/U/S/E`, `Ctrl+Shift+A` (select all in editor).
+- **Disposition (alignement)** : 4 boutons align-left/center/right/justify avec voyant lumineux.
+- **Couleur du texte + Surlignage** : 2 popovers (`TextColorButton`, `HighlightButton`) avec 15 couleurs de texte et 10 couleurs de surlignage. Appliqués via `execCommand('foreColor')` et `execCommand('hiliteColor')` (fallback `backColor`).
+- **Indice/Exposant** : `execCommand('subscript'|'superscript')` avec voyant lumineux.
+- **Sélection d'objet** : `selectAllInEditor()` (sélectionne tout le contenu de l'éditeur via Range) et `clearSelection()` (collapse le caret).
+- Raccourcis clavier étendus : `Ctrl+S` (barré), `Ctrl+E` (centrer), `Ctrl+Shift+A` (select all).
+
+## 2. Filigrane (watermark)
+- État `watermark: { enabled, text, opacity, angle }` dans A4Editor.
+- Nouveau composant `WatermarkButton` (popover) : toggle on/off, texte personnalisable (défaut "CONFIDENTIEL"), slider d'opacité (2%-30%), slider d'angle (-90° à +90°).
+- Bouton "Filigrane" dans la barre d'outils ligne 2 — devient violet quand actif, avec voyant lumineux vert.
+- Le filigrane est rendu via un calque `.a4-watermark-layer` (absolu, `inset:0`, `pointer-events:none`) qui contient un SVG data-URI répété en `background-image` sur toute la page A4.
+- Badge "Filigrane actif" affiché en bas à droite de la ligne 2 quand le filigrane est activé.
+- CSS associé dans `globals.css` : `.a4-watermark-layer { position: absolute; inset: 0; pointer-events: none; user-select: none; z-index: 0; }` + `z-index: 1` sur `.a4-page` pour garantir que le contenu éditable reste au-dessus.
+
+## 3. Correction de la marge du bas (et visualization renforcée)
+- Avant : une seule ligne violette très fine à `calc(100% - 30mm)` — facile à rater, l'utilisateur ne voyait pas que sa marge du bas était violée.
+- Maintenant, le background-image de `.a4-page.a4-paginated` dessine 4 couches répétées tous les 297mm :
+  1. **Bande teintée** dans la marge inférieure (de 267mm à 297mm) en violet `oklch(0.42 0.18 285 / 0.05-0.08)` : montre clairement la zone interdite au texte.
+  2. **Ligne violette épaisse** (1.5px, opacité 0.45) à 267mm du haut de chaque page = bord bas de la zone de texte.
+  3. **Ombre douce** (rgba(0,0,0,0.06) → transparent sur 8px) en haut de chaque page suivante = effet de tranche de page.
+  4. **Ligne fine à 25mm du haut** (opacité 0.15) = bord bas de la marge supérieure.
+- L'utilisateur voit maintenant IMMÉDIATEMENT si son contenu déborde dans la marge inférieure (la bande violet clair devient visible sous le texte).
+
+## 4. Guide méthodologique déplacé dans la sidebar principale
+- Ajout du type `'guide'` à `ViewMode` dans `iris-store.ts`.
+- Ajout de l'entrée `{ id: 'guide', label: 'Guide méthodo', icon: BookOpen }` en TÊTE de `NAV_ITEMS` dans `sidebar.tsx` — AVANT "Mon mémoire".
+- Pastille verte sur l'entrée "Guide méthodo" quand un guide est actif (`project.guideText` non vide) — visible en mode collapsed et expanded.
+- Nouveau composant `src/components/iris/guide-view.tsx` (148 lignes) : page indépendante avec :
+  - Header + bouton "Retour au mémoire"
+  - Card "Pourquoi importer un guide ?" (violet)
+  - Card principale avec `<GuideUpload variant="full" />` (drag-and-drop + preview texte extrait)
+  - Card "Comment IRIS exploite votre guide" (4 étapes numérotées)
+  - CTA "Aller à mon mémoire" quand un guide est actif
+- Rendu câblé dans `page.tsx` : `{view === 'guide' && <GuideView />}`.
+- Suppression de `<GuideUpload variant="compact" />` du bottom-actions du workspace.tsx (l'import `GuideUpload` a été retiré).
+
+## 5. Aperçu Export avec zoom par défaut 100%
+- Ajout du type `'preview'` à `ExportSection` dans `export-view.tsx`.
+- Renommage de l'entrée sidebar 'overview' : "Aperçu" → "Vue d'ensemble" (avec icône `Layers`).
+- Nouvelle entrée sidebar 'preview' : label "Aperçu", icône `Eye`, desc "Aperçu A4 paginé avec zoom", group 'tools'.
+- Restructuration du `<main>` : le panneau 'preview' prend toute la largeur (hors `max-w-4xl`), les autres restent dans le conteneur centré.
+- Nouveau composant `PreviewPanel` :
+  - Barre de zoom collée en haut (sticky) : bouton `-`, badge `%` (reset au clic), bouton `+`, slider range (50-200%), bouton reset.
+  - **Zoom par défaut : 100%** via `useState<number>(100)`.
+  - Zone défilante avec fond `bg-muted/40` contenant des "pages A4" visuelles (210×297mm, marges 25mm, fond blanc, ombre).
+  - Page de titre centrée + une page par section rédigée.
+  - Application du zoom via `transform: scale(zoom/100)` avec `transformOrigin: 'top center'`.
+- Nouveau composant `PreviewPage` : wrapper visuel A4 (210mm × 297mm minimum, padding 25mm/30mm) — réutilise le style de l'éditeur.
+- **Aperçu Dialog dans FormatPanel** : ajout d'une mini-barre de zoom dans le header du Dialog (`previewZoom` state, défaut 100%). Reset à 100% à chaque ouverture via `onOpenChange`. Slider couvre 50-200%.
+
+## Tests finaux
+- `npx tsc --noEmit --skipLibCheck` → 0 erreur dans les fichiers modifiés (les erreurs pré-existantes dans workspace.tsx, agents-view.tsx, etc. sont toujours là mais ne sont PAS dues à mes changements — confirmé par le worklog précédent).
+- `curl http://localhost:3000/` → 200 OK, page rendue sans erreur de compilation.
+- Dev log propre : aucun "error"/"fail"/"warn" après mes modifications.
+- Fichiers modifiés : `a4-editor.tsx` (réécrit), `globals.css` (CSS pagination + watermark), `iris-store.ts` (type ViewMode), `sidebar.tsx` (nav + pastille guide), `page.tsx` (rendu GuideView), `workspace.tsx` (suppression GuideUpload), `export-view.tsx` (preview panel + zoom).
+- Nouveau fichier : `guide-view.tsx`.
+
+Stage Summary:
+- L'éditeur A4 passe d'une barre minimaliste (14 boutons, scrollable) à une barre riche 2 lignes (30+ contrôles) avec voyants lumineux, filigrane, police/taille, majuscule/minuscule, alignement, sélection d'objet, indice/exposant, couleur/surlignage.
+- La marge du bas est maintenant visualisée par une bande violette claire + une ligne violette épaisse à 267mm — l'utilisateur voit immédiatement s'il déborde.
+- Le guide méthodologique a sa propre page dédiée accessible depuis la sidebar principale, avec une pastille verte quand il est actif.
+- L'aperçu Export a maintenant un vrai panneau A4 paginé avec contrôle de zoom (défaut 100%, range 50-200%) + zoom aussi dans le dialog d'aperçu de chaque format (reset 100% à chaque ouverture).

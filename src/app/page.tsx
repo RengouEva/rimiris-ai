@@ -14,6 +14,7 @@ import { PlagiarismView } from '@/components/iris/plagiarism-view'
 import { ExportView } from '@/components/iris/export-view'
 import { AgentsView } from '@/components/iris/agents-view'
 import { AuditView } from '@/components/iris/audit-view'
+import { GuideView } from '@/components/iris/guide-view'
 
 export default function Home() {
   const { view, projectInitialized } = useIrisStore()
@@ -34,6 +35,7 @@ export default function Home() {
         <Header />
         <main className="flex-1">
           {view === 'workspace' && <Workspace />}
+          {view === 'guide' && <GuideView />}
           {view === 'audit' && <AuditView />}
           {view === 'coherence' && <CoherenceView />}
           {view === 'soutenance' && <SoutenanceView />}

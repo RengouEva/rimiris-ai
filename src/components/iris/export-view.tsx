@@ -23,6 +23,9 @@ import {
   Palette,
   FileSignature,
   CircleDot,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
 } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -43,12 +46,13 @@ import { cn } from '@/lib/utils'
 // ExportView — page indépendante avec sa propre sidebar
 // Organisation :
 //   - Sidebar gauche : navigation entre les sections d'export
-//     (Aperçu, PDF, Word, HTML, Markdown, Impression, Paramètres)
+//     (Vue d'ensemble, Aperçu, PDF, Word, HTML, Markdown, Impression, Paramètres)
 //   - Zone principale : panneau correspondant à la section sélectionnée
 // ============================================================================
 
 type ExportSection =
   | 'overview'
+  | 'preview'
   | 'pdf'
   | 'word'
   | 'html'
@@ -63,13 +67,14 @@ const SIDEBAR_ITEMS: {
   desc: string
   group: 'formats' | 'tools' | 'config'
 }[] = [
-  { id: 'overview', label: 'Aperçu', icon: Eye, desc: 'Vue d\'ensemble du document', group: 'tools' },
-  { id: 'pdf',      label: 'PDF',     icon: FileType2,      desc: 'Format portable pour impression', group: 'formats' },
-  { id: 'word',     label: 'Word',    icon: FileText,       desc: 'Document Microsoft Word éditable', group: 'formats' },
-  { id: 'html',     label: 'HTML',    icon: FileCode2,      desc: 'Page web autonome', group: 'formats' },
-  { id: 'markdown', label: 'Markdown', icon: Hash,           desc: 'Texte structuré léger', group: 'formats' },
-  { id: 'print',    label: 'Impression', icon: Printer,     desc: 'Imprimer ou sauvegarder en PDF', group: 'tools' },
-  { id: 'settings', label: 'Paramètres', icon: Settings2,   desc: 'Format, marges, police', group: 'config' },
+  { id: 'overview', label: 'Vue d\'ensemble', icon: Layers,     desc: 'Stats et contenu du mémoire', group: 'tools' },
+  { id: 'preview',  label: 'Aperçu',         icon: Eye,         desc: 'Aperçu A4 paginé avec zoom', group: 'tools' },
+  { id: 'pdf',      label: 'PDF',            icon: FileType2,   desc: 'Format portable pour impression', group: 'formats' },
+  { id: 'word',     label: 'Word',           icon: FileText,    desc: 'Document Microsoft Word éditable', group: 'formats' },
+  { id: 'html',     label: 'HTML',           icon: FileCode2,   desc: 'Page web autonome', group: 'formats' },
+  { id: 'markdown', label: 'Markdown',       icon: Hash,        desc: 'Texte structuré léger', group: 'formats' },
+  { id: 'print',    label: 'Impression',     icon: Printer,     desc: 'Imprimer ou sauvegarder en PDF', group: 'tools' },
+  { id: 'settings', label: 'Paramètres',     icon: Settings2,   desc: 'Format, marges, police', group: 'config' },
 ]
 
 export function ExportView() {
@@ -155,51 +160,59 @@ export function ExportView() {
 
       {/* ====== Zone principale ====== */}
       <main className="flex-1 overflow-y-auto bg-background">
-        <div className="max-w-4xl mx-auto px-6 py-8">
-          {activeSection === 'overview' && (
-            <OverviewPanel
-              project={project}
-              sections={sections}
-              totalWords={totalWords}
-              draftedCount={draftedCount}
-              onSelectSection={setActiveSection}
-            />
-          )}
-          {activeSection === 'pdf' && (
-            <FormatPanel
-              format="pdf"
-              project={project}
-              sections={sections}
-              draftedCount={draftedCount}
-            />
-          )}
-          {activeSection === 'word' && (
-            <FormatPanel
-              format="word"
-              project={project}
-              sections={sections}
-              draftedCount={draftedCount}
-            />
-          )}
-          {activeSection === 'html' && (
-            <FormatPanel
-              format="html"
-              project={project}
-              sections={sections}
-              draftedCount={draftedCount}
-            />
-          )}
-          {activeSection === 'markdown' && (
-            <FormatPanel
-              format="markdown"
-              project={project}
-              sections={sections}
-              draftedCount={draftedCount}
-            />
-          )}
-          {activeSection === 'print' && <PrintPanel project={project} sections={sections} />}
-          {activeSection === 'settings' && <SettingsPanel project={project} />}
-        </div>
+        {/* Aperçu plein écran — pagination A4 avec zoom */}
+        {activeSection === 'preview' && (
+          <PreviewPanel project={project} sections={sections} />
+        )}
+
+        {/* Les autres panneaux dans un conteneur centré max-w-4xl */}
+        {activeSection !== 'preview' && (
+          <div className="max-w-4xl mx-auto px-6 py-8">
+            {activeSection === 'overview' && (
+              <OverviewPanel
+                project={project}
+                sections={sections}
+                totalWords={totalWords}
+                draftedCount={draftedCount}
+                onSelectSection={setActiveSection}
+              />
+            )}
+            {activeSection === 'pdf' && (
+              <FormatPanel
+                format="pdf"
+                project={project}
+                sections={sections}
+                draftedCount={draftedCount}
+              />
+            )}
+            {activeSection === 'word' && (
+              <FormatPanel
+                format="word"
+                project={project}
+                sections={sections}
+                draftedCount={draftedCount}
+              />
+            )}
+            {activeSection === 'html' && (
+              <FormatPanel
+                format="html"
+                project={project}
+                sections={sections}
+                draftedCount={draftedCount}
+              />
+            )}
+            {activeSection === 'markdown' && (
+              <FormatPanel
+                format="markdown"
+                project={project}
+                sections={sections}
+                draftedCount={draftedCount}
+              />
+            )}
+            {activeSection === 'print' && <PrintPanel project={project} sections={sections} />}
+            {activeSection === 'settings' && <SettingsPanel project={project} />}
+          </div>
+        )}
 
         {/* ====== Rendu imprimable masqué ======
             Ce bloc est invisible à l'écran mais devient la seule chose visible
@@ -242,6 +255,178 @@ function PrintableMemoire({ project, sections }: { project: any; sections: any[]
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ============================================================================
+// PreviewPanel — Aperçu A4 paginé avec contrôle de zoom (défaut 100%)
+// Affiche le mémoire tel qu'il sera exporté : page de titre + sections
+// dans des "pages A4" visuelles, avec barre de zoom collée en haut.
+// ============================================================================
+
+function PreviewPanel({ project, sections }: { project: any; sections: any[] }) {
+  // Zoom par défaut : 100%. L'utilisateur peut ajuster entre 50% et 200%.
+  const [zoom, setZoom] = React.useState<number>(100)
+  const drafted = sections.filter((s) => s.content && s.content.trim())
+
+  function changeZoom(delta: number) {
+    setZoom((z) => Math.min(200, Math.max(50, z + delta)))
+  }
+
+  function resetZoom() {
+    setZoom(100)
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Barre de zoom — collée en haut, ne défile pas */}
+      <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm px-4 py-2 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <Eye className="h-4 w-4 text-primary flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold leading-none truncate">
+              Aperçu — {project.title || 'Mémoire sans titre'}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5 leading-none">
+              {drafted.length} section{drafted.length > 1 ? 's' : ''} · {sections.reduce((sum, s) => sum + s.wordCount, 0)} mots
+            </p>
+          </div>
+        </div>
+
+        {/* Contrôles de zoom */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => changeZoom(-10)}
+            disabled={zoom <= 50}
+            className="h-8 w-8 p-0"
+            title="Dézoomer"
+          >
+            <ZoomOut className="h-3.5 w-3.5" />
+          </Button>
+          <button
+            onClick={resetZoom}
+            className="h-8 min-w-[60px] px-2 rounded-md border border-border bg-background text-xs font-medium tabular-nums hover:bg-muted transition-colors"
+            title="Réinitialiser le zoom à 100%"
+          >
+            {zoom}%
+          </button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => changeZoom(10)}
+            disabled={zoom >= 200}
+            className="h-8 w-8 p-0"
+            title="Zoomer"
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+          </Button>
+          {/* Slider de zoom */}
+          <input
+            type="range"
+            min={50}
+            max={200}
+            step={10}
+            value={zoom}
+            onChange={(e) => setZoom(parseInt(e.target.value))}
+            className="w-24 accent-primary hidden sm:block"
+            title={`Zoom : ${zoom}%`}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setZoom(100)}
+            className="h-8 px-2 hidden sm:flex"
+            title="Réinitialiser"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Zone défilante contenant les pages A4 */}
+      <div className="flex-1 overflow-y-auto bg-muted/40 p-4 sm:p-8">
+        {drafted.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center max-w-md mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-3">
+              <Eye className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <p className="font-semibold text-base mb-1">Rien à afficher</p>
+            <p className="text-sm text-muted-foreground">
+              Aucune section n'a encore été rédigée. Retournez au mémoire pour
+              commencer l'écriture, puis revenez ici pour voir l'aperçu.
+            </p>
+          </div>
+        ) : (
+          <div
+            className="flex flex-col items-center gap-6 mx-auto"
+            style={{
+              transform: `scale(${zoom / 100})`,
+              transformOrigin: 'top center',
+              transition: 'transform 0.2s ease',
+            }}
+          >
+            {/* Page de titre */}
+            <PreviewPage>
+              <div className="flex flex-col items-center justify-center text-center py-16">
+                <h1 className="font-bold text-3xl mb-6" style={{ fontFamily: 'Inter, sans-serif' }}>
+                  {project.title || 'Mémoire sans titre'}
+                </h1>
+                <p className="text-lg text-muted-foreground mb-1">
+                  {project.university || ''}
+                </p>
+                <p className="text-base text-muted-foreground mb-1">
+                  {project.faculty || ''}
+                </p>
+                <p className="text-base text-muted-foreground mb-6">
+                  {project.level || ''}
+                  {project.filiere ? ` · ${project.filiere}` : ''}
+                </p>
+                <p className="text-sm text-muted-foreground italic">
+                  Norme : {project.norme || 'APA'}
+                </p>
+              </div>
+            </PreviewPage>
+
+            {/* Pages de contenu */}
+            {drafted.map((s, idx) => (
+              <PreviewPage key={s.id}>
+                <h2
+                  className="font-bold text-xl mb-3"
+                  style={{ fontFamily: 'Inter, sans-serif' }}
+                >
+                  {idx + 1}. {s.title}
+                </h2>
+                <div
+                  className="prose-iris text-sm leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: s.content }}
+                />
+              </PreviewPage>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Une "page A4" visuelle pour l'aperçu — 210×297mm, marges 25mm, fond blanc.
+function PreviewPage({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="bg-white text-black shadow-xl flex-shrink-0"
+      style={{
+        width: '210mm',
+        minHeight: '297mm',
+        padding: '25mm 25mm 30mm 25mm',
+        fontFamily: "'Times New Roman', Georgia, serif",
+        fontSize: '12pt',
+        lineHeight: 1.6,
+      }}
+    >
+      {children}
     </div>
   )
 }
@@ -448,6 +633,8 @@ function FormatPanel({
 }) {
   const [exporting, setExporting] = React.useState(false)
   const [previewOpen, setPreviewOpen] = React.useState(false)
+  // Zoom par défaut du dialog d'aperçu = 100%.
+  const [previewZoom, setPreviewZoom] = React.useState<number>(100)
   const [options, setOptions] = React.useState({
     includeTitlePage: true,
     includeTableOfContents: false,
@@ -658,22 +845,68 @@ function FormatPanel({
           )}
         </Button>
 
-        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <Dialog
+          open={previewOpen}
+          onOpenChange={(open) => {
+            setPreviewOpen(open)
+            if (open) setPreviewZoom(100) // réinitialise le zoom à 100% à chaque ouverture
+          }}
+        >
           <DialogTrigger asChild>
             <Button variant="outline" size="lg" className="rounded-full">
               <Eye className="h-4 w-4 mr-2" />
               Aperçu
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+          <DialogContent className="max-w-5xl max-h-[90vh] p-0">
             <DialogHeader className="px-6 pt-6 pb-3 border-b">
-              <DialogTitle className="flex items-center gap-2">
-                <Icon className="h-4 w-4" />
-                Aperçu — {project.title || 'Mémoire sans titre'}
+              <DialogTitle className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <Icon className="h-4 w-4" />
+                  Aperçu — {project.title || 'Mémoire sans titre'}
+                </span>
+                {/* Mini-barre de zoom dans le dialog — défaut 100% */}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPreviewZoom((z) => Math.max(50, z - 10))}
+                    disabled={previewZoom <= 50}
+                    className="h-7 w-7 p-0"
+                    title="Dézoomer"
+                  >
+                    <ZoomOut className="h-3 w-3" />
+                  </Button>
+                  <button
+                    onClick={() => setPreviewZoom(100)}
+                    className="h-7 min-w-[52px] px-2 rounded-md border border-border bg-background text-[11px] font-medium tabular-nums hover:bg-muted"
+                    title="Réinitialiser le zoom à 100%"
+                  >
+                    {previewZoom}%
+                  </button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPreviewZoom((z) => Math.min(200, z + 10))}
+                    disabled={previewZoom >= 200}
+                    className="h-7 w-7 p-0"
+                    title="Zoomer"
+                  >
+                    <ZoomIn className="h-3 w-3" />
+                  </Button>
+                </div>
               </DialogTitle>
             </DialogHeader>
             <ScrollArea className="h-[75vh] px-6 py-4">
-              <PreviewContent project={project} sections={sections} />
+              <div
+                style={{
+                  transform: `scale(${previewZoom / 100})`,
+                  transformOrigin: 'top center',
+                  transition: 'transform 0.15s ease',
+                }}
+              >
+                <PreviewContent project={project} sections={sections} />
+              </div>
             </ScrollArea>
           </DialogContent>
         </Dialog>

@@ -38,7 +38,6 @@ import { AGENTS } from '@/lib/iris/agents'
 import { A4Editor, type A4EditorHandle } from '@/components/iris/a4-editor'
 import { SectionWorkflowPanel } from '@/components/iris/section-workflow-panel'
 import { DraftAllButton } from '@/components/iris/draft-all-button'
-import { GuideUpload } from '@/components/iris/guide-upload'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -183,7 +182,6 @@ export function Workspace() {
         {/* Bottom actions */}
         <div className="p-2 border-t border-border space-y-1.5">
           <DraftAllButton compact />
-          <GuideUpload variant="compact" />
           <Button
             onClick={() => addSection()}
             variant="outline"

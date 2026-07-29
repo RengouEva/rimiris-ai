@@ -115,6 +115,7 @@ export type ViewMode =
   | 'welcome'
   | 'onboarding'
   | 'plan_review'
+  | 'guide'
   | 'workspace'
   | 'audit'
   | 'coherence'
