@@ -24,6 +24,7 @@ import { buildDocumentTypeContext } from '../document-types'
 import type { DocumentTypeSkill } from './types'
 
 import { dissertationPhilosophiqueSkill } from './dissertation-philosophique'
+import { dissertationLitteraireSkill } from './dissertation-litteraire'
 import { memoireLicenceSkill } from './memoire-licence'
 import { memoireMasterSkill } from './memoire-master'
 import { theseDoctoratSkill } from './these-doctorat'
@@ -39,6 +40,7 @@ export const ALL_SKILLS: DocumentTypeSkill[] = [
   theseDoctoratSkill,
   monographieSkill,
   dissertationPhilosophiqueSkill,
+  dissertationLitteraireSkill,
   // (autres skills à ajouter : article-scientifique, rapport-stage,
   //  projet-fin-etudes, essai-court, rapport-recherche — non disponibles)
 ]
@@ -193,6 +195,7 @@ ${skill.extraPromptContext({
 
 export {
   dissertationPhilosophiqueSkill,
+  dissertationLitteraireSkill,
   memoireLicenceSkill,
   memoireMasterSkill,
   theseDoctoratSkill,

@@ -535,3 +535,39 @@ Stage Summary:
 - **Le texte ne déborde plus jamais dans la marge inférieure** : un moteur de pagination JS insère automatiquement des "pousseurs" (`<div class="iris-page-break-auto">`) qui décalent chaque bloc au début de la page suivante si son bas dépasserait la limite de zone de texte (267mm). Les pousseurs sont visuels dans l'éditeur (hachures violettes + label "Page suivante") et deviennent de vrais sauts de page à l'impression.
 - La pagination est réactive (250ms de debounce pendant la frappe, immédiate pour paste/insert AI/replace AI) et persistée (le HTML avec pousseurs est sauvé dans le store, donc rechargé correctement).
 - Limite connue : un bloc indivisible plus grand que 242mm (toute la zone de texte) ne peut pas être paginé proprement — il est laissé où il est. L'utilisateur doit le scinder manuellement avec Entrée.
+
+---
+Task ID: dissertation-litteraire-skill
+Agent: main (Super Z)
+Task: Lire la page Major-Prépa (https://major-prepa.com/lettres/methode-dissertation-litteraire-a-l/) et implémenter le skill + type de document "Dissertation littéraire" dans IRIS.
+
+Work Log:
+- Invoqué la skill web-reader puis appelé `z-ai function -n page_reader -a '{"url":"https://major-prepa.com/lettres/methode-dissertation-litteraire-a-l/"}'` → /home/z/my-project/dissertation_litteraire.json
+- Extrait le texte HTML nettoyé : méthode complète de la dissertation littéraire en prépa A/L (Ariane Thévenet, Major-Prépa, 11 juin 2026) — couvre format (5h BCE / 6h ENS, coeff 2 BEL), travail au brouillon, structure (intro 1-2 pages, 3 parties égales, conclusion ~1 page), règle 70/30 corpus/lectures annexes, transitions obligatoires, 4 erreurs les plus sanctionnées.
+- Lu les fichiers existants pour suivre le pattern : skills/types.ts, skills/index.ts, skills/dissertation-philosophique.ts, document-types.ts.
+- Ajouté 'dissertation_litteraire' à l'union DocumentTypeId dans document-types.ts (ligne 27).
+- Créé /home/z/my-project/src/lib/iris/skills/dissertation-litteraire.ts (572 lignes) implémentant DocumentTypeSkill :
+  * id: 'dissertation_litteraire', label: 'Dissertation littéraire', shortLabel: 'Dissertation litt.', icon: 'BookOpen'
+  * pageRange: [7, 12] (prépa A/L)
+  * expectedStructure: 5 sections (Introduction 500 mots, Partie I Thèse 900, Partie II Antithèse 900, Partie III Dépassement 900, Conclusion 350)
+  * specificRules: 22 règles couvrant structure, argumentation/citations, transitions, brouillon, présentation
+  * methodologicalGuidance: synthèse de la méthode Major-Prépa
+  * defaultLayout: Times New Roman 12pt, marges 25/25/30/25 mm, interligne 1.5, justifié
+  * appliesUQAC: false (la dissertation littéraire n'est PAS un type UQAC)
+  * writingStyle: registre académique littéraire, vocabulaire critique précis
+  * citationStyle: citations « », attribution explicite, auteurs du corpus + critiques
+  * extraPromptContext: détection automatique prépa A/L, université, Terminale L, contexte africain francophone, sujet-citation
+  * planTypes: 3 plans (dialectique canonique, thématique, analytique)
+  * notionBank: ~40 notions (esthétique, genres, procédés, littérature/monde, auteur/lecteur, langage/forme)
+  * authorBank: ~70 auteurs (Moyen Âge → XXIe siècle + francophones + critiques littéraires)
+  * subjectBank: ~40 sujets types (roman, poésie, théâtre, littérature et société, forme/fond, auteur/lecteur, vérité, mémoire, réécriture)
+  * commonPitfalls: 15 pièges dont les 4 sanctionnés par Major-Prépa (citation-prétexte, déséquilibre des 3 parties, transitions négligées, oubli règle 70/30)
+- Enregistré le skill dans skills/index.ts : import, ajout à ALL_SKILLS, ajout au réexport.
+- Vérifié la compilation TypeScript : aucune erreur liée aux nouveaux fichiers (1 apostrophe non échappée corrigée dans notionBank → passé en double quotes).
+- Les 14 erreurs TS restantes sont toutes pré-existantes dans d'autres fichiers (skills/image-edit, skills/stock-analysis-skill, src/app/api/ai/audit, src/app/api/ai/coherence, src/components/iris/onboarding-interview, src/components/iris/plan-review, src/components/iris/quick-start, src/components/iris/workspace) — non liées à ce travail.
+
+Stage Summary:
+- Nouveau skill "Dissertation littéraire" pleinement opérationnel et conforme à la méthode Major-Prépa.
+- 6 skills désormais disponibles dans IRIS : Mémoire Licence, Mémoire Master, Thèse Doctorat, Monographie, Dissertation Philosophique, Dissertation Littéraire.
+- Le skill est immédiatement utilisable par l'API AI (buildSkillContext le détectera automatiquement via project.documentType === 'dissertation_litteraire').
+- Aucune régression TypeScript.

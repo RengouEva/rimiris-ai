@@ -23,7 +23,8 @@ export type DocumentTypeId =
   | 'projet_fin_etudes'
   | 'essai_court'
   | 'rapport_recherche'
-  | 'dissertation_philosophique' // ← NOUVEAU : dissertation philosophique
+  | 'dissertation_philosophique' // dissertation philosophique
+  | 'dissertation_litteraire' // ← NOUVEAU : dissertation littéraire (prépa A/L, BEL, ENS)
 
 export type SectionNature = 'front_matter' | 'main' | 'back_matter'
 
