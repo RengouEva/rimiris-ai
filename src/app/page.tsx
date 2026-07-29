@@ -17,7 +17,6 @@ import { AuditView } from '@/components/iris/audit-view'
 import { GuideView } from '@/components/iris/guide-view'
 import { AdminPortal } from '@/components/admin/admin-portal'
 import { PricingView } from '@/components/monetization/pricing-view'
-import { AuthGate } from '@/components/auth/auth-gate'
 
 // Valid view IDs that can be passed via ?view= for PWA shortcuts.
 const VALID_VIEWS: ViewMode[] = [
@@ -35,7 +34,7 @@ const VALID_VIEWS: ViewMode[] = [
 ]
 
 export default function Home() {
-  const { projectInitialized, setView } = useIrisStore()
+  const { view, projectInitialized, setView } = useIrisStore()
 
   // Honor ?view=... from PWA shortcuts (only if the project is initialized).
   React.useEffect(() => {
@@ -51,17 +50,6 @@ export default function Home() {
       window.history.replaceState({}, '', url.toString())
     }
   }, [projectInitialized, setView])
-
-  // AuthGate wraps everything — LoginScreen is shown when no session.
-  return (
-    <AuthGate>
-      <AppShell />
-    </AuthGate>
-  )
-}
-
-function AppShell() {
-  const { view, projectInitialized, setView } = useIrisStore()
 
   // Full-screen views (no app shell)
   if (view === 'welcome' || (!projectInitialized && view !== 'onboarding')) {

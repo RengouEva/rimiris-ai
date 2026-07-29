@@ -25,6 +25,7 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 import { TIER_LIST, getTier } from '@/lib/iris/tiers'
 import { RimirisLogo } from '@/components/iris/rimiris-logo'
+import { LoginScreen } from '@/components/auth/login-screen'
 
 // ============================================================================
 // Stat card
@@ -231,11 +232,13 @@ export function AdminPortal() {
 
   function handleLogout() {
     signOut()
-    // The AuthGate will catch the missing session and show the login screen.
+    // The login screen will re-render automatically via the useAuth subscriber.
   }
 
   // Access control — only super_admin can pass.
-  if (!session) return null
+  // If not logged in, show the login screen so the user can authenticate.
+  // Once logged in but not super_admin, show access denied.
+  if (!session) return <LoginScreen />
   if (!isSuperAdmin(session)) return <AccessDenied session={session} />
   if (!stats) return <div className="p-8">Chargement…</div>
 

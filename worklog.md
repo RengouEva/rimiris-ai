@@ -684,3 +684,28 @@ Stage Summary:
 - 0 nouvelle dépendance npm (sharp déjà présent).
 - Fichiers créés : scripts/generate-pwa-icons.js, public/manifest.json, public/sw.js, public/offline.html, public/icons/{icon-192,icon-512,maskable-192,maskable-512,apple-touch-icon}.png, public/{favicon,favicon-16}.png, public/icon.svg, src/components/pwa/{register-sw,install-prompt,use-pwa}.tsx.
 - Fichiers modifiés : src/app/page.tsx, src/app/layout.tsx, src/app/globals.css, src/components/iris/{workspace,a4-editor,section-workflow-panel,export-view,coherence-view,onboarding-interview,guide-view}.tsx.
+
+---
+Task ID: restore-landing-no-auth-gate
+Agent: main (Super Z)
+Task: L'utilisateur a signalé que le site s'ouvrait sur Login au lieu de la landing page, et que des modifications visuelles (header, sidebar, welcome) avaient été apportées sans son accord. Restauration de la landing comme point d'entrée + annulation des modifs visuelles, SANS supprimer le système d'auth.
+
+Work Log:
+- Diagnostic : le commit c9e71d0 avait wrappé toute l'app dans <AuthGate> dans src/app/page.tsx → LoginScreen affiché en premier quand pas de session. Le même commit avait aussi modifié visuellement welcome-screen.tsx (boutons LogOut/Settings + nom utilisateur), header.tsx (bouton Admin + bouton Déconnexion), et sidebar.tsx (badge Admin, bloc session, bouton Déconnexion, gating admin-only sur le lien Portail Admin).
+- src/app/page.tsx : restauration byte-pour-byte à l'état pré-auth (suppression du wrapper <AuthGate>, suppression de la fonction AppShell séparée). La landing page (WelcomeScreen) redevient l'entrée quand view==='welcome' ou pas de projet.
+- src/components/iris/welcome-screen.tsx : restauration via `git show c9e71d0~1:... > ...`. Plus de boutons LogOut/Settings dans le header. Header identique à l'original (juste ThemeToggle + bouton Reprendre si projet initialisé).
+- src/components/iris/header.tsx : restauration via `git show c9e71d0~1:... > ...`. Plus de bouton Admin, plus de bouton Déconnexion, plus de isAdmin dans MobileNav.
+- src/components/iris/sidebar.tsx : restauration via `git show c9e71d0~1:... > ...`. Le lien "Portail Admin" redevient toujours visible (pas de gating admin-only). Plus de badge Admin, plus de bloc session email, plus de bouton Déconnexion.
+- src/components/admin/admin-portal.tsx : conservé dans sa version auth-based (listAccounts, isSuperAdmin, AccessDenied). Modification unique : remplacé `if (!session) return null` par `if (!session) return <LoginScreen />` pour qu'un clic sur "Portail Admin" sans session affiche l'écran de connexion au lieu d'une page blanche. Commentaire mis à jour pour refléter que la re-render se fait via le subscriber useAuth (plus de AuthGate global).
+- Infra conservée intacte : src/lib/iris/auth.ts (signUp, signIn, signOut, applySuperAdminRule, ADMIN_EMAIL='admin@rimiris.com'), src/hooks/use-auth.ts, src/components/auth/login-screen.tsx, src/components/auth/auth-gate.tsx (utilisateurs futurs).
+- Vérifications :
+  * `git diff c9e71d0~1 -- src/app/page.tsx src/components/iris/welcome-screen.tsx src/components/iris/header.tsx src/components/iris/sidebar.tsx` → 0 ligne de diff pour chacun des 4 fichiers.
+  * `npx tsc --noEmit --skipLibCheck` → 0 erreur nouvelle liée à l'auth/landing (les 12 erreurs restantes sont préexistantes dans agents-view, workspace, onboarding-interview, plan-review, quick-start, examples/websocket, skills/* — aucune touchée par cette intervention).
+  * `curl http://localhost:3000/` → 200 OK, le HTML renvoyé contient "Rimiris vous pose les bonnes questions" (titre H1 de la WelcomeScreen) — la landing est bien l'entrée, PAS la LoginScreen.
+
+Stage Summary:
+- La landing page (WelcomeScreen) est de nouveau l'entrée de l'app, sans auth requise.
+- Aucune modification visuelle vs l'état pré-auth : header, sidebar, welcome-screen byte-pour-byte identiques.
+- Le système d'auth (admin@rimiris.com = super_admin auto-premium) reste opérationnel via src/lib/iris/auth.ts + useAuth + LoginScreen.
+- Le Portail Admin garde son gating auth (LoginScreen si pas de session, AccessDenied si non-super_admin), mais le lien sidebar pour y accéder est redevenu visible pour tous — l'utilisateur peut cliquer dessus, il sera alors invité à se connecter.
+- Aucune donnée utilisateur perdue (localStorage keys rimiris.auth.accounts et rimiris.auth.session inchangées).
