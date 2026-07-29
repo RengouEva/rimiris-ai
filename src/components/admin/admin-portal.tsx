@@ -7,6 +7,7 @@ import {
   Search, ArrowUpRight, ArrowDownRight, Crown, Sparkles,
   Download, FileText, Brain, Eye, ChevronRight, ShieldAlert,
   Image as ImageIcon, Upload, CheckCircle2, AlertTriangle,
+  CreditCard, Zap, Trash2, Rocket, History,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -211,7 +212,7 @@ export function AdminPortal() {
   const [stats, setStats] = React.useState<GlobalStats | null>(null)
   const [rows, setRows] = React.useState<AdminUserRow[]>([])
   const [search, setSearch] = React.useState('')
-  const [tab, setTab] = React.useState<'overview' | 'users' | 'revenue' | 'tiers' | 'llm' | 'branding'>('overview')
+  const [tab, setTab] = React.useState<'overview' | 'users' | 'revenue' | 'tiers' | 'llm' | 'payments' | 'branding'>('overview')
 
   // Load real data (no demo seeding).
   React.useEffect(() => {
@@ -293,6 +294,7 @@ export function AdminPortal() {
             ['revenue', 'Revenus'],
             ['tiers', 'Plans & Tiers'],
             ['llm', 'Configuration IA'],
+            ['payments', 'Paiements'],
             ['branding', 'Apparence'],
           ] as const).map(([id, label]) => (
             <button
@@ -630,6 +632,10 @@ export function AdminPortal() {
 
             {tab === 'llm' && (
               <LLMConfigPanel />
+            )}
+
+            {tab === 'payments' && (
+              <PaymentProvidersPanel sessionEmail={session.email} />
             )}
 
             {tab === 'branding' && (
@@ -1226,6 +1232,520 @@ function BrandingPanel() {
         logo en PNG avec fond transparent. Évitez JPG (pas de transparence) et les PNG déjà aplatis
         sur fond blanc.
       </p>
+    </motion.div>
+  )
+}
+
+// ============================================================================
+// Payment Providers Panel — lets the admin securely configure Stripe,
+// Campay, FedaPay, Flutterwave, Paystack, NotchPay, CinetPay and push
+// the config to disk (immediate effect, no restart needed).
+// ============================================================================
+interface ProviderDescriptorUI {
+  id: string
+  name: string
+  tagline: string
+  description: string
+  region: string
+  supportsXAF: boolean
+  supportsMobileMoneyPush: boolean
+  docsUrl: string
+  fields: Array<{
+    key: string
+    label: string
+    placeholder: string
+    required: boolean
+    secret: boolean
+    help?: string
+  }>
+}
+
+interface MaskedConfig {
+  activeProvider: string
+  providers: Record<string, Record<string, { value: string; masked: string; hasValue: boolean }>>
+  updatedAt?: string
+  updatedBy?: string
+}
+
+interface AuditEntry {
+  ts: string
+  admin: string
+  action: 'activate' | 'update' | 'remove'
+  provider: string
+  mode: string
+  fields: string[]
+}
+
+function PaymentProvidersPanel({ sessionEmail }: { sessionEmail: string }) {
+  const [loading, setLoading] = React.useState(true)
+  const [saving, setSaving] = React.useState(false)
+  const [testing, setTesting] = React.useState<string | null>(null)
+  const [providers, setProviders] = React.useState<ProviderDescriptorUI[]>([])
+  const [masked, setMasked] = React.useState<MaskedConfig | null>(null)
+  const [audit, setAudit] = React.useState<AuditEntry[]>([])
+  // Selected provider for editing
+  const [selected, setSelected] = React.useState<string>('stripe')
+  // Form state — field values for the currently-selected provider
+  const [form, setForm] = React.useState<Record<string, string>>({})
+  const [mode, setMode] = React.useState<'test' | 'live'>('test')
+  const [setActive, setSetActive] = React.useState(true)
+  const [testResult, setTestResult] = React.useState<{ ok: boolean; detail: string; diagnostic?: string } | null>(null)
+  const [toast, setToast] = React.useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+
+  // Load config + provider registry on mount
+  React.useEffect(() => {
+    fetch('/api/admin/payment-providers', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => {
+        setProviders(data.providers || [])
+        setMasked(data.config || null)
+        setAudit(data.audit || [])
+        if (data.config?.activeProvider) {
+          setSelected(data.config.activeProvider)
+        }
+        setLoading(false)
+      })
+      .catch(() => {
+        setLoading(false)
+        flash('error', 'Impossible de charger la configuration des paiements.')
+      })
+  }, [])
+
+  // When the selected provider changes, reset the form (the fields will
+  // show masked values from the loaded config).
+  React.useEffect(() => {
+    if (!masked || !selected) return
+    const providerFields = masked.providers[selected] || {}
+    const initialForm: Record<string, string> = {}
+    for (const [key, info] of Object.entries(providerFields)) {
+      // Secret fields start empty (admin must re-enter to replace; leave empty = keep)
+      // Non-secret fields show the current value
+      const isSecret = providers
+        .find((p) => p.id === selected)
+        ?.fields.find((f) => f.key === key)?.secret
+      if (isSecret) {
+        initialForm[key] = ''
+      } else {
+        initialForm[key] = info.value || ''
+      }
+    }
+    setForm(initialForm)
+    setMode((providerFields.mode?.value as 'test' | 'live') || 'test')
+    setTestResult(null)
+  }, [selected, masked, providers])
+
+  function flash(type: 'success' | 'error', msg: string) {
+    setToast({ type, msg })
+    setTimeout(() => setToast(null), 4500)
+  }
+
+  async function refresh() {
+    const res = await fetch('/api/admin/payment-providers', { cache: 'no-store' })
+    const data = await res.json()
+    setMasked(data.config || null)
+    setAudit(data.audit || [])
+  }
+
+  async function push(opts: { test?: boolean } = {}) {
+    if (!selected) return
+    setSaving(true)
+    setTestResult(null)
+    if (opts.test) setTesting(selected)
+    try {
+      const res = await fetch('/api/admin/payment-providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'push',
+          provider: selected,
+          mode,
+          fields: form,
+          setActive,
+          test: opts.test,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Échec du push.')
+
+      // Reset secret form fields after successful push
+      const providerFields = providers.find((p) => p.id === selected)?.fields || []
+      setForm((f) => {
+        const next = { ...f }
+        for (const field of providerFields) {
+          if (field.secret) next[field.key] = ''
+        }
+        return next
+      })
+
+      if (data.test) setTestResult(data.test)
+      await refresh()
+      flash(
+        'success',
+        opts.test
+          ? 'Configuration poussée et testée avec succès.'
+          : `Configuration poussée — active immédiatement (${data.activeProvider}).`,
+      )
+    } catch (e: any) {
+      flash('error', e?.message || 'Échec du push.')
+    } finally {
+      setSaving(false)
+      setTesting(null)
+    }
+  }
+
+  async function testOnly() {
+    if (!selected) return
+    setTesting(selected)
+    setTestResult(null)
+    try {
+      const res = await fetch('/api/admin/payment-providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'test', provider: selected }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Échec du test.')
+      setTestResult(data.test)
+      if (data.test?.ok) flash('success', 'Test réussi — les credentials actuels sont valides.')
+      else flash('error', data.test?.detail || 'Test échoué.')
+    } catch (e: any) {
+      flash('error', e?.message || 'Échec du test.')
+    } finally {
+      setTesting(null)
+    }
+  }
+
+  async function remove() {
+    if (!selected) return
+    if (!confirm(`Supprimer le prestataire "${selected}" de la configuration ?`)) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/admin/payment-providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove', provider: selected }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Échec de la suppression.')
+      // Switch to the new active provider
+      if (data.activeProvider) setSelected(data.activeProvider)
+      await refresh()
+      flash('success', `Prestataire ${selected} supprimé.`)
+    } catch (e: any) {
+      flash('error', e?.message || 'Échec de la suppression.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <div className="p-8 text-muted-foreground">Chargement…</div>
+
+  const selectedProvider = providers.find((p) => p.id === selected)
+  const selectedMasked = masked?.providers[selected] || {}
+  const isActive = masked?.activeProvider === selected
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-4">
+      {toast && (
+        <div className={`p-3 rounded-lg text-sm ${
+          toast.type === 'success'
+            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          {toast.msg}
+        </div>
+      )}
+
+      {/* Security overview banner */}
+      <Card className="p-4 border-primary/30 bg-primary/5">
+        <div className="flex items-start gap-3">
+          <Lock className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+          <div className="text-sm space-y-1">
+            <p className="font-medium text-primary">Configuration sécurisée des paiements</p>
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              Les clés secrètes sont chiffrées au repos (AES-256-GCM) et ne sont jamais renvoyées
+              en clair par l'API. Chaque push est journalisé avec horodatage et email administrateur.
+              L'authentification repose sur le cookie HMAC signé + rôle super_admin.
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Provider picker */}
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <CreditCard className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold">Prestataire de paiement</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-5">
+          Choisissez le prestataire qui traitera les paiements Pro (7 000 XAF / projet) et les
+          dissertations/exposés (2 000 XAF). Le changement est effectif immédiatement après le push —
+          aucun redémarrage nécessaire.
+        </p>
+
+        <div className="grid sm:grid-cols-2 gap-3">
+          {providers.map((p) => {
+            const isSel = selected === p.id
+            const isActiveProvider = masked?.activeProvider === p.id
+            const isConfigured = !!masked?.providers[p.id]?.mode?.hasValue
+            return (
+              <button
+                key={p.id}
+                onClick={() => setSelected(p.id)}
+                className={`text-left p-4 rounded-lg border transition-colors relative ${
+                  isSel ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${
+                    isSel ? 'border-primary bg-primary' : 'border-muted-foreground/30'
+                  }`} />
+                  <span className="font-semibold text-sm">{p.name}</span>
+                  {isActiveProvider && (
+                    <Badge className="ml-auto bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] py-0">
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Actif
+                    </Badge>
+                  )}
+                  {isConfigured && !isActiveProvider && (
+                    <Badge variant="secondary" className="ml-auto text-[10px] py-0">Configuré</Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mb-2">{p.tagline}</p>
+                <div className="flex flex-wrap gap-1">
+                  {p.supportsXAF && (
+                    <Badge variant="outline" className="text-[10px] py-0">XAF</Badge>
+                  )}
+                  {p.supportsMobileMoneyPush && (
+                    <Badge variant="outline" className="text-[10px] py-0">
+                      <Zap className="h-2.5 w-2.5 mr-0.5" />
+                      Mobile Money
+                    </Badge>
+                  )}
+                  <Badge variant="outline" className="text-[10px] py-0">{p.region}</Badge>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </Card>
+
+      {/* Selected provider config form */}
+      {selectedProvider && (
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold">{selectedProvider.name}</h3>
+              {isActive && (
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Prestataire actif
+                </Badge>
+              )}
+            </div>
+            <a
+              href={selectedProvider.docsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-primary underline hover:no-underline"
+            >
+              Obtenir mes clés ↗
+            </a>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">{selectedProvider.description}</p>
+
+          {/* Mode toggle (test/live) */}
+          <div className="mb-5">
+            <label className="text-sm font-medium mb-1.5 block">Mode</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMode('test')}
+                className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  mode === 'test' ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-border hover:border-amber-300'
+                }`}
+              >
+                <AlertTriangle className="h-3.5 w-3.5 inline mr-1" />
+                Test (sandbox)
+              </button>
+              <button
+                onClick={() => setMode('live')}
+                className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  mode === 'live' ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-border hover:border-emerald-300'
+                }`}
+              >
+                <Rocket className="h-3.5 w-3.5 inline mr-1" />
+                Live (production)
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {mode === 'test'
+                ? "Mode sandbox — aucun paiement réel ne sera prélevé. Idéal pour valider l'intégration."
+                : '⚠️ Mode production — les paiements seront réellement prélevés sur les cartes/Mobile Money des étudiants.'}
+            </p>
+          </div>
+
+          {/* Credential fields */}
+          <div className="space-y-4">
+            {selectedProvider.fields.map((field) => {
+              const maskedInfo = selectedMasked[field.key]
+              return (
+                <div key={field.key}>
+                  <label className="text-sm font-medium mb-1.5 block">
+                    {field.label}
+                    {field.required && <span className="text-destructive ml-1">*</span>}
+                  </label>
+                  <Input
+                    type={field.secret ? 'password' : 'text'}
+                    value={form[field.key] || ''}
+                    onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                    placeholder={
+                      field.secret && maskedInfo?.hasValue
+                        ? `Actuel : ${maskedInfo.masked} — laisser vide pour conserver`
+                        : field.placeholder
+                    }
+                  />
+                  {field.help && (
+                    <p className="text-xs text-muted-foreground mt-1">{field.help}</p>
+                  )}
+                  {field.secret && maskedInfo?.hasValue && (
+                    <p className="text-xs mt-1">
+                      Clé actuelle : <code className="text-xs bg-muted px-1 py-0.5 rounded">{maskedInfo.masked}</code>
+                      {form[field.key] ? ' — sera remplacée' : ' — laisser vide pour conserver'}
+                    </p>
+                  )}
+                  {field.secret && !maskedInfo?.hasValue && (
+                    <p className="text-xs text-amber-600 mt-1">Aucune clé enregistrée pour ce champ.</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Set as active checkbox */}
+          <div className="mt-5 p-3 rounded-lg border border-primary/20 bg-primary/5 flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="set-active"
+              checked={setActive}
+              onChange={(e) => setSetActive(e.target.checked)}
+              className="w-4 h-4 rounded border-border"
+            />
+            <label htmlFor="set-active" className="text-sm cursor-pointer flex-1">
+              <span className="font-medium">Définir comme prestataire actif</span>
+              <span className="block text-xs text-muted-foreground">
+                Les nouveaux paiements utiliseront ce prestataire immédiatement après le push.
+              </span>
+            </label>
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-wrap gap-2 mt-5">
+            <Button onClick={() => push()} disabled={saving}>
+              <Rocket className="h-4 w-4 mr-1" />
+              {saving ? 'Push en cours…' : 'Enregistrer et pousser'}
+            </Button>
+            <Button variant="outline" onClick={() => push({ test: true })} disabled={saving || !!testing}>
+              {testing === selected ? 'Test en cours…' : 'Pousser et tester'}
+            </Button>
+            <Button variant="ghost" onClick={testOnly} disabled={!!testing}>
+              Tester les credentials actuels
+            </Button>
+            {selectedMasked?.mode?.hasValue && (
+              <Button
+                variant="ghost"
+                onClick={remove}
+                disabled={saving}
+                className="ml-auto text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Supprimer
+              </Button>
+            )}
+          </div>
+
+          {/* Test result */}
+          {testResult && (
+            <div className={`mt-4 p-3 rounded-lg text-sm border ${
+              testResult.ok
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-red-50 text-red-700 border-red-200'
+            }`}>
+              <div className="font-medium mb-1">
+                {testResult.ok ? '✓ Test réussi' : '✗ Test échoué'}
+              </div>
+              <p className="text-xs">{testResult.detail}</p>
+              {testResult.diagnostic && (
+                <p className="font-mono text-xs mt-1 opacity-80">{testResult.diagnostic}</p>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Audit log */}
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <History className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-semibold text-sm">Journal des pushs</h3>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Historique des dernières modifications de configuration. Chaque entrée est horodatée et
+          attribuée à l'administrateur qui a effectué le push.
+        </p>
+        {audit.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">
+            Aucun push effectué pour le moment.
+          </p>
+        ) : (
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {audit.map((entry, i) => (
+              <div key={i} className="flex items-start gap-3 py-2 px-3 rounded-lg hover:bg-muted/50 text-xs">
+                <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  {entry.action === 'activate' ? (
+                    <Rocket className="h-3 w-3 text-emerald-500" />
+                  ) : entry.action === 'remove' ? (
+                    <Trash2 className="h-3 w-3 text-destructive" />
+                  ) : (
+                    <CreditCard className="h-3 w-3 text-primary" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium capitalize">
+                    {entry.action === 'activate' ? 'Activation' : entry.action === 'remove' ? 'Suppression' : 'Mise à jour'}{' '}
+                    <span className="font-mono">{entry.provider}</span>
+                    {entry.action !== 'remove' && (
+                      <span className="text-muted-foreground"> · {entry.mode}</span>
+                    )}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {new Date(entry.ts).toLocaleString('fr-FR')} · par {entry.admin}
+                    {entry.fields.length > 0 && (
+                      <> · champs : {entry.fields.join(', ')}</>
+                    )}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Security reminder footer */}
+      <Card className="p-4 border-amber-200 bg-amber-50/40">
+        <div className="flex items-start gap-2 text-xs text-amber-800">
+          <ShieldAlert className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Bonnes pratiques de sécurité</p>
+            <ul className="mt-1 space-y-0.5 list-disc list-inside opacity-80">
+              <li>Utilisez le mode <strong>test</strong> d'abord avec les clés sandbox du prestataire.</li>
+              <li>Ne passez en <strong>live</strong> qu'après avoir validé un paiement complet en sandbox.</li>
+              <li>Configurez toujours le <strong>webhook secret</strong> pour vérifier les notifications de paiement.</li>
+              <li>Rotations : changez les clés tous les 90 jours ou en cas de suspicion de fuite.</li>
+              <li>Connecté en tant que <code className="bg-amber-100 px-1 rounded">{sessionEmail}</code> — toutes les actions sont journalisées.</li>
+            </ul>
+          </div>
+        </div>
+      </Card>
     </motion.div>
   )
 }

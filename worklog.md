@@ -859,3 +859,59 @@ Stage Summary:
 - Runtime behaviour is identical: same prompts, same temperatures (0.3/0.4/0.5/0.6/0.7/0.75/0.8/0.85/0.9 depending on endpoint), same max_tokens (200/300/400/500/600/700/800/900/1500/1800/2000/2200/2500/4000 depending on endpoint), same thinking='disabled' setting. The `chatLLM` helper applies identical defaults (temperature 0.7, maxTokens 2200) when an option is omitted, but all original explicit values were preserved verbatim.
 - TypeScript check confirms migration introduced no new errors in any `api/ai/` file. The only 2 remaining errors in `api/ai/` are pre-existing (`audit/route.ts` `filière` accent typo and `coherence/route.ts` `let issues = []` inference) and were present before the migration.
 - To switch providers globally (e.g. to OpenAI, Anthropic, Mistral, OpenRouter), the user now sets `LLM_PROVIDER` + matching API key env var — no code changes in any of the 18 endpoints needed.
+
+---
+Task ID: admin-payment-providers-push
+Agent: main (Super Z)
+Task: PERMET à admin de façon sécurisée de configurer les prestataires de paiement depuis son dashboard et push
+
+Work Log:
+- Création de `src/lib/iris/payment-providers.ts` (≈620 lignes) :
+  * Registre de 7 prestataires : Stripe, Campay, FedaPay, Flutterwave, Paystack, NotchPay, CinetPay.
+  * Chaque prestataire a : nom, tagline, description, région, supportsXAF, supportsMobileMoneyPush, docsUrl, et un schéma de champs (publishableKey/secretKey/webhookSecret/username/password/encryptionKey/siteId/apikey).
+  * Champs marqués `secret: true` sont chiffrés au repos via AES-256-GCM (réutilisation de `encryptSecret`/`decryptSecret` de `security.ts`, clé dérivée par PBKDF2 100k itérations sha256).
+  * Cache in-memory invalidé à chaque push (`invalidatePaymentConfigCache`).
+  * `getMaskedConfig()` retourne la config avec clés masquées (`sk_live••••abcd`) pour l'UI admin — jamais de clé en clair côté client.
+  * `pushProviderConfig()` : valide les champs requis, chiffre les secrets, écrit dans `.payment-config.json`, append une ligne JSONL dans `.payment-config.audit.jsonl` avec timestamp + email admin + champs modifiés + mode (test/live).
+  * `removeProvider()` : supprime un prestataire et remet l'active sur le premier restant.
+  * `testProvider()` : ping réseau réel vers l'API du prestataire (Stripe `/v1/balance`, Campay `/get-token/`, FedaPay `/v1/me`, Flutterwave `/v3/balances`, Paystack `/transaction/totals`, NotchPay `/v1/business`, CinetPay `/v2/{siteId}/status`). Timeout 8s par fetch (AbortController).
+  * `getActiveProvider()` et `isPaymentEnabled()` exposés pour les futures routes `/api/payment/initiate` et `/api/payment/webhook`.
+- Création de `src/app/api/admin/payment-providers/route.ts` :
+  * `requireSuperAdmin(req)` : authentification par cookie HMAC signé + rôle super_admin (défense-en-profondeur côté serveur, pas de trust côté client).
+  * CSRF check intégré à `requireSession` (Origin/Referer requis pour POST).
+  * GET retourne : config masquée + registre des prestataires + 30 dernières entrées du journal d'audit.
+  * POST avec `action: 'push'` : écrit la config (chiffrement), invalide le cache, retourne le résultat + optionnellement le résultat du test.
+  * POST avec `action: 'test'` : ping le prestataire avec les credentials ACTUELLEMENT stockés (sans rien écrire).
+  * POST avec `action: 'remove'` : supprime le prestataire.
+- Création de `src/app/api/payment/health/route.ts` :
+  * Endpoint PUBLIC qui retourne UNIQUEMENT : `enabled` (booléen), `provider.id`, `provider.name`, `provider.tagline`, `provider.region`, `provider.supportsXAF`, `provider.supportsMobileMoneyPush`, `mode` (test/live), `publishableKey` (non-secret), `siteId` (non-secret pour CinetPay).
+  * AUCUNE clé secrète exposée. Permet à la page pricing d'afficher dynamiquement le badge du prestataire actif.
+- Modification de `src/components/admin/admin-portal.tsx` :
+  * Ajout de l'onglet `Paiements` dans la barre de navigation (entre `Configuration IA` et `Apparence`).
+  * Ajout du composant `PaymentProvidersPanel({ sessionEmail })` (≈470 lignes) qui permet à l'admin de :
+    - Sélectionner un prestataire dans une grille (cartes avec badges XAF / Mobile Money / région, indicateur "Actif" / "Configuré").
+    - Saisir les credentials dans un formulaire dynamique généré depuis le schéma du prestataire.
+    - Basculer entre mode `test` (sandbox) et `live` (production) avec avertissements visuels.
+    - Cocher "Définir comme prestataire actif".
+    - Bouton "Enregistrer et pousser" (icône Rocket) : persiste + invalide le cache → effectif immédiatement.
+    - Bouton "Pousser et tester" : persiste + ping l'API.
+    - Bouton "Tester les credentials actuels" : ping sans rien écrire (utile pour vérifier une config existante).
+    - Bouton "Supprimer" : retire le prestataire de la config.
+    - Affichage du résultat de test (ok/échec + diagnostic : solde du compte, token obtenu, etc.).
+    - Journal d'audit défilant (30 dernières entrées) avec icônes différenciées (Rocket pour activation, Trash pour suppression, CreditCard pour mise à jour).
+    - Bannière de sécurité en haut rappelant le chiffrement AES-256-GCM et l'auth HMAC.
+    - Pied de page avec bonnes pratiques (test d'abord, live ensuite, webhook secret, rotation 90j, etc.).
+- Vérifications :
+  * `npx tsc --noEmit --skipLibCheck` → 0 erreur (au global, pas seulement sur les nouveaux fichiers).
+  * `curl http://localhost:3000/api/payment/health` → `{"enabled":false,"provider":null,"mode":null,"message":"Aucun prestataire..."}` ✓
+  * `curl http://localhost:3000/api/admin/payment-providers` (sans cookie) → 401 "Authentication required." ✓
+  * `curl -H "Cookie: rimiris.session=forged.invalid"` → 401 (HMAC signature check) ✓
+  * `curl -X POST ...` (sans Origin/Referer) → 403 "CSRF check failed." ✓
+  * Aucune mock data : le panel affiche "Aucun push effectué pour le moment." quand le journal d'audit est vide, et tous les providers affichent leur badge "Configuré" uniquement s'ils ont une entrée réelle dans `.payment-config.json`.
+
+Stage Summary:
+- L'admin peut désormais configurer en toute sécurité 7 prestataires de paiement (Stripe, Campay, FedaPay, Flutterwave, Paystack, NotchPay, CinetPay) depuis son dashboard, et "pousser" la configuration en un clic — elle devient active immédiatement (aucun redémarrage, cache in-memory invalidé).
+- Couches de sécurité empilées : (1) cookie HMAC signé httpOnly + sameSite=strict, (2) rôle super_admin vérifié côté serveur, (3) CSRF check Origin/Referer, (4) chiffrement AES-256-GCM au repos via PBKDF2, (5) masquage systématique des clés dans l'API (`sk_live••••abcd`), (6) journal d'audit JSONL avec timestamp + email admin + champs modifiés.
+- Test réseau réel de chaque prestataire implémenté (endpoints lecture-seule : /balance, /get-token, /me, etc. — aucun paiement réel déclenché).
+- Endpoint public `/api/payment/health` exposé pour que la page pricing puisse afficher dynamiquement le badge du prestataire actif (sans exposer aucune clé secrète).
+- Infrastructure prête pour les futures routes `/api/payment/initiate` (démarre un paiement) et `/api/payment/webhook` (vérifie la signature HMAC avec le webhookSecret stocké). Les helpers `getActiveProvider()` et `isPaymentEnabled()` sont déjà exportés.
