@@ -20,6 +20,7 @@ import { useIrisStore } from '@/store/iris-store'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from './theme-toggle'
 import { RimirisLogo } from './rimiris-logo'
+import { ImmersiveBackground } from './immersive-background'
 
 export function WelcomeScreen() {
   const { setView, projectInitialized, project, sections, interviewAnswers } = useIrisStore()
@@ -41,13 +42,11 @@ export function WelcomeScreen() {
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 -z-10 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-primary/15 blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full bg-accent/20 blur-3xl" />
-      </div>
+      {/* Immersive AI academic background — particles network + floating
+          glyphs + breathing gradient mesh. Ultra-smooth, GPU-only. */}
+      <ImmersiveBackground />
 
-      <header className="border-b border-border/40 backdrop-blur-sm bg-background/60 sticky top-0 z-10">
+      <header className="relative z-10 border-b border-border/40 backdrop-blur-sm bg-background/60 sticky top-0">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <RimirisLogo size="lg" withWordmark />
@@ -69,7 +68,7 @@ export function WelcomeScreen() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-12 sm:py-20">
+      <main className="relative z-10 flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-12 sm:py-20">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -218,7 +217,7 @@ export function WelcomeScreen() {
         </motion.div>
       </main>
 
-      <footer className="border-t border-border/40 py-6">
+      <footer className="relative z-10 border-t border-border/40 py-6">
         <div className="max-w-6xl mx-auto px-4 text-center text-xs text-muted-foreground">
           Rimiris AI — Plateforme d'accompagnement à la rédaction académique
         </div>

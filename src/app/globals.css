@@ -926,3 +926,55 @@
 html {
   scrollbar-gutter: stable;
 }
+
+/* ============================================================================
+   ImmersiveBackground — keyframes
+   All animations are GPU-friendly (transform + opacity only — no layout,
+   no paint, runs on the compositor thread → 60fps even on mid-range mobile).
+   ============================================================================ */
+
+/* Breathing mesh blobs — slow drift across the background */
+@keyframes rimiris-drift-1 {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(8vw, 6vh) scale(1.15); }
+}
+@keyframes rimiris-drift-2 {
+  0%   { transform: translate(0, 0) scale(1.1); }
+  100% { transform: translate(-6vw, -8vh) scale(1); }
+}
+@keyframes rimiris-drift-3 {
+  0%   { transform: translate(-50%, 0) scale(1); }
+  100% { transform: translate(-50%, 8vh) scale(1.2); }
+}
+
+/* Floating academic glyphs — drift + fade in/out cycle */
+@keyframes rimiris-float {
+  0% {
+    transform: translate(-50%, -50%) translateY(0) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.18;
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-24px) rotate(var(--rotate, 0deg));
+    opacity: 0.24;
+  }
+  80% {
+    opacity: 0.16;
+  }
+  100% {
+    transform: translate(-50%, -50%) translateY(-48px) rotate(var(--rotate, 0deg));
+    opacity: 0;
+  }
+}
+
+/* Honor reduced-motion preference — disable animations entirely */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
