@@ -33,6 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# runtime LLM config (written by admin portal)
+.llm-config.json
+
+# tool results scratch
+tool-results/
+
 # vercel
 .vercel
 

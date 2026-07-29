@@ -210,7 +210,7 @@ export function AdminPortal() {
   const [stats, setStats] = React.useState<GlobalStats | null>(null)
   const [rows, setRows] = React.useState<AdminUserRow[]>([])
   const [search, setSearch] = React.useState('')
-  const [tab, setTab] = React.useState<'overview' | 'users' | 'revenue' | 'tiers'>('overview')
+  const [tab, setTab] = React.useState<'overview' | 'users' | 'revenue' | 'tiers' | 'llm'>('overview')
 
   // Load real data (no demo seeding).
   React.useEffect(() => {
@@ -291,6 +291,7 @@ export function AdminPortal() {
             ['users', 'Utilisateurs'],
             ['revenue', 'Revenus'],
             ['tiers', 'Plans & Tiers'],
+            ['llm', 'Configuration IA'],
           ] as const).map(([id, label]) => (
             <button
               key={id}
@@ -597,9 +598,282 @@ export function AdminPortal() {
                 })}
               </motion.div>
             )}
+
+            {tab === 'llm' && (
+              <LLMConfigPanel />
+            )}
           </>
         )}
       </main>
     </div>
+  )
+}
+
+// ============================================================================
+// LLM Configuration Panel — lets the admin pick provider + set API keys
+// ============================================================================
+function LLMConfigPanel() {
+  const [loading, setLoading] = React.useState(true)
+  const [saving, setSaving] = React.useState(false)
+  const [testing, setTesting] = React.useState(false)
+  const [cfg, setCfg] = React.useState<any>(null)
+  const [form, setForm] = React.useState({
+    provider: 'zai',
+    model: '',
+    openaiApiKey: '',
+    anthropicApiKey: '',
+    mistralApiKey: '',
+    openrouterApiKey: '',
+    openaiBaseUrl: 'https://api.openai.com/v1',
+  })
+  const [testResult, setTestResult] = React.useState<{ ok: boolean; reply?: string; error?: string } | null>(null)
+  const [toast, setToast] = React.useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+
+  // Load current config on mount
+  React.useEffect(() => {
+    fetch('/api/admin/llm-config', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => {
+        setCfg(data)
+        setForm({
+          provider: data.provider || 'zai',
+          model: data.model || '',
+          openaiApiKey: '',
+          anthropicApiKey: '',
+          mistralApiKey: '',
+          openrouterApiKey: '',
+          openaiBaseUrl: data.openai?.baseUrl || 'https://api.openai.com/v1',
+        })
+        setLoading(false)
+      })
+      .catch(() => {
+        setLoading(false)
+        setToast({ type: 'error', msg: 'Impossible de charger la configuration.' })
+      })
+  }, [])
+
+  function flash(type: 'success' | 'error', msg: string) {
+    setToast({ type, msg })
+    setTimeout(() => setToast(null), 3500)
+  }
+
+  async function save(opts: { test?: boolean } = {}) {
+    setSaving(true)
+    setTestResult(null)
+    if (opts.test) setTesting(true)
+    try {
+      const body: any = {
+        provider: form.provider,
+        model: form.model,
+        openaiBaseUrl: form.openaiBaseUrl,
+        test: opts.test,
+      }
+      // Only send keys that were entered — empty string = leave unchanged
+      for (const [k, v] of Object.entries({
+        openaiApiKey: form.openaiApiKey,
+        anthropicApiKey: form.anthropicApiKey,
+        mistralApiKey: form.mistralApiKey,
+        openrouterApiKey: form.openrouterApiKey,
+      })) {
+        if (v) body[k] = v
+      }
+      const res = await fetch('/api/admin/llm-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erreur')
+      if (data.test) setTestResult(data.test)
+      // Clear the key fields after successful save (so masked values show next time)
+      setForm((f) => ({
+        ...f,
+        openaiApiKey: '',
+        anthropicApiKey: '',
+        mistralApiKey: '',
+        openrouterApiKey: '',
+      }))
+      // Re-load config to refresh masked keys
+      const refresh = await fetch('/api/admin/llm-config', { cache: 'no-store' })
+      setCfg(await refresh.json())
+      flash('success', opts.test ? 'Configuration enregistrée et testée.' : 'Configuration enregistrée.')
+    } catch (e: any) {
+      flash('error', e?.message || 'Échec de la sauvegarde.')
+    } finally {
+      setSaving(false)
+      setTesting(false)
+    }
+  }
+
+  if (loading) return <div className="p-8 text-muted-foreground">Chargement…</div>
+
+  const PROVIDERS = [
+    { id: 'zai',        name: 'ZAI (GLM)',                desc: 'Gratuit dans cet environnement. Aucune clé requise.', needsKey: false },
+    { id: 'openai',     name: 'OpenAI (GPT-4o, etc.)',    desc: 'Plateforme OpenAI. Clé API requise.', needsKey: true },
+    { id: 'anthropic',  name: 'Anthropic (Claude)',       desc: 'Claude 3.5 Sonnet / Haiku. Clé API requise.', needsKey: true },
+    { id: 'mistral',    name: 'Mistral AI',               desc: 'Mistral Large / Small. Clé API requise.', needsKey: true },
+    { id: 'openrouter', name: 'OpenRouter (multi-IA)',    desc: 'Une seule clé, accès à GPT-4o + Claude + Gemini + Llama + Mistral.', needsKey: true },
+  ] as const
+
+  const currentProvider = PROVIDERS.find((p) => p.id === form.provider)!
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl mx-auto space-y-4">
+      {toast && (
+        <div className={`p-3 rounded-lg text-sm ${
+          toast.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          {toast.msg}
+        </div>
+      )}
+
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Brain className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold">Fournisseur d'IA</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-5">
+          Choisissez le moteur d'IA qui alimente Rimiris (rédaction, humanisation, audit, etc.).
+          Les changements sont effectifs immédiatement — aucun redémarrage nécessaire.
+        </p>
+
+        {/* Provider picker */}
+        <div className="space-y-2 mb-5">
+          {PROVIDERS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setForm((f) => ({ ...f, provider: p.id }))}
+              className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                form.provider === p.id
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/50'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <div className={`w-4 h-4 rounded-full border-2 ${
+                  form.provider === p.id ? 'border-primary bg-primary' : 'border-muted-foreground/30'
+                }`} />
+                <span className="font-medium text-sm">{p.name}</span>
+                {!p.needsKey && (
+                  <Badge variant="secondary" className="text-[10px] py-0">Gratuit</Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 ml-6">{p.desc}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* Model field */}
+        <div className="mb-5">
+          <label className="text-sm font-medium mb-1.5 block">Modèle (optionnel)</label>
+          <Input
+            value={form.model}
+            onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+            placeholder={form.provider === 'zai' ? '(défaut GLM)' : form.provider === 'openai' ? 'gpt-4o' : form.provider === 'anthropic' ? 'claude-3-5-sonnet-20241022' : form.provider === 'mistral' ? 'mistral-large-latest' : 'anthropic/claude-3.5-sonnet'}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Laisser vide pour utiliser le modèle par défaut du fournisseur.
+          </p>
+        </div>
+
+        {/* OpenAI Base URL (only for openai provider) */}
+        {form.provider === 'openai' && (
+          <div className="mb-5">
+            <label className="text-sm font-medium mb-1.5 block">Base URL OpenAI (avancé)</label>
+            <Input
+              value={form.openaiBaseUrl}
+              onChange={(e) => setForm((f) => ({ ...f, openaiBaseUrl: e.target.value }))}
+              placeholder="https://api.openai.com/v1"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Pour Azure OpenAI, vLLM, LM Studio ou tout autre endpoint compatible OpenAI.
+            </p>
+          </div>
+        )}
+
+        {/* API key field for the chosen provider */}
+        {currentProvider.needsKey && (
+          <div className="mb-5">
+            <label className="text-sm font-medium mb-1.5 block">
+              Clé API {currentProvider.name.split(' ')[0]}
+            </label>
+            <Input
+              type="password"
+              value={form[currentProvider.id === 'openrouter' ? 'openrouterApiKey' : `${currentProvider.id}ApiKey`]}
+              onChange={(e) => {
+                const field = currentProvider.id === 'openrouter' ? 'openrouterApiKey' : `${currentProvider.id}ApiKey`
+                setForm((f) => ({ ...f, [field]: e.target.value }))
+              }}
+              placeholder={cfg?.[currentProvider.id]?.masked ? `Actuelle : ${cfg[currentProvider.id].masked} — laisser vide pour conserver` : 'Collez votre clé API ici'}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              {cfg?.[currentProvider.id]?.hasKey ? (
+                <>Clé actuelle : <code className="text-xs">{cfg[currentProvider.id].masked}</code> — laisser vide pour conserver.</>
+              ) : (
+                <>Aucune clé enregistrée pour ce fournisseur.</>
+              )}
+            </p>
+            <p className="text-xs mt-1">
+              Obtenir une clé :{' '}
+              {form.provider === 'openai' && <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-primary underline">platform.openai.com/api-keys</a>}
+              {form.provider === 'anthropic' && <a href="https://console.anthropic.com/" target="_blank" rel="noreferrer" className="text-primary underline">console.anthropic.com</a>}
+              {form.provider === 'mistral' && <a href="https://console.mistral.ai/" target="_blank" rel="noreferrer" className="text-primary underline">console.mistral.ai</a>}
+              {form.provider === 'openrouter' && <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" className="text-primary underline">openrouter.ai/keys</a>}
+            </p>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => save()} disabled={saving}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </Button>
+          <Button variant="outline" onClick={() => save({ test: true })} disabled={saving || testing}>
+            {testing ? 'Test en cours…' : 'Enregistrer et tester'}
+          </Button>
+        </div>
+
+        {testResult && (
+          <div className={`mt-4 p-3 rounded-lg text-sm border ${
+            testResult.ok
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-red-50 text-red-700 border-red-200'
+          }`}>
+            <div className="font-medium mb-1">
+              {testResult.ok ? '✓ Test réussi' : '✗ Test échoué'}
+            </div>
+            {testResult.ok ? (
+              <p className="font-mono text-xs">Réponse : {testResult.reply}</p>
+            ) : (
+              <p className="font-mono text-xs">{testResult.error}</p>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* Other provider keys (optional — for future switches) */}
+      <Card className="p-6">
+        <h3 className="font-semibold mb-1">Clés API pour les autres fournisseurs</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Pré-enregistrez les clés des autres fournisseurs pour basculer instantanément sans avoir à re-saisir la clé.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {PROVIDERS.filter((p) => p.needsKey && p.id !== form.provider).map((p) => {
+            const field = p.id === 'openrouter' ? 'openrouterApiKey' : `${p.id}ApiKey`
+            return (
+              <div key={p.id}>
+                <label className="text-xs font-medium mb-1 block">{p.name.split(' ')[0]}</label>
+                <Input
+                  type="password"
+                  value={(form as any)[field]}
+                  onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
+                  placeholder={cfg?.[p.id]?.masked ? `Actuelle : ${cfg[p.id].masked}` : 'Non configurée'}
+                />
+              </div>
+            )
+          })}
+        </div>
+      </Card>
+    </motion.div>
   )
 }

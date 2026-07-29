@@ -52,6 +52,8 @@
  */
 
 import ZAI from 'z-ai-web-dev-sdk'
+import * as fs from 'fs'
+import * as path from 'path'
 
 // ============================================================================
 // Types
@@ -66,9 +68,9 @@ export interface ChatMessage {
 export interface ChatOptions {
   temperature?: number
   maxTokens?: number
-  /** Optional provider override (else read from env LLM_PROVIDER). */
+  /** Optional provider override (else read from runtime config or env). */
   provider?: LLMProvider
-  /** Optional model override (else read from env LLM_MODEL or default). */
+  /** Optional model override (else read from runtime config or env). */
   model?: string
   /** ZAI-specific: enable/disable thinking mode. Default: disabled. */
   thinking?: 'enabled' | 'disabled'
@@ -77,14 +79,100 @@ export interface ChatOptions {
 export type LLMProvider = 'zai' | 'openai' | 'anthropic' | 'mistral' | 'openrouter'
 
 // ============================================================================
-// Provider resolution
+// Runtime config — written by the admin portal, takes precedence over env
+// ============================================================================
+// File location: <project_root>/.llm-config.json
+// Shape: { provider, model?, openaiApiKey?, anthropicApiKey?, mistralApiKey?,
+//         openrouterApiKey?, openaiBaseUrl? }
+// We cache the parsed file for 5s to avoid disk thrashing on every AI call.
+
+interface RuntimeLLMConfig {
+  provider?: LLMProvider
+  model?: string
+  openaiApiKey?: string
+  anthropicApiKey?: string
+  mistralApiKey?: string
+  openrouterApiKey?: string
+  openaiBaseUrl?: string
+}
+
+let _cachedConfig: RuntimeLLMConfig | null = null
+let _cachedAt = 0
+const CONFIG_TTL_MS = 5000
+
+const RUNTIME_CONFIG_PATH = path.join(
+  process.cwd(),
+  '.llm-config.json',
+)
+
+function readRuntimeConfig(): RuntimeLLMConfig {
+  const now = Date.now()
+  if (_cachedConfig && now - _cachedAt < CONFIG_TTL_MS) return _cachedConfig
+  try {
+    if (fs.existsSync(RUNTIME_CONFIG_PATH)) {
+      const raw = fs.readFileSync(RUNTIME_CONFIG_PATH, 'utf8')
+      _cachedConfig = JSON.parse(raw) as RuntimeLLMConfig
+    } else {
+      _cachedConfig = {}
+    }
+  } catch {
+    _cachedConfig = {}
+  }
+  _cachedAt = now
+  return _cachedConfig
+}
+
+/**
+ * Force a re-read on next call (used by the admin API after a config update).
+ * Exported so /api/admin/llm-config can invalidate the cache after writing.
+ */
+export function invalidateLLMConfigCache() {
+  _cachedConfig = null
+  _cachedAt = 0
+}
+
+// ============================================================================
+// Provider resolution — runtime config first, then env, then zai default
 // ============================================================================
 function getProvider(): LLMProvider {
+  const rc = readRuntimeConfig()
+  if (rc.provider && ['zai', 'openai', 'anthropic', 'mistral', 'openrouter'].includes(rc.provider)) {
+    return rc.provider!
+  }
   const p = (process.env.LLM_PROVIDER || 'zai').toLowerCase()
   if (['zai', 'openai', 'anthropic', 'mistral', 'openrouter'].includes(p)) {
     return p as LLMProvider
   }
   return 'zai'
+}
+
+function getModel(provider: LLMProvider): string {
+  const rc = readRuntimeConfig()
+  if (rc.model) return rc.model
+  if (process.env.LLM_MODEL) return process.env.LLM_MODEL
+  switch (provider) {
+    case 'openai':      return 'gpt-4o'
+    case 'anthropic':   return 'claude-3-5-sonnet-20241022'
+    case 'mistral':     return 'mistral-large-latest'
+    case 'openrouter':  return 'anthropic/claude-3.5-sonnet'
+    default:            return '' // zai: SDK picks the default
+  }
+}
+
+function getApiKey(provider: LLMProvider): string {
+  const rc = readRuntimeConfig()
+  switch (provider) {
+    case 'openai':      return rc.openaiApiKey      || process.env.OPENAI_API_KEY      || ''
+    case 'anthropic':   return rc.anthropicApiKey   || process.env.ANTHROPIC_API_KEY   || ''
+    case 'mistral':     return rc.mistralApiKey     || process.env.MISTRAL_API_KEY     || ''
+    case 'openrouter':  return rc.openrouterApiKey  || process.env.OPENROUTER_API_KEY  || ''
+    default:            return ''
+  }
+}
+
+function getOpenAIBaseUrl(): string {
+  const rc = readRuntimeConfig()
+  return rc.openaiBaseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
 }
 
 // ============================================================================
@@ -101,30 +189,31 @@ export async function chatLLM(
   opts: ChatOptions = {},
 ): Promise<string> {
   const provider = opts.provider || getProvider()
+  const model = opts.model || getModel(provider)
 
   switch (provider) {
     case 'zai':
       return chatZAI(messages, opts)
     case 'openai':
       return chatOpenAICompatible(messages, opts, {
-        baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-        apiKey: process.env.OPENAI_API_KEY || '',
-        model: opts.model || process.env.LLM_MODEL || 'gpt-4o',
+        baseUrl: getOpenAIBaseUrl(),
+        apiKey: getApiKey('openai'),
+        model,
       })
     case 'mistral':
       return chatOpenAICompatible(messages, opts, {
         baseUrl: 'https://api.mistral.ai/v1',
-        apiKey: process.env.MISTRAL_API_KEY || '',
-        model: opts.model || process.env.LLM_MODEL || 'mistral-large-latest',
+        apiKey: getApiKey('mistral'),
+        model,
       })
     case 'openrouter':
       return chatOpenAICompatible(messages, opts, {
         baseUrl: 'https://openrouter.ai/api/v1',
-        apiKey: process.env.OPENROUTER_API_KEY || '',
-        model: opts.model || process.env.LLM_MODEL || 'anthropic/claude-3.5-sonnet',
+        apiKey: getApiKey('openrouter'),
+        model,
       })
     case 'anthropic':
-      return chatAnthropic(messages, opts)
+      return chatAnthropic(messages, opts, getApiKey('anthropic'), model)
   }
 }
 
@@ -184,12 +273,15 @@ async function chatOpenAICompatible(
 // ============================================================================
 // Anthropic provider (Claude)
 // ============================================================================
-async function chatAnthropic(messages: ChatMessage[], opts: ChatOptions): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+async function chatAnthropic(
+  messages: ChatMessage[],
+  opts: ChatOptions,
+  apiKey: string,
+  model: string,
+): Promise<string> {
   if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY is not set. Add it to .env.local.')
+    throw new Error('ANTHROPIC_API_KEY is not set. Configure it via the admin portal or .env.local.')
   }
-  const model = opts.model || process.env.LLM_MODEL || 'claude-3-5-sonnet-20241022'
   // Anthropic splits system message from the rest
   const systemMsgs = messages.filter((m) => m.role === 'system')
   const convoMsgs = messages.filter((m) => m.role !== 'system')
