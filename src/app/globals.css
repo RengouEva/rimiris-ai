@@ -513,3 +513,205 @@
     margin: 0 0 10pt 0;
   }
 }
+
+/* =========================================================================
+   ENRICHED EDITOR — tables, spreadsheets, page breaks, footnotes, borders
+   ========================================================================= */
+
+/* iris-table — academic table with caption + zebra rows (extends .prose-iris table) */
+.prose-iris table.iris-table {
+  border: 1px solid #1f2937;
+  font-size: 11pt;
+}
+.prose-iris table.iris-table caption {
+  caption-side: top;
+  font-family: 'Inter', sans-serif;
+  font-size: 10pt;
+  font-style: italic;
+  color: #4b5563;
+  margin-bottom: 4pt;
+  text-align: left;
+}
+.prose-iris table.iris-table th {
+  background: #1f2937;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  border: 1px solid #1f2937;
+  text-align: left;
+  padding: 6pt 8pt;
+}
+.prose-iris table.iris-table td {
+  border: 1px solid #cbd5e1;
+  padding: 6pt 8pt;
+  vertical-align: top;
+}
+.prose-iris table.iris-table tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+/* iris-spreadsheet — Excel-like table with row numbers (1, 2, 3…) and column headers (A, B, C…) */
+.prose-iris table.iris-spreadsheet {
+  border-collapse: collapse;
+  width: auto;
+  margin: 8pt 0;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 10pt;
+  table-layout: fixed;
+}
+.prose-iris table.iris-spreadsheet th,
+.prose-iris table.iris-spreadsheet td {
+  border: 1px solid #d1d5db;
+  padding: 3pt 6pt;
+  min-width: 60px;
+  vertical-align: middle;
+  text-align: left;
+}
+.prose-iris table.iris-spreadsheet th.iris-corner {
+  background: #f3f4f6;
+  font-weight: 600;
+  color: #4b5563;
+  text-align: center;
+  width: 32px;
+}
+.prose-iris table.iris-spreadsheet th.iris-col-h {
+  background: #f3f4f6;
+  font-weight: 600;
+  color: #4b5563;
+  text-align: center;
+  font-family: 'Inter', sans-serif;
+}
+.prose-iris table.iris-spreadsheet th.iris-row-h {
+  background: #f3f4f6;
+  font-weight: 600;
+  color: #4b5563;
+  text-align: center;
+  font-family: 'Inter', sans-serif;
+  width: 32px;
+}
+.prose-iris table.iris-spreadsheet td {
+  background: #ffffff;
+}
+.prose-iris table.iris-spreadsheet td:focus {
+  background: #eff6ff;
+  outline: 2px solid #7c3aed;
+  outline-offset: -2px;
+}
+
+/* iris-img — inserted image with consistent margin + max-width */
+.prose-iris img.iris-img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 8pt 0;
+  border-radius: 2px;
+}
+.prose-iris img.iris-img:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* iris-page-break — manual page break (visual bar in editor, real page break on print) */
+.prose-iris .iris-page-break {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 12pt 0;
+  padding: 4pt 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(124,58,237,0.08) 20%, rgba(124,58,237,0.12) 50%, rgba(124,58,237,0.08) 80%, transparent 100%);
+  border-top: 1px dashed rgba(124,58,237,0.45);
+  border-bottom: 1px dashed rgba(124,58,237,0.45);
+  user-select: none;
+  cursor: default;
+  position: relative;
+}
+.prose-iris .iris-page-break span {
+  font-family: 'Inter', sans-serif;
+  font-size: 9pt;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #7c3aed;
+  background: #ffffff;
+  padding: 2pt 8pt;
+  border-radius: 10pt;
+  border: 1px solid rgba(124,58,237,0.3);
+}
+@media print {
+  .prose-iris .iris-page-break {
+    border: none !important;
+    background: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    break-after: page;
+    page-break-after: always;
+    height: 0;
+    overflow: hidden;
+  }
+  .prose-iris .iris-page-break span { display: none !important; }
+}
+
+/* iris-fn — footnote marker (superscript) */
+.prose-iris sup.iris-fn {
+  font-family: 'Inter', sans-serif;
+  font-size: 8pt;
+  font-weight: 600;
+  color: #7c3aed;
+  vertical-align: super;
+  line-height: 0;
+}
+.prose-iris sup.iris-fn a {
+  color: inherit;
+  text-decoration: none;
+}
+.prose-iris sup.iris-fn a:hover {
+  text-decoration: underline;
+}
+
+/* iris-footnotes — footnotes section appended at the end of the editor content */
+.prose-iris .iris-footnotes {
+  margin-top: 24pt;
+  padding-top: 8pt;
+  border-top: 1px solid #cbd5e1;
+  font-size: 10pt;
+  color: #4b5563;
+  font-family: 'Inter', 'Times New Roman', sans-serif;
+}
+.prose-iris .iris-footnotes p {
+  margin: 0 0 4pt 0;
+  font-size: 10pt;
+  line-height: 1.4;
+  font-family: 'Inter', 'Times New Roman', sans-serif;
+  color: #4b5563;
+}
+.prose-iris .iris-footnotes .iris-fn-text {
+  color: #4b5563;
+}
+
+/* Hyperlinks inside the editor — make them look clickable */
+.prose-iris a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.prose-iris a:hover {
+  color: #1d4ed8;
+  text-decoration-thickness: 2px;
+}
+
+/* Subtle indicator when a block has a border applied (so the user sees it's intentional) */
+.prose-iris p[style*="border"],
+.prose-iris h1[style*="border"],
+.prose-iris h2[style*="border"],
+.prose-iris h3[style*="border"],
+.prose-iris blockquote[style*="border"] {
+  border-radius: 2px;
+}
+
+/* Subtle indicator when a block has a background (trame) applied */
+.prose-iris p[style*="background-color"],
+.prose-iris h1[style*="background-color"],
+.prose-iris h2[style*="background-color"],
+.prose-iris h3[style*="background-color"] {
+  border-radius: 2px;
+}

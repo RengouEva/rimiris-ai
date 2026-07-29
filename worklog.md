@@ -339,3 +339,82 @@ Stage Summary:
 - La marge du bas est maintenant visualisée par une bande violette claire + une ligne violette épaisse à 267mm — l'utilisateur voit immédiatement s'il déborde.
 - Le guide méthodologique a sa propre page dédiée accessible depuis la sidebar principale, avec une pastille verte quand il est actif.
 - L'aperçu Export a maintenant un vrai panneau A4 paginé avec contrôle de zoom (défaut 100%, range 50-200%) + zoom aussi dans le dialog d'aperçu de chaque format (reset 100% à chaque ouverture).
+
+---
+Task ID: 5
+Agent: main (Super Z)
+Task: Enrichir davantage l'éditeur A4 — insertion tableau, feuille de calcul, disposition (retraits/interligne), bordures et trames, désélection du surlignage, et autres outils nécessaires à la rédaction (lien hypertexte, image, caractères spéciaux, séparateur, saut de page, date, note de bas de page, recherche/remplacement)
+
+Work Log:
+
+## 1. Nouveaux outils d'insertion (3ème ligne de barre d'outils)
+- Réorganisé la barre d'outils de 2 → **3 lignes non-scrollables** (tous les outils visibles d'un coup).
+- Nouvelle ligne 3 « Insérer » avec :
+  - **Tableau** (`TableInsertButton`) : popover avec grille 6×6 interactive. Au survol, affiche « 4 × 3 » etc. Clic → insère `<table class="iris-table">` avec `<thead>` (en-têtes « En-tête 1, 2, 3… ») + `<tbody>` (lignes vides) + `<caption>` « Légende du tableau » + `<p>&nbsp;</p>` après.
+  - **Feuille** (`SpreadsheetInsertButton`) : popover avec grille 6×6 (couleur emerald). Clic → insère `<table class="iris-spreadsheet">` style Excel : en-têtes de colonnes (A, B, C…) + en-têtes de lignes (1, 2, 3…) + cellule coin « # ».
+  - **Lien hypertexte** (`HyperlinkButton`) : popover avec champ URL. Si sélection existante → `execCommand('createLink')` + ajoute `target=_blank`. Sinon → insère `<a href>` avec l'URL comme texte.
+  - **Image** (`ImageButton`) : popover avec URL + texte alternatif. Insère `<img class="iris-img">`.
+  - **Caractères spéciaux** (`SpecialCharButton`) : popover avec grille de ~150 caractères (accents français/allemands/espagnols, ponctuation typographique « » " " ' ' — – …, symboles mathématiques ∑ ∏ ∫ √ ≈ ≠ ≤ ≥ ± × ÷, lettres grecques α β γ δ ε ζ η θ λ μ ν ξ π ρ σ τ φ χ ψ ω Γ Δ Θ Λ Π Σ Φ Ψ Ω, devises € £ ¥ ¢ ₹ $ © ® ™ § ¶, flèches ← ↑ → ↓ ↔ ⇐ ⇒ ⇔).
+  - **Séparateur horizontal** : `execCommand('insertHorizontalRule')` + `<p>&nbsp;</p>` après.
+  - **Saut de page** (`onInsertPageBreak`) : insère `<div class="iris-page-break" contenteditable="false"><span>Saut de page</span></div>`. En édition : barre violette avec label. À l'impression : `break-after: page; page-break-after: always;` réel.
+  - **Date du jour** : dropdown avec 2 options — Date (jj/mm/aaaa) ou Date et heure (jj/mm/aaaa à HH:MM).
+  - **Note de bas de page** (`onInsertFootnote`) : insère `<sup class="iris-fn"><a href="#fn-N" id="fnref-N">[N]</a></sup>` au curseur. Ajoute automatiquement une section `<div class="iris-footnotes">` en fin d'éditeur avec `<p id="fn-N"><sup>[N]</sup> &nbsp; Saisissez votre note ici…</p>`. Le compteur s'incrémente en comptant les `sup.iris-fn` existants.
+
+## 2. Disposition (retraits + interligne)
+- **Diminuer/Augmenter le retrait** : 2 boutons (ChevronLeft/ChevronRight) qui appellent `execCommand('outdent')` et `execCommand('indent')`.
+- **Interligne** (`LineSpacingButton`) : dropdown avec 6 valeurs — Simple (1.0), 1,15, 1,5, Double (2.0), Serré (0.9), Très large (2.5). Applique `block.style.lineHeight = value` sur le bloc courant (paragraphe/titre/citation).
+
+## 3. Bordures et trames
+- **Bordures** (`BordersButton`) : popover avec 12 presets — Aucune, Tous, Haut, Bas, Gauche, Droite, Haut+Bas, G+D, Encadré (violet 2px), Pointillés (violet dashed), Double (3px double), Ombre (box-shadow violet). Applique le border au bloc courant via `getCurrentBlockElement()` qui trouve le `<p>/<h1>/<h2>/<h3>/<blockquote>/<li>` ancêtre de la sélection.
+- **Trame de fond** (`ParagraphBackgroundButton`) : popover avec 20 couleurs (gris, jaune, orange, rouge, rose, violet, bleu, cyan, vert, etc.) + option « transparent » (avec ✕ rouge). Applique `block.style.backgroundColor` au bloc courant.
+
+## 4. Désélection du surlignage
+- Nouveau bouton `onClearHighlight` (icône Highlighter avec ✕ rouge en superposition) dans la ligne 1, juste après le bouton de surlignage.
+- Appelle `execCommand('hiliteColor', false, 'transparent')` (fallback `backColor`) pour retirer la couleur de surlignage de la sélection courante.
+
+## 5. Recherche et remplacement
+- Nouveau bouton `FindReplaceButton` (icône Search + label « Rechercher ») dans la ligne 2.
+- Popover avec 2 champs (Rechercher / Remplacer par) + 2 boutons (Rechercher le suivant / Remplacer l'occurrence courante) + 1 bouton « Tout remplacer ».
+- `findInDocument(query)` : utilise `TreeWalker` pour parcourir tous les `TextNode`, collecte les occurrences, trouve la prochaine après la sélection courante, la sélectionne via `Range` + `Selection.addRange()`, scroll automatiquement si hors champ. Affiche « Occurrence N / Total ».
+- `replaceInDocument(query, replacement, all=false)` : mode `all` → remplace dans tous les text nodes (compte les remplacements). Mode single → remplace la prochaine occurrence et la sélectionne pour continuer.
+- `escapeRegExp()` utilitaire pour sécuriser le comptage.
+
+## 6. Raccourcis clavier étendus
+- `Ctrl+K` : insère un lien (prompt natif pour l'URL, convention Google Docs/Notion).
+- `Ctrl+Shift+Enter` : insère un saut de page manuel.
+- `Ctrl+Shift+7` : liste numérotée (convention Google Docs).
+- `Ctrl+Shift+8` : liste à puces (convention Google Docs).
+- `Ctrl+B/I/U/S/E` et `Ctrl+Shift+A` déjà préservés.
+
+## 7. CSS associé (globals.css +200 lignes)
+- `.iris-table` : bordures fines, en-têtes blancs sur fond noir, zebra rows alternées, caption italique au-dessus.
+- `.iris-spreadsheet` : table-layout fixed, fond gris clair pour en-têtes (`.iris-corner`, `.iris-col-h`, `.iris-row-h`), cellules blanches avec focus bleu pâle + outline violet.
+- `.iris-img` : max-width 100%, display block, margin 8pt, border-radius 2px, hover shadow.
+- `.iris-page-break` : barre horizontale avec gradient violet, bordures dashed violet, label central blanc avec bordure violet. En `@media print` : `break-after: page; page-break-after: always; height: 0; overflow: hidden;` (la barre visuelle disparaît, seul le saut de page reste).
+- `sup.iris-fn` : violet, 8pt, vertical-align super, lien sans soulignement (souligné au hover).
+- `.iris-footnotes` : section au bas de l'éditeur avec bordure-top grise, 10pt, couleur gris foncé.
+- Liens cliquables dans l'éditeur : bleu `#2563eb` souligné, hover `#1d4ed8` avec épaisseur 2px.
+- Arrondi 2px automatique sur tous les blocs ayant un border ou un background-color appliqué.
+
+## 8. Architecture
+- Nouveaux types/constantses : `LINE_SPACINGS`, `SPECIAL_CHARS` (~150 chars), `BORDER_PRESETS` (12 presets), `SHADE_COLORS` (20 couleurs), `findState` (query/replacement/count/current).
+- Nouvelles fonctions dans A4Editor : `clearHighlight`, `insertTable`, `insertSpreadsheet`, `insertHyperlink`, `insertImageByUrl`, `insertSpecialChar`, `insertHorizontalRule`, `insertPageBreak`, `insertDate`, `insertFootnote`, `setLineSpacing`, `indentBlock`, `outdentBlock`, `applyBorder`, `applyParagraphBackground`, `getCurrentBlockElement`, `findInDocument`, `replaceInDocument`.
+- Nouveaux composants de barre d'outils : `TableInsertButton`, `SpreadsheetInsertButton`, `HyperlinkButton`, `ImageButton`, `SpecialCharButton`, `LineSpacingButton`, `BordersButton`, `ParagraphBackgroundButton`, `FindReplaceButton`.
+- Nouvel utilitaire : `escapeRegExp()`.
+- Imports lucide-react étendus : `Table2`, `TableProperties`, `Sheet`, `Link2`, `Image`, `Sigma`, `Minus`, `Calendar`, `Search`, `Replace`, `SeparatorHorizontal`, `AlignVerticalJustifyCenter`, `Grid3x3`, `ChevronRight`, `ChevronLeft`, `PaintBucket`, `Brackets`, `Hash`.
+- Import de `DropdownMenu` (Radix) ajouté pour le sélecteur d'interligne et le dropdown Date.
+
+## Tests end-to-end (agent-browser)
+- Serveur dev : `curl http://localhost:3000/` → 200 OK, compile en <500ms, aucun warn/error dans le log.
+- `npx tsc --noEmit --skipLibCheck` → 0 erreur dans a4-editor.tsx et globals.css (les 2 erreurs pré-existantes dans workspace.tsx sur `in_progress` et `importTemplate` sont identifiées dans le worklog Task 4 comme bugs préexistants du store).
+- Test navigateur : injecté un état IRIS valide via `localStorage.setItem("iris-thesis-ai-v3", …)` pour bypasser l'onboarding.
+- Snapshot de la page workspace : tous les boutons sont présents et visibles — ligne 1 (undo/redo, police, taille, B/I/U/S, sub/sup, case, couleur, surlignage, **désélection surlignage**), ligne 2 (P/H1/H2/H3, listes, citation, alignement, **indent-/indent+**, **Interligne**, **Bordures**, **trame de fond**, Filigrane, **Rechercher**, sélection, effacer), ligne 3 « Insérer » (**Tableau**, **Feuille**, lien, image, caractères spéciaux, séparateur, **saut de page**, date, note de bas de page).
+- Test d'insertion de tableau : clic sur « Tableau » → popover grille 6×6 visible (36 boutons `rounded-sm`) → clic sur cellule [4,3] → tableau 4×3 inséré dans l'éditeur avec caption « Légende du tableau », 12 cellules (1 header row de 3 th + 3 body rows de 3 td).
+- Test d'insertion de feuille de calcul : clic sur « Feuille » → popover grille 6×6 (couleur emerald) → clic sur cellule [3,4] → `<table class="iris-spreadsheet">` inséré avec 3 lignes tbody + en-têtes A/B/C/D + numéros 1/2/3.
+- Screenshots sauvés : `download/enriched-toolbar.png` (barre d'outils complète) et `download/enriched-editor-with-tables.png` (éditeur avec table + feuille insérés).
+
+Stage Summary:
+- L'éditeur A4 passe de 30+ contrôles (2 lignes) à **~50 contrôles sur 3 lignes non-scrollables**. La nouvelle 3ème ligne « Insérer » regroupe tous les outils d'insertion : tableau, feuille de calcul, lien, image, caractères spéciaux, séparateur, saut de page, date, note de bas de page.
+- Tous les outils demandés sont implémentés : insertion tableau, feuille de calcul (style Excel), disposition (retraits + interligne), bordures et trames (12 presets de bordures + 20 couleurs de fond), désélection du surlignage.
+- Bonus : recherche/remplacement avec compteur d'occurrences, notes de bas de page automatiques avec liens `[N]`↔`#fn-N`, saut de page manuel (visible en édition, réel à l'impression), 150+ caractères spéciaux, raccourcis clavier Google Docs-style (Ctrl+K, Ctrl+Shift+Enter, Ctrl+Shift+7/8).
+- Tout est testé end-to-end via agent-browser : tableau 4×3 inséré avec caption, feuille 3×4 insérée avec en-têtes A/B/C/D, popover grids interactives, 0 erreur TypeScript sur les fichiers modifiés, serveur dev compile en <500ms.

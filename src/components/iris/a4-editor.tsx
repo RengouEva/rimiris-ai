@@ -29,6 +29,24 @@ import {
   Subscript,
   Superscript,
   Palette,
+  Table2,
+  TableProperties,
+  Sheet,
+  Link2,
+  Image as ImageIcon,
+  Sigma,
+  Minus,
+  Calendar,
+  Search,
+  Replace,
+  SeparatorHorizontal,
+  AlignVerticalJustifyCenter,
+  Grid3x3,
+  ChevronRight,
+  ChevronLeft,
+  PaintBucket,
+  Brackets,
+  Hash,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -45,6 +63,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -106,6 +130,66 @@ const FONT_SIZES: { label: string; value: string }[] = [
   { label: '24', value: '7' },  // 36pt
 ]
 
+// Line spacing options.
+const LINE_SPACINGS: { label: string; value: string }[] = [
+  { label: 'Simple',   value: '1.0' },
+  { label: '1,15',     value: '1.15' },
+  { label: '1,5',      value: '1.5' },
+  { label: 'Double',   value: '2.0' },
+  { label: 'Serré',    value: '0.9' },
+  { label: 'Très large', value: '2.5' },
+]
+
+// Special characters offered in the Insert → Special character popover.
+const SPECIAL_CHARS: string[] = [
+  'À', 'Á', 'Â', 'Ã', 'Ä', 'Å', 'Æ', 'Ç',
+  'È', 'É', 'Ê', 'Ë', 'Ì', 'Í', 'Î', 'Ï',
+  'Ñ', 'Ò', 'Ó', 'Ô', 'Õ', 'Ö', 'Œ', 'Ø',
+  'Ù', 'Ú', 'Û', 'Ü', 'Ý', 'Ÿ', 'ß', 'Þ',
+  'à', 'á', 'â', 'ã', 'ä', 'å', 'æ', 'ç',
+  'è', 'é', 'ê', 'ë', 'ì', 'í', 'î', 'ï',
+  'ñ', 'ò', 'ó', 'ô', 'õ', 'ö', 'œ', 'ø',
+  'ù', 'ú', 'û', 'ü', 'ý', 'ÿ', 'þ', 'ð',
+  '«', '»', '“', '”', '‘', '’', '„', '‟',
+  '—', '–', '·', '•', '…', '‰', '°', '′',
+  '″', '‹', '›', '〈', '〉', '⟨', '⟩', '«',
+  '←', '↑', '→', '↓', '↔', '⇐', '⇒', '⇔',
+  '€', '£', '¥', '¢', '₹', '$', '©', '®',
+  '™', '§', '¶', '†', '‡', '№', '∞', '∅',
+  '∑', '∏', '∫', '√', '≈', '≠', '≤', '≥',
+  '±', '∓', '×', '÷', '·', '∗', '⊕', '⊗',
+  'α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ',
+  'λ', 'μ', 'ν', 'ξ', 'π', 'ρ', 'σ', 'τ',
+  'φ', 'χ', 'ψ', 'ω', 'Γ', 'Δ', 'Θ', 'Λ',
+  'Π', 'Σ', 'Φ', 'Ψ', 'Ω', '∂', '∇', '∀',
+]
+
+// Border style presets for the Borders & Shading popover.
+// `value` is a CSS border shorthand applied to the current block element.
+const BORDER_PRESETS: { label: string; icon: string; value: string | null }[] = [
+  { label: 'Aucune',      icon: '∅',  value: null },
+  { label: 'Tous',        icon: '⊞',  value: '1px solid #111' },
+  { label: 'Haut',        icon: '⊤',  value: 'top' },
+  { label: 'Bas',         icon: '⊥',  value: 'bottom' },
+  { label: 'Gauche',      icon: '⊢',  value: 'left' },
+  { label: 'Droite',      icon: '⊣',  value: 'right' },
+  { label: 'Haut+Bas',    icon: '⊨',  value: 'top-bottom' },
+  { label: 'G+D',         icon: '⫴',  value: 'left-right' },
+  { label: 'Encadré',     icon: '⊟',  value: '2px solid #7c3aed' },
+  { label: 'Pointillés',  icon: '⢾',  value: '1px dashed #7c3aed' },
+  { label: 'Double',      icon: '⌶',  value: '3px double #111' },
+  { label: 'Ombre',       icon: '⌗',  value: 'shadow' },
+]
+
+// Color palette for paragraph background shading (trames).
+const SHADE_COLORS: string[] = [
+  'transparent',
+  '#f3f4f6', '#e5e7eb', '#d1d5db', '#9ca3af',
+  '#fef3c7', '#fed7aa', '#fecaca', '#fbcfe8', '#ddd6fe',
+  '#bfdbfe', '#bae6fd', '#a7f3d0', '#d9f99d', '#fde68a',
+  '#dbeafe', '#e0e7ff', '#fce7f3', '#fae8ff', '#ffedd5',
+]
+
 export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
   function A4Editor({ value, onChange, editable = true, showToolbar = true, onPageCountChange }, ref) {
     const editorRef = React.useRef<HTMLDivElement>(null)
@@ -142,6 +226,17 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
       opacity: 0.08,
       angle: -30,
     })
+
+    // Find & Replace state — drives the FindReplaceButton popover.
+    const [findState, setFindState] = React.useState<{
+      query: string
+      replacement: string
+      count: number
+      current: number
+    }>({ query: '', replacement: '', count: 0, current: 0 })
+
+    // Ref to the last match found — used by replace() to know which text node to update.
+    const lastMatchRef = React.useRef<Range | null>(null)
 
     // ----------------------------------------------------------------------
     // Pagination : measure content height, derive page count, notify parent
@@ -426,6 +521,404 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
       refreshActiveState()
     }
 
+    // ----------------------------------------------------------------------
+    // Deselect highlight — clears the highlight (surlignage) from the current
+    // selection by applying a transparent background color.
+    // ----------------------------------------------------------------------
+    function clearHighlight() {
+      editorRef.current?.focus()
+      // hiliteColor with 'transparent' clears the highlight in modern browsers.
+      try {
+        document.execCommand('hiliteColor', false, 'transparent')
+      } catch {
+        document.execCommand('backColor', false, 'transparent')
+      }
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Insert a table at the caret position.
+    // Generates an HTML <table> with <thead> (1 row) + <tbody> (rows-1 rows).
+    // ----------------------------------------------------------------------
+    function insertTable(rows: number, cols: number) {
+      const hasHeader = true
+      const head = hasHeader
+        ? `<thead><tr>${Array.from({ length: cols }, (_, i) => `<th>En-tête ${i + 1}</th>`).join('')}</tr></thead>`
+        : ''
+      const bodyRows = Array.from(
+        { length: Math.max(1, rows - (hasHeader ? 1 : 0)) },
+        (_, r) =>
+          `<tr>${Array.from({ length: cols }, () => `<td>&nbsp;</td>`).join('')}</tr>`
+      ).join('')
+      const html = `<table class="iris-table"><caption>Légende du tableau</caption>${head}<tbody>${bodyRows}</tbody></table><p>&nbsp;</p>`
+      editorRef.current?.focus()
+      document.execCommand('insertHTML', false, html)
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Insert a spreadsheet-like table (feuille de calcul).
+    // Generates an HTML <table class="iris-spreadsheet"> with column headers
+    // (A, B, C, ...) and row numbers (1, 2, 3, ...) — like Excel.
+    // ----------------------------------------------------------------------
+    function insertSpreadsheet(rows: number, cols: number) {
+      const colHeaders = Array.from({ length: cols }, (_, i) =>
+        String.fromCharCode(65 + i)
+      )
+      const head = `<thead><tr><th class="iris-corner">#</th>${colHeaders.map((c) => `<th class="iris-col-h">${c}</th>`).join('')}</tr></thead>`
+      const bodyRows = Array.from({ length: rows }, (_, r) => {
+        const cells = Array.from({ length: cols }, () => `<td>&nbsp;</td>`).join('')
+        return `<tr><th class="iris-row-h">${r + 1}</th>${cells}</tr>`
+      }).join('')
+      const html = `<table class="iris-spreadsheet">${head}<tbody>${bodyRows}</tbody></table><p>&nbsp;</p>`
+      editorRef.current?.focus()
+      document.execCommand('insertHTML', false, html)
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Insert a hyperlink on the current selection (or with placeholder text).
+    // ----------------------------------------------------------------------
+    function insertHyperlink(url: string) {
+      if (!url) return
+      editorRef.current?.focus()
+      const sel = window.getSelection()
+      // If no selection, insert the URL as the link text
+      if (!sel || sel.isCollapsed) {
+        const safe = escapeHtml(url)
+        document.execCommand('insertHTML', false, `<a href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a> `)
+      } else {
+        document.execCommand('createLink', false, url)
+        // Add target=_blank to the newly created link
+        const link = (editorRef.current?.querySelector('a[href="' + url + '"]:last-of-type') ||
+          editorRef.current?.querySelector('a[href="' + url + '"]')) as HTMLAnchorElement | null
+        if (link) {
+          link.target = '_blank'
+          link.rel = 'noopener noreferrer'
+        }
+      }
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Insert an image (by URL) at the caret position.
+    // ----------------------------------------------------------------------
+    function insertImageByUrl(url: string, alt?: string) {
+      if (!url) return
+      editorRef.current?.focus()
+      const safe = escapeHtml(url)
+      const altSafe = escapeHtml(alt || 'Image')
+      document.execCommand('insertHTML', false, `<img src="${safe}" alt="${altSafe}" class="iris-img" />`)
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Insert a special character at the caret position.
+    // ----------------------------------------------------------------------
+    function insertSpecialChar(ch: string) {
+      editorRef.current?.focus()
+      document.execCommand('insertText', false, ch)
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Insert a horizontal rule (separateur horizontal).
+    // ----------------------------------------------------------------------
+    function insertHorizontalRule() {
+      editorRef.current?.focus()
+      document.execCommand('insertHorizontalRule')
+      // Add an empty paragraph after the HR so the user can keep typing below it
+      document.execCommand('insertHTML', false, '<p>&nbsp;</p>')
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Insert a manual page break (saut de page manuel).
+    // Renders as a labelled bar in the editor, becomes `break-after: page` in print.
+    // ----------------------------------------------------------------------
+    function insertPageBreak() {
+      editorRef.current?.focus()
+      const html = `<div class="iris-page-break" contenteditable="false" data-iris="page-break"><span>Saut de page</span></div><p>&nbsp;</p>`
+      document.execCommand('insertHTML', false, html)
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Insert current date (and optionally time) at the caret position.
+    // ----------------------------------------------------------------------
+    function insertDate(withTime = false) {
+      editorRef.current?.focus()
+      const now = new Date()
+      const dd = String(now.getDate()).padStart(2, '0')
+      const mm = String(now.getMonth() + 1).padStart(2, '0')
+      const yyyy = now.getFullYear()
+      let str = `${dd}/${mm}/${yyyy}`
+      if (withTime) {
+        const hh = String(now.getHours()).padStart(2, '0')
+        const mi = String(now.getMinutes()).padStart(2, '0')
+        str += ` à ${hh}:${mi}`
+      }
+      document.execCommand('insertText', false, str)
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Insert a footnote marker — a superscript number that links to a note
+    // at the bottom of the section. For simplicity, we insert just the
+    // superscript marker (the student adds the note text at the bottom).
+    // ----------------------------------------------------------------------
+    function insertFootnote() {
+      editorRef.current?.focus()
+      // Find the highest footnote number currently in the document
+      const existing = editorRef.current?.querySelectorAll('sup.iris-fn')
+      const next = (existing?.length || 0) + 1
+      const html = `<sup class="iris-fn" data-fn="${next}"><a href="#fn-${next}" id="fnref-${next}">[${next}]</a></sup>`
+      document.execCommand('insertHTML', false, html)
+      // Append the footnote definition at the end of the editor if not exists
+      const editor = editorRef.current
+      if (editor) {
+        let notes = editor.querySelector('.iris-footnotes')
+        if (!notes) {
+          notes = document.createElement('div')
+          notes.className = 'iris-footnotes'
+          notes.setAttribute('contenteditable', 'true')
+          notes.innerHTML = '<p><strong>Notes</strong></p>'
+          editor.appendChild(notes)
+        }
+        const p = document.createElement('p')
+        p.id = `fn-${next}`
+        p.innerHTML = `<sup>[${next}]</sup> &nbsp; <span class="iris-fn-text">Saisissez votre note ici…</span>`
+        notes.appendChild(p)
+      }
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Apply line spacing to the current block (paragraph, heading, quote).
+    // ----------------------------------------------------------------------
+    function setLineSpacing(value: string) {
+      const block = getCurrentBlockElement()
+      if (!block) return
+      block.style.lineHeight = value
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Indent / outdent the current block (uses execCommand).
+    // ----------------------------------------------------------------------
+    function indentBlock() {
+      editorRef.current?.focus()
+      document.execCommand('indent')
+      handleInput()
+    }
+    function outdentBlock() {
+      editorRef.current?.focus()
+      document.execCommand('outdent')
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Apply a border style to the current block element.
+    // `value` is either a full CSS shorthand, or a keyword (top/bottom/left/right/
+    // top-bottom/left-right/shadow) handled separately.
+    // ----------------------------------------------------------------------
+    function applyBorder(preset: { label: string; value: string | null }) {
+      const block = getCurrentBlockElement()
+      if (!block) return
+      // Reset all borders first
+      block.style.border = ''
+      block.style.borderTop = ''
+      block.style.borderBottom = ''
+      block.style.borderLeft = ''
+      block.style.borderRight = ''
+      block.style.boxShadow = ''
+      block.style.padding = ''
+      if (preset.value == null) {
+        handleInput()
+        return
+      }
+      if (preset.value === 'shadow') {
+        block.style.boxShadow = '0 2px 8px rgba(124, 58, 237, 0.18)'
+        block.style.padding = '8pt 12pt'
+      } else if (['top', 'bottom', 'left', 'right'].includes(preset.value)) {
+        const side = preset.value as 'top' | 'bottom' | 'left' | 'right'
+        const cap = side.charAt(0).toUpperCase() + side.slice(1)
+        ;(block.style as any)[`border${cap}`] = '1.5px solid #111'
+        block.style.padding = '6pt 8pt'
+      } else if (preset.value === 'top-bottom') {
+        block.style.borderTop = '1.5px solid #111'
+        block.style.borderBottom = '1.5px solid #111'
+        block.style.padding = '6pt 8pt'
+      } else if (preset.value === 'left-right') {
+        block.style.borderLeft = '1.5px solid #111'
+        block.style.borderRight = '1.5px solid #111'
+        block.style.padding = '6pt 8pt'
+      } else {
+        // Full shorthand
+        block.style.border = preset.value
+        block.style.padding = '6pt 8pt'
+      }
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Apply a paragraph background color (trame) to the current block.
+    // ----------------------------------------------------------------------
+    function applyParagraphBackground(color: string) {
+      const block = getCurrentBlockElement()
+      if (!block) return
+      if (color === 'transparent') {
+        block.style.backgroundColor = ''
+      } else {
+        block.style.backgroundColor = color
+        if (!block.style.padding) block.style.padding = '4pt 8pt'
+      }
+      handleInput()
+    }
+
+    // ----------------------------------------------------------------------
+    // Helper — find the block element containing the current selection.
+    // Returns the closest p/h1/h2/h3/blockquote/li/div (with class) ancestor.
+    // ----------------------------------------------------------------------
+    function getCurrentBlockElement(): HTMLElement | null {
+      const editor = editorRef.current
+      if (!editor) return null
+      const sel = window.getSelection()
+      if (!sel || sel.rangeCount === 0) return null
+      let node: Node | null = sel.getRangeAt(0).commonAncestorContainer
+      while (node && node !== editor) {
+        if (node.nodeType === 1) {
+          const tag = (node as HTMLElement).tagName.toLowerCase()
+          if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'li', 'pre', 'div'].includes(tag)) {
+            return node as HTMLElement
+          }
+        }
+        node = node.parentNode
+      }
+      return editor
+    }
+
+    // ----------------------------------------------------------------------
+    // Find & Replace — search the editor content for `query` and select the
+    // next match. Uses TreeWalker to traverse text nodes.
+    // ----------------------------------------------------------------------
+    function findInDocument(query: string) {
+      const editor = editorRef.current
+      if (!editor || !query) {
+        setFindState((s) => ({ ...s, query, count: 0, current: 0 }))
+        lastMatchRef.current = null
+        return
+      }
+      const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          if (!node.nodeValue || !node.nodeValue.includes(query)) {
+            return NodeFilter.FILTER_REJECT
+          }
+          // Skip text inside script/style
+          const parent = node.parentElement
+          if (parent && ['SCRIPT', 'STYLE'].includes(parent.tagName)) {
+            return NodeFilter.FILTER_REJECT
+          }
+          return NodeFilter.FILTER_ACCEPT
+        },
+      })
+      const matches: { node: Text; offset: number }[] = []
+      let cur: Node | null
+      while ((cur = walker.nextNode())) {
+        const text = cur as Text
+        const idx = text.nodeValue!.indexOf(query)
+        if (idx >= 0) matches.push({ node: text, offset: idx })
+      }
+      if (matches.length === 0) {
+        setFindState((s) => ({ ...s, query, count: 0, current: 0 }))
+        lastMatchRef.current = null
+        toast_editor(`Aucune occurrence de « ${query} ».`)
+        return
+      }
+      // Find next match after current selection
+      const sel = window.getSelection()
+      let startIdx = 0
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0)
+        for (let i = 0; i < matches.length; i++) {
+          const m = matches[i]
+          // Skip matches that are entirely before the current selection
+          if (
+            m.node === range.startContainer &&
+            m.offset + query.length <= range.startOffset
+          ) continue
+          startIdx = i
+          break
+        }
+      }
+      const m = matches[startIdx]
+      const range = document.createRange()
+      range.setStart(m.node, m.offset)
+      range.setEnd(m.node, m.offset + query.length)
+      sel?.removeAllRanges()
+      sel?.addRange(range)
+      lastMatchRef.current = range.cloneRange()
+      // Scroll the match into view
+      const rect = range.getBoundingClientRect()
+      if (rect.top < 80 || rect.top > window.innerHeight - 80) {
+        window.scrollBy({ top: rect.top - 200, behavior: 'smooth' })
+      }
+      setFindState((s) => ({ ...s, query, count: matches.length, current: startIdx + 1 }))
+    }
+
+    function replaceInDocument(query: string, replacement: string, all = false) {
+      const editor = editorRef.current
+      if (!editor || !query) return
+      let count = 0
+      const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          if (!node.nodeValue || !node.nodeValue.includes(query)) {
+            return NodeFilter.FILTER_REJECT
+          }
+          const parent = node.parentElement
+          if (parent && ['SCRIPT', 'STYLE'].includes(parent.tagName)) {
+            return NodeFilter.FILTER_REJECT
+          }
+          return NodeFilter.FILTER_ACCEPT
+        },
+      })
+      const nodes: Text[] = []
+      let cur: Node | null
+      while ((cur = walker.nextNode())) nodes.push(cur as Text)
+      for (const text of nodes) {
+        if (!text.nodeValue) continue
+        if (all) {
+          const newValue = text.nodeValue.split(query).join(replacement)
+          if (newValue !== text.nodeValue) {
+            text.nodeValue = newValue
+            count += (text.nodeValue.match(new RegExp(escapeRegExp(replacement), 'g')) || []).length
+          }
+        } else {
+          // Replace only the next occurrence after the last match
+          const idx = text.nodeValue.indexOf(query)
+          if (idx >= 0) {
+            text.nodeValue =
+              text.nodeValue.slice(0, idx) +
+              replacement +
+              text.nodeValue.slice(idx + query.length)
+            count = 1
+            // Select the replacement so find-next continues from here
+            const range = document.createRange()
+            range.setStart(text, idx)
+            range.setEnd(text, idx + replacement.length)
+            const sel = window.getSelection()
+            sel?.removeAllRanges()
+            sel?.addRange(range)
+            lastMatchRef.current = range.cloneRange()
+            break
+          }
+        }
+      }
+      if (count > 0) handleInput()
+      setFindState((s) => ({ ...s, replacement, current: all ? 0 : s.current, count: all ? 0 : s.count }))
+      toast_editor(all ? `${count} remplacement(s) effectué(s).` : (count ? 'Remplacement effectué.' : 'Aucune occurrence trouvée.'))
+    }
+
     function handleKeyDown(e: React.KeyboardEvent) {
       const meta = e.metaKey || e.ctrlKey
       if (meta && e.key.toLowerCase() === 'b') {
@@ -448,6 +941,27 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
         // Ctrl+Shift+A = select all in editor
         e.preventDefault()
         selectAllInEditor()
+      } else if (meta && e.key.toLowerCase() === 'f') {
+        // Ctrl+F = find (we mark it handled so the browser's native find doesn't fire)
+        // The FindReplaceButton popover is the actual UI; Ctrl+F just dispatches
+        // a custom event the toolbar can listen for. For now we focus the editor
+        // and let the user click the Recherche button — this avoids hijacking
+        // the browser native find which some users may prefer.
+        // No preventDefault() — let the browser handle it if it wants to.
+      } else if (meta && e.key.toLowerCase() === 'k') {
+        // Ctrl+K = insert hyperlink (Google Docs / Notion convention)
+        e.preventDefault()
+        const url = window.prompt('URL du lien :', 'https://')
+        if (url) insertHyperlink(url)
+      } else if (meta && e.shiftKey && e.key === 'Enter') {
+        // Ctrl+Shift+Enter = insert manual page break
+        e.preventDefault()
+        insertPageBreak()
+      } else if (meta && e.shiftKey && (e.key === '7' || e.key === '8')) {
+        // Ctrl+Shift+7 = numbered list, Ctrl+Shift+8 = bulleted list (Google Docs convention)
+        e.preventDefault()
+        if (e.key === '7') exec('insertOrderedList')
+        else exec('insertUnorderedList')
       }
     }
 
@@ -494,10 +1008,29 @@ export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
             onFontSize={applyFontSize}
             onTextColor={applyTextColor}
             onHighlight={applyHighlight}
+            onClearHighlight={clearHighlight}
             onSelectAll={selectAllInEditor}
             onClearSelection={clearSelection}
             watermark={watermark}
             onWatermarkChange={setWatermark}
+            onIndent={indentBlock}
+            onOutdent={outdentBlock}
+            onLineSpacing={setLineSpacing}
+            onApplyBorder={applyBorder}
+            onApplyParagraphBackground={applyParagraphBackground}
+            onInsertTable={insertTable}
+            onInsertSpreadsheet={insertSpreadsheet}
+            onInsertHyperlink={insertHyperlink}
+            onInsertImage={insertImageByUrl}
+            onInsertSpecialChar={insertSpecialChar}
+            onInsertHR={insertHorizontalRule}
+            onInsertPageBreak={insertPageBreak}
+            onInsertDate={() => insertDate(false)}
+            onInsertDateTime={() => insertDate(true)}
+            onInsertFootnote={insertFootnote}
+            findState={findState}
+            onFind={findInDocument}
+            onReplace={replaceInDocument}
           />
         )}
 
@@ -616,7 +1149,7 @@ const A4Page = React.forwardRef<
 })
 
 // ============================================================================
-// Toolbar — 2 rows, all visible, no scroll.
+// Toolbar — 3 rows, all visible, no scroll.
 // Active state indicators (voyant lumineux): when a toggle is active for the
 // current selection, the button gets a filled background and a small dot.
 // ============================================================================
@@ -666,10 +1199,33 @@ interface ToolbarProps {
   onFontSize: (v: string) => void
   onTextColor: (c: string) => void
   onHighlight: (c: string) => void
+  onClearHighlight: () => void
   onSelectAll: () => void
   onClearSelection: () => void
   watermark: { enabled: boolean; text: string; opacity: number; angle: number }
   onWatermarkChange: (w: { enabled: boolean; text: string; opacity: number; angle: number }) => void
+  // Layout (disposition)
+  onIndent: () => void
+  onOutdent: () => void
+  onLineSpacing: (v: string) => void
+  // Borders & Shading
+  onApplyBorder: (preset: { label: string; value: string | null }) => void
+  onApplyParagraphBackground: (c: string) => void
+  // Insert tools
+  onInsertTable: (rows: number, cols: number) => void
+  onInsertSpreadsheet: (rows: number, cols: number) => void
+  onInsertHyperlink: (url: string) => void
+  onInsertImage: (url: string, alt?: string) => void
+  onInsertSpecialChar: (ch: string) => void
+  onInsertHR: () => void
+  onInsertPageBreak: () => void
+  onInsertDate: () => void
+  onInsertDateTime: () => void
+  onInsertFootnote: () => void
+  // Find & Replace
+  findState: { query: string; replacement: string; count: number; current: number }
+  onFind: (q: string) => void
+  onReplace: (q: string, r: string, all?: boolean) => void
 }
 
 function Toolbar(props: ToolbarProps) {
@@ -681,9 +1237,16 @@ function Toolbar(props: ToolbarProps) {
     onAlignLeft, onAlignCenter, onAlignRight, onAlignJustify,
     onCaseUpper, onCaseLower, onCaseTitle,
     onFontFamily, onFontSize,
-    onTextColor, onHighlight,
+    onTextColor, onHighlight, onClearHighlight,
     onSelectAll, onClearSelection,
     watermark, onWatermarkChange,
+    onIndent, onOutdent, onLineSpacing,
+    onApplyBorder, onApplyParagraphBackground,
+    onInsertTable, onInsertSpreadsheet,
+    onInsertHyperlink, onInsertImage,
+    onInsertSpecialChar, onInsertHR, onInsertPageBreak,
+    onInsertDate, onInsertDateTime, onInsertFootnote,
+    findState, onFind, onReplace,
   } = props
 
   return (
@@ -769,9 +1332,18 @@ function Toolbar(props: ToolbarProps) {
 
           <Divider />
 
-          {/* Text color + Highlight */}
+          {/* Text color + Highlight + Deselect highlight */}
           <TextColorButton onColor={onTextColor} />
           <HighlightButton onColor={onHighlight} />
+          <ToolbarButton onClick={onClearHighlight} label="Désélectionner le surlignage">
+            <Highlighter className="h-4 w-4 relative" />
+            <span
+              className="absolute -top-0.5 -right-0.5 text-[9px] font-bold text-red-500 leading-none"
+              aria-hidden
+            >
+              ✕
+            </span>
+          </ToolbarButton>
 
           {/* Spacer pushes the rest to the right */}
           <div className="ml-auto pr-2 hidden lg:flex items-center">
@@ -828,8 +1400,32 @@ function Toolbar(props: ToolbarProps) {
 
           <Divider />
 
+          {/* Indent / Outdent — disposition (retraits) */}
+          <ToolbarButton onClick={onOutdent} label="Diminuer le retrait">
+            <ChevronLeft className="h-4 w-4" />
+          </ToolbarButton>
+          <ToolbarButton onClick={onIndent} label="Augmenter le retrait">
+            <ChevronRight className="h-4 w-4" />
+          </ToolbarButton>
+
+          {/* Line spacing — interligne */}
+          <LineSpacingButton onApply={onLineSpacing} />
+
+          <Divider />
+
+          {/* Borders & Shading — bordures et trames */}
+          <BordersButton onApply={onApplyBorder} />
+          <ParagraphBackgroundButton onApply={onApplyParagraphBackground} />
+
+          <Divider />
+
           {/* Watermark (filigrane) */}
           <WatermarkButton watermark={watermark} onChange={onWatermarkChange} />
+
+          <Divider />
+
+          {/* Find & Replace */}
+          <FindReplaceButton findState={findState} onFind={onFind} onReplace={onReplace} />
 
           <Divider />
 
@@ -855,6 +1451,95 @@ function Toolbar(props: ToolbarProps) {
                 Filigrane actif
               </span>
             )}
+          </div>
+        </div>
+
+        {/* ====================== Row 3 — Insertion ====================== */}
+        <div className="flex items-center gap-1 px-2 pb-1.5 pt-0.5 flex-nowrap overflow-x-hidden border-t border-border/50">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pr-1">
+            Insérer
+          </span>
+
+          {/* Table */}
+          <TableInsertButton onInsert={onInsertTable} />
+
+          {/* Spreadsheet (feuille de calcul) */}
+          <SpreadsheetInsertButton onInsert={onInsertSpreadsheet} />
+
+          <Divider />
+
+          {/* Hyperlink */}
+          <HyperlinkButton onInsert={onInsertHyperlink} />
+
+          {/* Image */}
+          <ImageButton onInsert={onInsertImage} />
+
+          {/* Special character */}
+          <SpecialCharButton onInsert={onInsertSpecialChar} />
+
+          <Divider />
+
+          {/* Horizontal rule */}
+          <ToolbarButton onClick={onInsertHR} label="Séparateur horizontal">
+            <SeparatorHorizontal className="h-4 w-4" />
+          </ToolbarButton>
+
+          {/* Page break */}
+          <ToolbarButton onClick={onInsertPageBreak} label="Saut de page">
+            <div className="flex flex-col items-center leading-none">
+              <span className="text-[8px]">□</span>
+              <span className="h-[2px] w-3.5 bg-foreground mt-0.5 rounded-full" />
+              <span className="text-[8px] mt-0.5">□</span>
+            </div>
+          </ToolbarButton>
+
+          <Divider />
+
+          {/* Date / DateTime */}
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 flex-shrink-0"
+                    tabIndex={-1}
+                  >
+                    <Calendar className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Date du jour
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={onInsertDate}>
+                <Calendar className="h-3.5 w-3.5 mr-2" />
+                Date (jj/mm/aaaa)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onInsertDateTime}>
+                <Calendar className="h-3.5 w-3.5 mr-2" />
+                Date et heure
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Footnote */}
+          <ToolbarButton onClick={onInsertFootnote} label="Note de bas de page">
+            <Brackets className="h-4 w-4" />
+            <span className="absolute -top-0.5 -right-0.5 text-[8px] font-bold text-primary leading-none">
+              ¹
+            </span>
+          </ToolbarButton>
+
+          {/* Spacer pushes the rest to the right */}
+          <div className="ml-auto pr-2 hidden lg:flex items-center gap-1.5">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              Édition A4 · 297 mm
+            </span>
           </div>
         </div>
       </div>
@@ -1171,6 +1856,602 @@ function WatermarkButton({
 }
 
 // ============================================================================
+// Insert Table — popover with a 6×6 grid picker for choosing rows × cols
+// ============================================================================
+
+function TableInsertButton({ onInsert }: { onInsert: (rows: number, cols: number) => void }) {
+  const [hover, setHover] = React.useState<{ r: number; c: number }>({ r: 0, c: 0 })
+  const MAX = 6
+  return (
+    <Popover>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 flex-shrink-0 gap-1"
+              tabIndex={-1}
+            >
+              <Table2 className="h-4 w-4" />
+              <span className="text-[11px] font-medium hidden sm:inline">Tableau</span>
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Insérer un tableau
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent className="w-auto p-2" align="start">
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+          {hover.r > 0 && hover.c > 0
+            ? `${hover.r} × ${hover.c}`
+            : 'Choisissez la taille'}
+        </p>
+        <div
+          className="grid gap-0.5"
+          style={{ gridTemplateColumns: `repeat(${MAX}, 18px)` }}
+          onMouseLeave={() => setHover({ r: 0, c: 0 })}
+        >
+          {Array.from({ length: MAX * MAX }, (_, i) => {
+            const r = Math.floor(i / MAX) + 1
+            const c = (i % MAX) + 1
+            const isOn = r <= hover.r && c <= hover.c
+            return (
+              <button
+                key={i}
+                type="button"
+                onMouseEnter={() => setHover({ r, c })}
+                onClick={() => onInsert(r, c)}
+                className={cn(
+                  'w-[18px] h-[18px] rounded-sm border transition-colors',
+                  isOn
+                    ? 'bg-primary border-primary'
+                    : 'bg-muted/40 border-border hover:bg-muted'
+                )}
+                tabIndex={-1}
+              />
+            )
+          })}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5">
+          Cliquez pour insérer un tableau avec ligne d’en-tête.
+        </p>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ============================================================================
+// Insert Spreadsheet (feuille de calcul) — Excel-like grid with row/col headers
+// ============================================================================
+
+function SpreadsheetInsertButton({ onInsert }: { onInsert: (rows: number, cols: number) => void }) {
+  const [hover, setHover] = React.useState<{ r: number; c: number }>({ r: 0, c: 0 })
+  const MAX = 6
+  return (
+    <Popover>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 flex-shrink-0 gap-1"
+              tabIndex={-1}
+            >
+              <Sheet className="h-4 w-4" />
+              <span className="text-[11px] font-medium hidden sm:inline">Feuille</span>
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Insérer une feuille de calcul (style tableur)
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent className="w-auto p-2" align="start">
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+          {hover.r > 0 && hover.c > 0
+            ? `${hover.r} lignes × ${hover.c} colonnes`
+            : 'Choisissez la taille'}
+        </p>
+        <div
+          className="grid gap-0.5"
+          style={{ gridTemplateColumns: `repeat(${MAX}, 18px)` }}
+          onMouseLeave={() => setHover({ r: 0, c: 0 })}
+        >
+          {Array.from({ length: MAX * MAX }, (_, i) => {
+            const r = Math.floor(i / MAX) + 1
+            const c = (i % MAX) + 1
+            const isOn = r <= hover.r && c <= hover.c
+            return (
+              <button
+                key={i}
+                type="button"
+                onMouseEnter={() => setHover({ r, c })}
+                onClick={() => onInsert(r, c)}
+                className={cn(
+                  'w-[18px] h-[18px] rounded-sm border transition-colors',
+                  isOn
+                    ? 'bg-emerald-500 border-emerald-500'
+                    : 'bg-muted/40 border-border hover:bg-muted'
+                )}
+                tabIndex={-1}
+              />
+            )
+          })}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5">
+          Feuille style Excel : en-têtes A, B, C… et numéros 1, 2, 3…
+        </p>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ============================================================================
+// Hyperlink — popover with URL input
+// ============================================================================
+
+function HyperlinkButton({ onInsert }: { onInsert: (url: string) => void }) {
+  const [url, setUrl] = React.useState('')
+  const [open, setOpen] = React.useState(false)
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setUrl('') }}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 flex-shrink-0"
+              tabIndex={-1}
+            >
+              <Link2 className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Insérer un lien hypertexte
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent className="w-72 p-3" align="start">
+        <Label className="text-xs font-medium">URL du lien</Label>
+        <Input
+          autoFocus
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://exemple.com"
+          className="h-8 text-xs mt-1"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              if (url.trim()) {
+                onInsert(url.trim())
+                setOpen(false)
+                setUrl('')
+              }
+            }
+          }}
+        />
+        <Button
+          type="button"
+          size="sm"
+          className="w-full mt-2 h-8"
+          disabled={!url.trim()}
+          onClick={() => {
+            onInsert(url.trim())
+            setOpen(false)
+            setUrl('')
+          }}
+        >
+          Insérer le lien
+        </Button>
+        <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
+          Sélectionnez d’abord le texte à transformer en lien, sinon l’URL elle-même
+          sera insérée comme texte cliquable.
+        </p>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ============================================================================
+// Image — popover with URL input + alt text
+// ============================================================================
+
+function ImageButton({ onInsert }: { onInsert: (url: string, alt?: string) => void }) {
+  const [url, setUrl] = React.useState('')
+  const [alt, setAlt] = React.useState('')
+  const [open, setOpen] = React.useState(false)
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setUrl(''); setAlt('') } }}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 flex-shrink-0"
+              tabIndex={-1}
+            >
+              <ImageIcon className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Insérer une image (URL)
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent className="w-72 p-3" align="start">
+        <Label className="text-xs font-medium">URL de l’image</Label>
+        <Input
+          autoFocus
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://exemple.com/image.png"
+          className="h-8 text-xs mt-1"
+        />
+        <Label className="text-xs font-medium mt-2 block">Texte alternatif</Label>
+        <Input
+          value={alt}
+          onChange={(e) => setAlt(e.target.value)}
+          placeholder="Description de l’image"
+          className="h-8 text-xs mt-1"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              if (url.trim()) {
+                onInsert(url.trim(), alt.trim())
+                setOpen(false)
+                setUrl(''); setAlt('')
+              }
+            }
+          }}
+        />
+        <Button
+          type="button"
+          size="sm"
+          className="w-full mt-2 h-8"
+          disabled={!url.trim()}
+          onClick={() => {
+            onInsert(url.trim(), alt.trim())
+            setOpen(false)
+            setUrl(''); setAlt('')
+          }}
+        >
+          Insérer l’image
+        </Button>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ============================================================================
+// Special character — popover with a grid of common academic characters
+// ============================================================================
+
+function SpecialCharButton({ onInsert }: { onInsert: (ch: string) => void }) {
+  const [open, setOpen] = React.useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 flex-shrink-0"
+              tabIndex={-1}
+            >
+              <Sigma className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Caractères spéciaux
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent className="w-72 p-2" align="start">
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+          Caractères spéciaux
+        </p>
+        <div className="grid grid-cols-8 gap-0.5 max-h-44 overflow-y-auto">
+          {SPECIAL_CHARS.map((ch, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                onInsert(ch)
+                setOpen(false)
+              }}
+              className="w-7 h-7 rounded-sm border border-border hover:bg-primary hover:text-primary-foreground transition-colors text-[13px] font-medium"
+              tabIndex={-1}
+              title={ch}
+            >
+              {ch}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ============================================================================
+// Line spacing — dropdown with preset values (Simple / 1.15 / 1.5 / Double…)
+// ============================================================================
+
+function LineSpacingButton({ onApply }: { onApply: (v: string) => void }) {
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 flex-shrink-0 gap-1"
+              tabIndex={-1}
+            >
+              <AlignVerticalJustifyCenter className="h-4 w-4" />
+              <span className="text-[11px] font-medium hidden sm:inline">Interligne</span>
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Interligne du paragraphe
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start">
+        {LINE_SPACINGS.map((ls) => (
+          <DropdownMenuItem key={ls.value} onClick={() => onApply(ls.value)}>
+            <span className="font-mono text-xs mr-2 w-10">{ls.value}</span>
+            <span className="text-xs">{ls.label}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+// ============================================================================
+// Borders — popover with border style presets applied to current block
+// ============================================================================
+
+function BordersButton({ onApply }: { onApply: (preset: { label: string; value: string | null }) => void }) {
+  return (
+    <Popover>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 flex-shrink-0 gap-1"
+              tabIndex={-1}
+            >
+              <TableProperties className="h-4 w-4" />
+              <span className="text-[11px] font-medium hidden sm:inline">Bordures</span>
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Bordures du paragraphe
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent className="w-56 p-2" align="start">
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+          Bordures et encadrements
+        </p>
+        <div className="grid grid-cols-3 gap-1">
+          {BORDER_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => onApply(preset)}
+              className="flex flex-col items-center justify-center gap-0.5 p-2 rounded-md border border-border hover:bg-primary hover:text-primary-foreground transition-colors"
+              tabIndex={-1}
+              title={preset.label}
+            >
+              <span className="text-base leading-none">{preset.icon}</span>
+              <span className="text-[9px] font-medium leading-none">{preset.label}</span>
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
+          Applique une bordure au paragraphe courant (placez le curseur dedans).
+        </p>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ============================================================================
+// Paragraph background (trames) — popover with color palette
+// ============================================================================
+
+function ParagraphBackgroundButton({ onApply }: { onApply: (c: string) => void }) {
+  return (
+    <Popover>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 flex-shrink-0 relative"
+              tabIndex={-1}
+            >
+              <PaintBucket className="h-4 w-4" />
+              <span
+                className="absolute bottom-0.5 left-1 right-1 h-1 rounded-full"
+                style={{ backgroundColor: '#a16207' }}
+              />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Trame de fond du paragraphe
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent className="w-56 p-2" align="start">
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+          Couleur de fond du paragraphe
+        </p>
+        <div className="grid grid-cols-5 gap-1.5">
+          {SHADE_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => onApply(c)}
+              className={cn(
+                'w-8 h-8 rounded-md border border-border hover:scale-110 transition-transform',
+                c === 'transparent' && 'relative'
+              )}
+              style={c === 'transparent' ? undefined : { backgroundColor: c }}
+              title={c === 'transparent' ? 'Aucun fond' : c}
+              tabIndex={-1}
+            >
+              {c === 'transparent' && (
+                <span className="absolute inset-0 flex items-center justify-center text-red-500 text-base font-bold">
+                  ✕
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ============================================================================
+// Find & Replace — popover with find/replace inputs + actions
+// ============================================================================
+
+function FindReplaceButton({
+  findState,
+  onFind,
+  onReplace,
+}: {
+  findState: { query: string; replacement: string; count: number; current: number }
+  onFind: (q: string) => void
+  onReplace: (q: string, r: string, all?: boolean) => void
+}) {
+  const [query, setQuery] = React.useState(findState.query)
+  const [replacement, setReplacement] = React.useState(findState.replacement)
+  const [open, setOpen] = React.useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 flex-shrink-0 gap-1"
+              tabIndex={-1}
+            >
+              <Search className="h-4 w-4" />
+              <span className="text-[11px] font-medium hidden sm:inline">Rechercher</span>
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Rechercher / Remplacer (Ctrl+F)
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent className="w-72 p-3" align="start">
+        <div className="space-y-2">
+          <div>
+            <Label className="text-[11px] font-medium">Rechercher</Label>
+            <div className="flex gap-1 mt-1">
+              <Input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Texte à rechercher…"
+                className="h-8 text-xs flex-1"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    onFind(query)
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 px-2"
+                disabled={!query.trim()}
+                onClick={() => onFind(query)}
+                title="Rechercher le suivant"
+              >
+                <Search className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            {findState.count > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Occurrence {findState.current} / {findState.count}
+              </p>
+            )}
+          </div>
+          <div>
+            <Label className="text-[11px] font-medium">Remplacer par</Label>
+            <div className="flex gap-1 mt-1">
+              <Input
+                value={replacement}
+                onChange={(e) => setReplacement(e.target.value)}
+                placeholder="Texte de remplacement…"
+                className="h-8 text-xs flex-1"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    onReplace(query, replacement, false)
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 px-2"
+                disabled={!query.trim()}
+                onClick={() => onReplace(query, replacement, false)}
+                title="Remplacer l’occurrence courante"
+              >
+                <Replace className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="w-full h-8"
+            disabled={!query.trim()}
+            onClick={() => onReplace(query, replacement, true)}
+          >
+            Tout remplacer
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ============================================================================
 // Utils
 // ============================================================================
 
@@ -1179,6 +2460,10 @@ function escapeHtml(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function appendHtml(el: HTMLElement, html: string) {

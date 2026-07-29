@@ -1,0 +1,1202 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import * as React from 'react'
+     4→     4→import {
+     5→     5→  Bold,
+     6→     6→  Italic,
+     7→     7→  Underline as UnderlineIcon,
+     8→     8→  Strikethrough,
+     9→     9→  Heading1,
+    10→    10→  Heading2,
+    11→    11→  Heading3,
+    12→    12→  List,
+    13→    13→  ListOrdered,
+    14→    14→  Quote,
+    15→    15→  Undo2,
+    16→    16→  Redo2,
+    17→    17→  Pilcrow,
+    18→    18→  Eraser,
+    19→    19→  AlignLeft,
+    20→    20→  AlignCenter,
+    21→    21→  AlignRight,
+    22→    22→  AlignJustify,
+    23→    23→  CaseUpper,
+    24→    24→  CaseLower,
+    25→    25→  Type as TypeIcon,
+    26→    26→  Droplet,
+    27→    27→  MousePointerClick,
+    28→    28→  Highlighter,
+    29→    29→  Subscript,
+    30→    30→  Superscript,
+    31→    31→  Palette,
+    32→    32→} from 'lucide-react'
+    33→    33→import { cn } from '@/lib/utils'
+    34→    34→import { Button } from '@/components/ui/button'
+    35→    35→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+    36→    36→import {
+    37→    37→  Select,
+    38→    38→  SelectContent,
+    39→    39→  SelectItem,
+    40→    40→  SelectTrigger,
+    41→    41→  SelectValue,
+    42→    42→} from '@/components/ui/select'
+    43→    43→import {
+    44→    44→  Popover,
+    45→    45→  PopoverContent,
+    46→    46→  PopoverTrigger,
+    47→    47→} from '@/components/ui/popover'
+    48→    48→import { Input } from '@/components/ui/input'
+    49→    49→import { Label } from '@/components/ui/label'
+    50→    50→
+    51→    51→// ============================================================================
+    52→    52→// A4Editor — WYSIWYG editor that mimics an A4 page
+    53→    53→// - 210mm × 297mm aspect ratio
+    54→    54→// - Standard academic margins (25mm top/sides, 30mm bottom — clearly visualized)
+    55→    55→// - Justified serif body text, sans-serif headings
+    56→    56→// - Two-row rich toolbar (NO scroll, all tools visible):
+    57→    57→//     Row 1: undo/redo | font family | font size | bold/italic/underline/strike |
+    58→    58→//            subscript/superscript | case (upper/lower/title) | highlight
+    59→    59→//     Row 2: paragraph/H1/H2/H3 | lists/quote | alignment | watermark | select all/clear | erase
+    60→    60→// - Per-button active state indicators (voyant lumineux) tracked via
+    61→    61→//   document.queryCommandState + selectionchange event.
+    62→    62→// - Optional watermark (filigrane) rendered behind the page content.
+    63→    63→// - Persists HTML to the store.
+    64→    64→// ============================================================================
+    65→    65→
+    66→    66→export interface A4EditorHandle {
+    67→    67→  insertHtml: (html: string) => void
+    68→    68→  replaceHtml: (html: string) => void
+    69→    69→  focus: () => void
+    70→    70→  /** Returns the current number of A4 pages based on actual content height */
+    71→    71→  getPageCount: () => number
+    72→    72→}
+    73→    73→
+    74→    74→interface A4EditorProps {
+    75→    75→  value: string // HTML
+    76→    76→  onChange: (html: string) => void
+    77→    77→  editable?: boolean
+    78→    78→  showToolbar?: boolean
+    79→    79→  /** Optional callback invoked whenever the page count changes (1, 2, 3, …). */
+    80→    80→  onPageCountChange?: (count: number) => void
+    81→    81→}
+    82→    82→
+    83→    83→// 297mm in CSS pixels at 96dpi: 297 * 96 / 25.4 ≈ 1122.52px
+    84→    84→const A4_PAGE_HEIGHT_PX = 1122.52
+    85→    85→
+    86→    86→// Font families offered in the toolbar.
+    87→    87→const FONT_FAMILIES: { label: string; value: string; css: string }[] = [
+    88→    88→  { label: 'Times New Roman', value: 'times', css: "'Times New Roman', 'Liberation Serif', Georgia, serif" },
+    89→    89→  { label: 'Arial', value: 'arial', css: "Arial, 'Helvetica Neue', sans-serif" },
+    90→    90→  { label: 'Calibri', value: 'calibri', css: "Calibri, 'Segoe UI', sans-serif" },
+    91→    91→  { label: 'Courier New', value: 'courier', css: "'Courier New', 'Liberation Mono', monospace" },
+    92→    92→  { label: 'Georgia', value: 'georgia', css: "Georgia, 'Times New Roman', serif" },
+    93→    93→  { label: 'Garamond', value: 'garamond', css: "Garamond, 'Times New Roman', serif" },
+    94→    94→  { label: 'Verdana', value: 'verdana', css: "Verdana, Geneva, sans-serif" },
+    95→    95→  { label: 'Inter', value: 'inter', css: "'Inter', 'Helvetica Neue', Arial, sans-serif" },
+    96→    96→]
+    97→    97→
+    98→    98→// Font sizes (in pt).
+    99→    99→const FONT_SIZES: { label: string; value: string }[] = [
+   100→   100→  { label: '8', value: '2' },   // 8pt ≈ size 2 in old execCommand fontSize
+   101→   101→  { label: '10', value: '1' },  // 10pt
+   102→   102→  { label: '12', value: '3' },  // 12pt
+   103→   103→  { label: '14', value: '4' },  // 14pt
+   104→   104→  { label: '16', value: '5' },  // 18pt
+   105→   105→  { label: '18', value: '6' },  // 24pt
+   106→   106→  { label: '24', value: '7' },  // 36pt
+   107→   107→]
+   108→   108→
+   109→   109→export const A4Editor = React.forwardRef<A4EditorHandle, A4EditorProps>(
+   110→   110→  function A4Editor({ value, onChange, editable = true, showToolbar = true, onPageCountChange }, ref) {
+   111→   111→    const editorRef = React.useRef<HTMLDivElement>(null)
+   112→   112→    const lastValueRef = React.useRef<string>(value)
+   113→   113→    const lastPageCountRef = React.useRef<number>(1)
+   114→   114→    const [pageCountState, setPageCountState] = React.useState<number>(1)
+   115→   115→
+   116→   116→    // Active formatting state — refreshed on selectionchange and on input.
+   117→   117→    const [activeState, setActiveState] = React.useState({
+   118→   118→      bold: false,
+   119→   119→      italic: false,
+   120→   120→      underline: false,
+   121→   121→      strikeThrough: false,
+   122→   122→      subscript: false,
+   123→   123→      superscript: false,
+   124→   124→      insertUnorderedList: false,
+   125→   125→      insertOrderedList: false,
+   126→   126→      justifyLeft: false,
+   127→   127→      justifyCenter: false,
+   128→   128→      justifyRight: false,
+   129→   129→      justifyFull: true, // default for academic body text
+   130→   130→      block: 'p', // 'p' | 'h1' | 'h2' | 'h3' | 'blockquote'
+   131→   131→    })
+   132→   132→
+   133→   133→    // Watermark state — applied to the A4 page background.
+   134→   134→    const [watermark, setWatermark] = React.useState<{
+   135→   135→      enabled: boolean
+   136→   136→      text: string
+   137→   137→      opacity: number
+   138→   138→      angle: number
+   139→   139→    }>({
+   140→   140→      enabled: false,
+   141→   141→      text: 'CONFIDENTIEL',
+   142→   142→      opacity: 0.08,
+   143→   143→      angle: -30,
+   144→   144→    })
+   145→   145→
+   146→   146→    // ----------------------------------------------------------------------
+   147→   147→    // Pagination : measure content height, derive page count, notify parent
+   148→   148→    // ----------------------------------------------------------------------
+   149→   149→    function recomputePageCount() {
+   150→   150→      const el = editorRef.current
+   151→   151→      if (!el) return
+   152→   152→      const px = el.scrollHeight
+   153→   153→      const count = Math.max(1, Math.ceil(px / A4_PAGE_HEIGHT_PX))
+   154→   154→      if (count !== lastPageCountRef.current) {
+   155→   155→        lastPageCountRef.current = count
+   156→   156→        setPageCountState(count)
+   157→   157→        onPageCountChange?.(count)
+   158→   158→      }
+   159→   159→    }
+   160→   160→
+   161→   161→    // ----------------------------------------------------------------------
+   162→   162→    // Refresh active formatting state from the current selection.
+   163→   163→    // Uses document.queryCommandState for the boolean commands and a manual
+   164→   164→    // check on the closest block ancestor for formatBlock.
+   165→   165→    // ----------------------------------------------------------------------
+   166→   166→    function refreshActiveState() {
+   167→   167→      if (!editorRef.current) return
+   168→   168→      // Only refresh when the selection is inside our editor
+   169→   169→      const sel = window.getSelection()
+   170→   170→      if (!sel || sel.rangeCount === 0) return
+   171→   171→      const range = sel.getRangeAt(0)
+   172→   172→      if (!editorRef.current.contains(range.commonAncestorContainer)) return
+   173→   173→
+   174→   174→      const safe = (cmd: string) => {
+   175→   175→        try {
+   176→   176→          return document.queryCommandState(cmd)
+   177→   177→        } catch {
+   178→   178→          return false
+   179→   179→        }
+   180→   180→      }
+   181→   181→
+   182→   182→      // Determine the block tag of the current selection
+   183→   183→      let node: Node | null = range.commonAncestorContainer
+   184→   184→      let blockTag = 'p'
+   185→   185→      while (node && node !== editorRef.current) {
+   186→   186→        if (node.nodeType === 1) {
+   187→   187→          const tag = (node as HTMLElement).tagName.toLowerCase()
+   188→   188→          if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'p', 'div', 'li'].includes(tag)) {
+   189→   189→            blockTag = tag === 'div' || tag === 'li' ? 'p' : tag
+   190→   190→            break
+   191→   191→          }
+   192→   192→        }
+   193→   193→        node = node.parentNode
+   194→   194→      }
+   195→   195→
+   196→   196→      setActiveState({
+   197→   197→        bold: safe('bold'),
+   198→   198→        italic: safe('italic'),
+   199→   199→        underline: safe('underline'),
+   200→   200→        strikeThrough: safe('strikeThrough'),
+   201→   201→        subscript: safe('subscript'),
+   202→   202→        superscript: safe('superscript'),
+   203→   203→        insertUnorderedList: safe('insertUnorderedList'),
+   204→   204→        insertOrderedList: safe('insertOrderedList'),
+   205→   205→        justifyLeft: safe('justifyLeft'),
+   206→   206→        justifyCenter: safe('justifyCenter'),
+   207→   207→        justifyRight: safe('justifyRight'),
+   208→   208→        justifyFull: safe('justifyFull'),
+   209→   209→        block: blockTag as any,
+   210→   210→      })
+   211→   211→    }
+   212→   212→
+   213→   213→    // Expose imperative API
+   214→   214→    React.useImperativeHandle(ref, () => ({
+   215→   215→      insertHtml: (html: string) => {
+   216→   216→        const el = editorRef.current
+   217→   217→        if (!el) return
+   218→   218→        el.focus()
+   219→   219→        const sel = window.getSelection()
+   220→   220→        const hasSelection = sel && sel.rangeCount > 0 && !sel.isCollapsed
+   221→   221→        if (hasSelection) {
+   222→   222→          const range = sel.getRangeAt(0)
+   223→   223→          if (el.contains(range.commonAncestorContainer)) {
+   224→   224→            range.deleteContents()
+   225→   225→            const fragment = range.createContextualFragment(html)
+   226→   226→            const lastNode = fragment.lastChild
+   227→   227→            range.insertNode(fragment)
+   228→   228→            if (lastNode) {
+   229→   229→              range.setStartAfter(lastNode)
+   230→   230→              range.setEndAfter(lastNode)
+   231→   231→              sel.removeAllRanges()
+   232→   232→              sel.addRange(range)
+   233→   233→            }
+   234→   234→          } else {
+   235→   235→            appendHtml(el, html)
+   236→   236→          }
+   237→   237→        } else {
+   238→   238→          appendHtml(el, html)
+   239→   239→        }
+   240→   240→        const newHtml = el.innerHTML
+   241→   241→        lastValueRef.current = newHtml
+   242→   242→        onChange(newHtml)
+   243→   243→      },
+   244→   244→      replaceHtml: (html: string) => {
+   245→   245→        const el = editorRef.current
+   246→   246→        if (!el) return
+   247→   247→        el.innerHTML = html || ''
+   248→   248→        lastValueRef.current = html || ''
+   249→   249→        onChange(html || '')
+   250→   250→        el.focus()
+   251→   251→        requestAnimationFrame(() => recomputePageCount())
+   252→   252→      },
+   253→   253→      focus: () => editorRef.current?.focus(),
+   254→   254→      getPageCount: () => lastPageCountRef.current,
+   255→   255→    }))
+   256→   256→
+   257→   257→    // ----------------------------------------------------------------------
+   258→   258→    // Recompute page count when value changes (external updates, e.g., AI draft)
+   259→   259→    // ----------------------------------------------------------------------
+   260→   260→    React.useEffect(() => {
+   261→   261→      recomputePageCount()
+   262→   262→    }, [value])
+   263→   263→
+   264→   264→    React.useEffect(() => {
+   265→   265→      const onResize = () => recomputePageCount()
+   266→   266→      window.addEventListener('resize', onResize)
+   267→   267→      // Listen for selection changes to update active state indicators
+   268→   268→      const onSelChange = () => refreshActiveState()
+   269→   269→      document.addEventListener('selectionchange', onSelChange)
+   270→   270→      const el = editorRef.current
+   271→   271→      let ro: ResizeObserver | null = null
+   272→   272→      if (el && typeof ResizeObserver !== 'undefined') {
+   273→   273→        ro = new ResizeObserver(() => recomputePageCount())
+   274→   274→        ro.observe(el)
+   275→   275→      }
+   276→   276→      requestAnimationFrame(() => recomputePageCount())
+   277→   277→      return () => {
+   278→   278→        window.removeEventListener('resize', onResize)
+   279→   279→        document.removeEventListener('selectionchange', onSelChange)
+   280→   280→        ro?.disconnect()
+   281→   281→      }
+   282→   282→      // eslint-disable-next-line react-hooks/exhaustive-deps
+   283→   283→    }, [])
+   284→   284→
+   285→   285→    // Sync external value -> editor (only when it really changed externally)
+   286→   286→    React.useEffect(() => {
+   287→   287→      const el = editorRef.current
+   288→   288→      if (!el) return
+   289→   289→      if (value !== lastValueRef.current && value !== el.innerHTML) {
+   290→   290→        el.innerHTML = value || ''
+   291→   291→        lastValueRef.current = value
+   292→   292→      }
+   293→   293→    }, [value])
+   294→   294→
+   295→   295→    // Initialize once
+   296→   296→    React.useEffect(() => {
+   297→   297→      const el = editorRef.current
+   298→   298→      if (!el) return
+   299→   299→      if (el.innerHTML !== (value || '')) {
+   300→   300→        el.innerHTML = value || ''
+   301→   301→        lastValueRef.current = value || ''
+   302→   302→      }
+   303→   303→      // eslint-disable-next-line react-hooks/exhaustive-deps
+   304→   304→    }, [])
+   305→   305→
+   306→   306→    function handleInput() {
+   307→   307→      const el = editorRef.current
+   308→   308→      if (!el) return
+   309→   309→      const html = el.innerHTML
+   310→   310→      lastValueRef.current = html
+   311→   311→      onChange(html)
+   312→   312→      recomputePageCount()
+   313→   313→      refreshActiveState()
+   314→   314→    }
+   315→   315→
+   316→   316→    function exec(command: string, val?: string) {
+   317→   317→      editorRef.current?.focus()
+   318→   318→      document.execCommand(command, false, val)
+   319→   319→      handleInput()
+   320→   320→    }
+   321→   321→
+   322→   322→    function setBlock(tag: 'h1' | 'h2' | 'h3' | 'p' | 'blockquote') {
+   323→   323→      editorRef.current?.focus()
+   324→   324→      try {
+   325→   325→        document.execCommand('formatBlock', false, `<${tag}>`)
+   326→   326→      } catch {
+   327→   327→        // fallback noop
+   328→   328→      }
+   329→   329→      handleInput()
+   330→   330→    }
+   331→   331→
+   332→   332→    function clearFormatting() {
+   333→   333→      editorRef.current?.focus()
+   334→   334→      document.execCommand('formatBlock', false, '<p>')
+   335→   335→      document.execCommand('removeFormat')
+   336→   336→      // Also clear subscript/superscript and lists
+   337→   337→      document.execCommand('unlink')
+   338→   338→      handleInput()
+   339→   339→    }
+   340→   340→
+   341→   341→    // ----------------------------------------------------------------------
+   342→   342→    // Case conversion — operates on the current selection.
+   343→   343→    // If the selection is collapsed, no-op.
+   344→   344→    // ----------------------------------------------------------------------
+   345→   345→    function convertCase(mode: 'upper' | 'lower' | 'title') {
+   346→   346→      const sel = window.getSelection()
+   347→   347→      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+   348→   348→        toast_editor('Sélectionnez d\'abord le texte à transformer.')
+   349→   349→        return
+   350→   350→      }
+   351→   351→      const range = sel.getRangeAt(0)
+   352→   352→      const text = range.toString()
+   353→   353→      if (!text) return
+   354→   354→      let out = text
+   355→   355→      if (mode === 'upper') out = text.toUpperCase()
+   356→   356→      else if (mode === 'lower') out = text.toLowerCase()
+   357→   357→      else if (mode === 'title') {
+   358→   358→        out = text
+   359→   359→          .toLowerCase()
+   360→   360→          .replace(/(^|\s|[\.\!\?\;\:])([a-zà-ÿ])/g, (_, p1, p2) => p1 + p2.toUpperCase())
+   361→   361→      }
+   362→   362→      // Insert as a text node (preserves any inline styles of the wrapping element)
+   363→   363→      const textNode = document.createTextNode(out)
+   364→   364→      range.deleteContents()
+   365→   365→      range.insertNode(textNode)
+   366→   366→      // Reselect the new text so the user can continue working on it
+   367→   367→      const newRange = document.createRange()
+   368→   368→      newRange.selectNodeContents(textNode)
+   369→   369→      sel.removeAllRanges()
+   370→   370→      sel.addRange(newRange)
+   371→   371→      handleInput()
+   372→   372→    }
+   373→   373→
+   374→   374→    // Apply font family to the current selection (or future typing at caret)
+   375→   375→    function applyFontFamily(fontValue: string) {
+   376→   376→      const ff = FONT_FAMILIES.find((f) => f.value === fontValue)
+   377→   377→      if (!ff) return
+   378→   378→      exec('fontName', ff.css)
+   379→   379→    }
+   380→   380→
+   381→   381→    // Apply font size to the current selection.
+   382→   382→    // execCommand('fontSize', false, n) only accepts 1..7, so we use the
+   383→   383→    // FONT_SIZES mapping above. To get true pt sizes we additionally wrap the
+   384→   384→    // selection in a <span style="font-size:Npt"> — but execCommand is simpler
+   385→   385→    // and matches what most users expect from a basic WYSIWYG toolbar.
+   386→   386→    function applyFontSize(sizeValue: string) {
+   387→   387→      exec('fontSize', sizeValue)
+   388→   388→    }
+   389→   389→
+   390→   390→    // Apply text color via execCommand('foreColor')
+   391→   391→    function applyTextColor(color: string) {
+   392→   392→      exec('foreColor', color)
+   393→   393→    }
+   394→   394→
+   395→   395→    // Apply highlight color via execCommand('hiliteColor') (fallback 'backColor')
+   396→   396→    function applyHighlight(color: string) {
+   397→   397→      editorRef.current?.focus()
+   398→   398→      try {
+   399→   399→        if (!document.execCommand('hiliteColor', false, color)) {
+   400→   400→          document.execCommand('backColor', false, color)
+   401→   401→        }
+   402→   402→      } catch {
+   403→   403→        document.execCommand('backColor', false, color)
+   404→   404→      }
+   405→   405→      handleInput()
+   406→   406→    }
+   407→   407→
+   408→   408→    // Select all content inside the editor (object selection)
+   409→   409→    function selectAllInEditor() {
+   410→   410→      const el = editorRef.current
+   411→   411→      if (!el) return
+   412→   412→      el.focus()
+   413→   413→      const range = document.createRange()
+   414→   414→      range.selectNodeContents(el)
+   415→   415→      const sel = window.getSelection()
+   416→   416→      sel?.removeAllRanges()
+   417→   417→      sel?.addRange(range)
+   418→   418→      refreshActiveState()
+   419→   419→    }
+   420→   420→
+   421→   421→    // Clear selection (collapse caret)
+   422→   422→    function clearSelection() {
+   423→   423→      const sel = window.getSelection()
+   424→   424→      sel?.removeAllRanges()
+   425→   425→      editorRef.current?.focus()
+   426→   426→      refreshActiveState()
+   427→   427→    }
+   428→   428→
+   429→   429→    function handleKeyDown(e: React.KeyboardEvent) {
+   430→   430→      const meta = e.metaKey || e.ctrlKey
+   431→   431→      if (meta && e.key.toLowerCase() === 'b') {
+   432→   432→        e.preventDefault()
+   433→   433→        exec('bold')
+   434→   434→      } else if (meta && e.key.toLowerCase() === 'i') {
+   435→   435→        e.preventDefault()
+   436→   436→        exec('italic')
+   437→   437→      } else if (meta && e.key.toLowerCase() === 'u') {
+   438→   438→        e.preventDefault()
+   439→   439→        exec('underline')
+   440→   440→      } else if (meta && e.key.toLowerCase() === 's') {
+   441→   441→        e.preventDefault()
+   442→   442→        exec('strikethrough')
+   443→   443→      } else if (meta && e.key.toLowerCase() === 'e') {
+   444→   444→        // Ctrl+E = center alignment (custom shortcut)
+   445→   445→        e.preventDefault()
+   446→   446→        exec('justifyCenter')
+   447→   447→      } else if (meta && e.shiftKey && e.key.toLowerCase() === 'a') {
+   448→   448→        // Ctrl+Shift+A = select all in editor
+   449→   449→        e.preventDefault()
+   450→   450→        selectAllInEditor()
+   451→   451→      }
+   452→   452→    }
+   453→   453→
+   454→   454→    function handlePaste(e: React.ClipboardEvent) {
+   455→   455→      e.preventDefault()
+   456→   456→      const text = e.clipboardData.getData('text/plain')
+   457→   457→      const html = text
+   458→   458→        .split(/\n\s*\n+/)
+   459→   459→        .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br/>')}</p>`)
+   460→   460→        .join('')
+   461→   461→      document.execCommand('insertHTML', false, html)
+   462→   462→      handleInput()
+   463→   463→    }
+   464→   464→
+   465→   465→    return (
+   466→   466→      <div className="flex flex-col h-full">
+   467→   467→        {showToolbar && editable && (
+   468→   468→          <Toolbar
+   469→   469→            active={activeState}
+   470→   470→            onBold={() => exec('bold')}
+   471→   471→            onItalic={() => exec('italic')}
+   472→   472→            onUnderline={() => exec('underline')}
+   473→   473→            onStrike={() => exec('strikeThrough')}
+   474→   474→            onSubscript={() => exec('subscript')}
+   475→   475→            onSuperscript={() => exec('superscript')}
+   476→   476→            onH1={() => setBlock('h1')}
+   477→   477→            onH2={() => setBlock('h2')}
+   478→   478→            onH3={() => setBlock('h3')}
+   479→   479→            onP={() => setBlock('p')}
+   480→   480→            onUL={() => exec('insertUnorderedList')}
+   481→   481→            onOL={() => exec('insertOrderedList')}
+   482→   482→            onQuote={() => setBlock('blockquote')}
+   483→   483→            onUndo={() => exec('undo')}
+   484→   484→            onRedo={() => exec('redo')}
+   485→   485→            onClear={clearFormatting}
+   486→   486→            onAlignLeft={() => exec('justifyLeft')}
+   487→   487→            onAlignCenter={() => exec('justifyCenter')}
+   488→   488→            onAlignRight={() => exec('justifyRight')}
+   489→   489→            onAlignJustify={() => exec('justifyFull')}
+   490→   490→            onCaseUpper={() => convertCase('upper')}
+   491→   491→            onCaseLower={() => convertCase('lower')}
+   492→   492→            onCaseTitle={() => convertCase('title')}
+   493→   493→            onFontFamily={applyFontFamily}
+   494→   494→            onFontSize={applyFontSize}
+   495→   495→            onTextColor={applyTextColor}
+   496→   496→            onHighlight={applyHighlight}
+   497→   497→            onSelectAll={selectAllInEditor}
+   498→   498→            onClearSelection={clearSelection}
+   499→   499→            watermark={watermark}
+   500→   500→            onWatermarkChange={setWatermark}
+   501→   501→          />
+   502→   502→        )}
+   503→   503→
+   504→   504→        <div className="flex-1 overflow-y-auto bg-muted/30 p-4 sm:p-8 flex justify-center">
+   505→   505→          <A4Page
+   506→   506→            ref={editorRef}
+   507→   507→            editable={editable}
+   508→   508→            onInput={handleInput}
+   509→   509→            onKeyDown={handleKeyDown}
+   510→   510→            onPaste={handlePaste}
+   511→   511→            className="shadow-xl"
+   512→   512→            pageCount={pageCountState}
+   513→   513→            watermark={watermark.enabled ? watermark : null}
+   514→   514→          />
+   515→   515→        </div>
+   516→   516→      </div>
+   517→   517→    )
+   518→   518→  }
+   519→   519→)
+   520→   520→
+   521→   521→// ============================================================================
+   522→   522→// A4 page surface — the white sheet.
+   523→   523→// Now renders the watermark layer behind the content and uses the
+   524→   524→// `a4-paginated` class so the CSS background-image renders page boundaries
+   525→   525→// every 297mm (visual auto page-break indicator).
+   526→   526→// ============================================================================
+   527→   527→
+   528→   528→interface WatermarkConfig {
+   529→   529→  text: string
+   530→   530→  opacity: number
+   531→   531→  angle: number
+   532→   532→}
+   533→   533→
+   534→   534→const A4Page = React.forwardRef<
+   535→   535→  HTMLDivElement,
+   536→   536→  {
+   537→   537→    editable: boolean
+   538→   538→    onInput: () => void
+   539→   539→    onKeyDown: (e: React.KeyboardEvent) => void
+   540→   540→    onPaste: (e: React.ClipboardEvent) => void
+   541→   541→    className?: string
+   542→   542→    pageCount?: number
+   543→   543→    watermark?: WatermarkConfig | null
+   544→   544→  }
+   545→   545→>(function A4Page({ editable, onInput, onKeyDown, onPaste, className, pageCount = 1, watermark }, ref) {
+   546→   546→  return (
+   547→   547→    <div className="relative" style={{ width: '210mm' }}>
+   548→   548→      <div
+   549→   549→        ref={ref}
+   550→   550→        contentEditable={editable}
+   551→   551→        suppressContentEditableWarning
+   552→   552→        spellCheck
+   553→   553→        onInput={onInput}
+   554→   554→        onKeyDown={onKeyDown}
+   555→   555→        onPaste={onPaste}
+   556→   556→        className={cn(
+   557→   557→          'a4-page',
+   558→   558→          'a4-paginated',
+   559→   559→          'bg-white text-black',
+   560→   560→          'mx-auto',
+   561→   561→          'outline-none',
+   562→   562→          'prose-iris',
+   563→   563→          editable && 'cursor-text',
+   564→   564→          className
+   565→   565→        )}
+   566→   566→        style={{
+   567→   567→          width: '210mm',
+   568→   568→          minHeight: '297mm',
+   569→   569→          padding: '25mm 25mm 30mm 25mm',
+   570→   570→        }}
+   571→   571→        data-placeholder="Commencez à écrire ici, ou demandez à IRIS de générer un brouillon formaté…"
+   572→   572→      />
+   573→   573→      {/* Watermark layer — rendered behind the content, repeated on each A4 page.
+   574→   574→          Only visible when `watermark` prop is non-null. */}
+   575→   575→      {watermark && (
+   576→   576→        <div
+   577→   577→          className="a4-watermark-layer"
+   578→   578→          aria-hidden
+   579→   579→          style={{
+   580→   580→            // Position repeated watermark text every 297mm
+   581→   581→            // The CSS uses background-image with text rendered as SVG data URI
+   582→   582→            backgroundImage: `url("data:image/svg+xml;utf8,${encodeURIComponent(
+   583→   583→              `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='400'>
+   584→   584→                 <text x='300' y='200' text-anchor='middle'
+   585→   585→                       font-family='Inter, Arial, sans-serif'
+   586→   586→                       font-size='90'
+   587→   587→                       font-weight='700'
+   588→   588→                       fill='#000000'
+   589→   589→                       opacity='${watermark.opacity}'
+   590→   590→                       transform='rotate(${watermark.angle} 300 200)'>
+   591→   591→                   ${escapeHtml(watermark.text || 'CONFIDENTIEL')}
+   592→   592→                 </text>
+   593→   593→               </svg>`
+   594→   594→            )}")`,
+   595→   595→            backgroundRepeat: 'repeat',
+   596→   596→            backgroundPosition: 'center',
+   597→   597→            backgroundSize: '600px 400px',
+   598→   598→          }}
+   599→   599→        />
+   600→   600→      )}
+   601→   601→      {/* Page markers — small "Page N" labels in the bottom margin of each A4 page.
+   602→   602→          Only rendered in the editor (hidden in print via CSS). */}
+   603→   603→      {Array.from({ length: pageCount }, (_, i) => (
+   604→   604→        <span
+   605→   605→          key={i}
+   606→   606→          className="a4-page-marker"
+   607→   607→          style={{
+   608→   608→            top: `calc(${(i + 1) * 297}mm - 18mm)`,
+   609→   609→          }}
+   610→   610→        >
+   611→   611→          — {i + 1} —
+   612→   612→        </span>
+   613→   613→      ))}
+   614→   614→    </div>
+   615→   615→  )
+   616→   616→})
+   617→   617→
+   618→   618→// ============================================================================
+   619→   619→// Toolbar — 2 rows, all visible, no scroll.
+   620→   620→// Active state indicators (voyant lumineux): when a toggle is active for the
+   621→   621→// current selection, the button gets a filled background and a small dot.
+   622→   622→// ============================================================================
+   623→   623→
+   624→   624→interface ActiveState {
+   625→   625→  bold: boolean
+   626→   626→  italic: boolean
+   627→   627→  underline: boolean
+   628→   628→  strikeThrough: boolean
+   629→   629→  subscript: boolean
+   630→   630→  superscript: boolean
+   631→   631→  insertUnorderedList: boolean
+   632→   632→  insertOrderedList: boolean
+   633→   633→  justifyLeft: boolean
+   634→   634→  justifyCenter: boolean
+   635→   635→  justifyRight: boolean
+   636→   636→  justifyFull: boolean
+   637→   637→  block: string
+   638→   638→}
+   639→   639→
+   640→   640→interface ToolbarProps {
+   641→   641→  active: ActiveState
+   642→   642→  onBold: () => void
+   643→   643→  onItalic: () => void
+   644→   644→  onUnderline: () => void
+   645→   645→  onStrike: () => void
+   646→   646→  onSubscript: () => void
+   647→   647→  onSuperscript: () => void
+   648→   648→  onH1: () => void
+   649→   649→  onH2: () => void
+   650→   650→  onH3: () => void
+   651→   651→  onP: () => void
+   652→   652→  onUL: () => void
+   653→   653→  onOL: () => void
+   654→   654→  onQuote: () => void
+   655→   655→  onUndo: () => void
+   656→   656→  onRedo: () => void
+   657→   657→  onClear: () => void
+   658→   658→  onAlignLeft: () => void
+   659→   659→  onAlignCenter: () => void
+   660→   660→  onAlignRight: () => void
+   661→   661→  onAlignJustify: () => void
+   662→   662→  onCaseUpper: () => void
+   663→   663→  onCaseLower: () => void
+   664→   664→  onCaseTitle: () => void
+   665→   665→  onFontFamily: (v: string) => void
+   666→   666→  onFontSize: (v: string) => void
+   667→   667→  onTextColor: (c: string) => void
+   668→   668→  onHighlight: (c: string) => void
+   669→   669→  onSelectAll: () => void
+   670→   670→  onClearSelection: () => void
+   671→   671→  watermark: { enabled: boolean; text: string; opacity: number; angle: number }
+   672→   672→  onWatermarkChange: (w: { enabled: boolean; text: string; opacity: number; angle: number }) => void
+   673→   673→}
+   674→   674→
+   675→   675→function Toolbar(props: ToolbarProps) {
+   676→   676→  const {
+   677→   677→    active,
+   678→   678→    onBold, onItalic, onUnderline, onStrike, onSubscript, onSuperscript,
+   679→   679→    onH1, onH2, onH3, onP, onUL, onOL, onQuote,
+   680→   680→    onUndo, onRedo, onClear,
+   681→   681→    onAlignLeft, onAlignCenter, onAlignRight, onAlignJustify,
+   682→   682→    onCaseUpper, onCaseLower, onCaseTitle,
+   683→   683→    onFontFamily, onFontSize,
+   684→   684→    onTextColor, onHighlight,
+   685→   685→    onSelectAll, onClearSelection,
+   686→   686→    watermark, onWatermarkChange,
+   687→   687→  } = props
+   688→   688→
+   689→   689→  return (
+   690→   690→    <TooltipProvider delayDuration={300}>
+   691→   691→      <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
+   692→   692→        {/* ====================== Row 1 ====================== */}
+   693→   693→        <div className="flex items-center gap-1 px-2 py-1.5 flex-nowrap overflow-x-hidden">
+   694→   694→          <ToolbarButton onClick={onUndo} label="Annuler (Ctrl+Z)">
+   695→   695→            <Undo2 className="h-4 w-4" />
+   696→   696→          </ToolbarButton>
+   697→   697→          <ToolbarButton onClick={onRedo} label="Rétablir (Ctrl+Y)">
+   698→   698→            <Redo2 className="h-4 w-4" />
+   699→   699→          </ToolbarButton>
+   700→   700→
+   701→   701→          <Divider />
+   702→   702→
+   703→   703→          {/* Font family */}
+   704→   704→          <Select onValueChange={onFontFamily}>
+   705→   705→            <SelectTrigger className="h-8 w-[150px] text-xs">
+   706→   706→              <SelectValue placeholder="Police" />
+   707→   707→            </SelectTrigger>
+   708→   708→            <SelectContent>
+   709→   709→              {FONT_FAMILIES.map((f) => (
+   710→   710→                <SelectItem key={f.value} value={f.value} style={{ fontFamily: f.css }}>
+   711→   711→                  {f.label}
+   712→   712→                </SelectItem>
+   713→   713→              ))}
+   714→   714→            </SelectContent>
+   715→   715→          </Select>
+   716→   716→
+   717→   717→          {/* Font size */}
+   718→   718→          <Select onValueChange={onFontSize}>
+   719→   719→            <SelectTrigger className="h-8 w-[68px] text-xs">
+   720→   720→              <SelectValue placeholder="Taille" />
+   721→   721→            </SelectTrigger>
+   722→   722→            <SelectContent>
+   723→   723→              {FONT_SIZES.map((s) => (
+   724→   724→                <SelectItem key={s.value} value={s.value}>
+   725→   725→                  {s.label} pt
+   726→   726→                </SelectItem>
+   727→   727→              ))}
+   728→   728→            </SelectContent>
+   729→   729→          </Select>
+   730→   730→
+   731→   731→          <Divider />
+   732→   732→
+   733→   733→          {/* Bold / Italic / Underline / Strikethrough with active state */}
+   734→   734→          <ToolbarToggle onClick={onBold} label="Gras (Ctrl+B)" active={active.bold}>
+   735→   735→            <Bold className="h-4 w-4" />
+   736→   736→          </ToolbarToggle>
+   737→   737→          <ToolbarToggle onClick={onItalic} label="Italique (Ctrl+I)" active={active.italic}>
+   738→   738→            <Italic className="h-4 w-4" />
+   739→   739→          </ToolbarToggle>
+   740→   740→          <ToolbarToggle onClick={onUnderline} label="Souligné (Ctrl+U)" active={active.underline}>
+   741→   741→            <UnderlineIcon className="h-4 w-4" />
+   742→   742→          </ToolbarToggle>
+   743→   743→          <ToolbarToggle onClick={onStrike} label="Barré (Ctrl+S)" active={active.strikeThrough}>
+   744→   744→            <Strikethrough className="h-4 w-4" />
+   745→   745→          </ToolbarToggle>
+   746→   746→
+   747→   747→          <Divider />
+   748→   748→
+   749→   749→          {/* Subscript / Superscript */}
+   750→   750→          <ToolbarToggle onClick={onSubscript} label="Indice" active={active.subscript}>
+   751→   751→            <Subscript className="h-4 w-4" />
+   752→   752→          </ToolbarToggle>
+   753→   753→          <ToolbarToggle onClick={onSuperscript} label="Exposant" active={active.superscript}>
+   754→   754→            <Superscript className="h-4 w-4" />
+   755→   755→          </ToolbarToggle>
+   756→   756→
+   757→   757→          <Divider />
+   758→   758→
+   759→   759→          {/* Case conversion — operates on selection */}
+   760→   760→          <ToolbarButton onClick={onCaseUpper} label="MAJUSCULES">
+   761→   761→            <CaseUpper className="h-4 w-4" />
+   762→   762→          </ToolbarButton>
+   763→   763→          <ToolbarButton onClick={onCaseLower} label="minuscules">
+   764→   764→            <CaseLower className="h-4 w-4" />
+   765→   765→          </ToolbarButton>
+   766→   766→          <ToolbarButton onClick={onCaseTitle} label="Titre (1ère lettre)">
+   767→   767→            <span className="text-[11px] font-bold leading-none">Ab</span>
+   768→   768→          </ToolbarButton>
+   769→   769→
+   770→   770→          <Divider />
+   771→   771→
+   772→   772→          {/* Text color + Highlight */}
+   773→   773→          <TextColorButton onColor={onTextColor} />
+   774→   774→          <HighlightButton onColor={onHighlight} />
+   775→   775→
+   776→   776→          {/* Spacer pushes the rest to the right */}
+   777→   777→          <div className="ml-auto pr-2 hidden lg:flex items-center">
+   778→   778→            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+   779→   779→              Format A4 · 25 mm
+   780→   780→            </span>
+   781→   781→          </div>
+   782→   782→        </div>
+   783→   783→
+   784→   784→        {/* ====================== Row 2 ====================== */}
+   785→   785→        <div className="flex items-center gap-1 px-2 pb-1.5 pt-0.5 flex-nowrap overflow-x-hidden border-t border-border/50">
+   786→   786→          {/* Block format */}
+   787→   787→          <ToolbarToggle onClick={onP} label="Paragraphe" active={active.block === 'p'}>
+   788→   788→            <Pilcrow className="h-4 w-4" />
+   789→   789→          </ToolbarToggle>
+   790→   790→          <ToolbarToggle onClick={onH1} label="Titre 1" active={active.block === 'h1'}>
+   791→   791→            <Heading1 className="h-4 w-4" />
+   792→   792→          </ToolbarToggle>
+   793→   793→          <ToolbarToggle onClick={onH2} label="Titre 2" active={active.block === 'h2'}>
+   794→   794→            <Heading2 className="h-4 w-4" />
+   795→   795→          </ToolbarToggle>
+   796→   796→          <ToolbarToggle onClick={onH3} label="Titre 3" active={active.block === 'h3'}>
+   797→   797→            <Heading3 className="h-4 w-4" />
+   798→   798→          </ToolbarToggle>
+   799→   799→
+   800→   800→          <Divider />
+   801→   801→
+   802→   802→          {/* Lists + Quote */}
+   803→   803→          <ToolbarToggle onClick={onUL} label="Liste à puces" active={active.insertUnorderedList}>
+   804→   804→            <List className="h-4 w-4" />
+   805→   805→          </ToolbarToggle>
+   806→   806→          <ToolbarToggle onClick={onOL} label="Liste numérotée" active={active.insertOrderedList}>
+   807→   807→            <ListOrdered className="h-4 w-4" />
+   808→   808→          </ToolbarToggle>
+   809→   809→          <ToolbarToggle onClick={onQuote} label="Citation" active={active.block === 'blockquote'}>
+   810→   810→            <Quote className="h-4 w-4" />
+   811→   811→          </ToolbarToggle>
+   812→   812→
+   813→   813→          <Divider />
+   814→   814→
+   815→   815→          {/* Alignment — disposition */}
+   816→   816→          <ToolbarToggle onClick={onAlignLeft} label="Aligner à gauche" active={active.justifyLeft}>
+   817→   817→            <AlignLeft className="h-4 w-4" />
+   818→   818→          </ToolbarToggle>
+   819→   819→          <ToolbarToggle onClick={onAlignCenter} label="Centrer (Ctrl+E)" active={active.justifyCenter}>
+   820→   820→            <AlignCenter className="h-4 w-4" />
+   821→   821→          </ToolbarToggle>
+   822→   822→          <ToolbarToggle onClick={onAlignRight} label="Aligner à droite" active={active.justifyRight}>
+   823→   823→            <AlignRight className="h-4 w-4" />
+   824→   824→          </ToolbarToggle>
+   825→   825→          <ToolbarToggle onClick={onAlignJustify} label="Justifier" active={active.justifyFull}>
+   826→   826→            <AlignJustify className="h-4 w-4" />
+   827→   827→          </ToolbarToggle>
+   828→   828→
+   829→   829→          <Divider />
+   830→   830→
+   831→   831→          {/* Watermark (filigrane) */}
+   832→   832→          <WatermarkButton watermark={watermark} onChange={onWatermarkChange} />
+   833→   833→
+   834→   834→          <Divider />
+   835→   835→
+   836→   836→          {/* Object selection */}
+   837→   837→          <ToolbarButton onClick={onSelectAll} label="Tout sélectionner (Ctrl+Shift+A)">
+   838→   838→            <MousePointerClick className="h-4 w-4" />
+   839→   839→          </ToolbarButton>
+   840→   840→          <ToolbarButton onClick={onClearSelection} label="Désélectionner">
+   841→   841→            <span className="text-[10px] font-bold leading-none">✕</span>
+   842→   842→          </ToolbarButton>
+   843→   843→
+   844→   844→          <Divider />
+   845→   845→
+   846→   846→          {/* Clear formatting */}
+   847→   847→          <ToolbarButton onClick={onClear} label="Effacer la mise en forme">
+   848→   848→            <Eraser className="h-4 w-4" />
+   849→   849→          </ToolbarButton>
+   850→   850→
+   851→   851→          <div className="ml-auto pr-2 hidden lg:flex items-center gap-1.5">
+   852→   852→            {watermark.enabled && (
+   853→   853→              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600">
+   854→   854→                <Droplet className="h-3 w-3" />
+   855→   855→                Filigrane actif
+   856→   856→              </span>
+   857→   857→            )}
+   858→   858→          </div>
+   859→   859→        </div>
+   860→   860→      </div>
+   861→   861→    </TooltipProvider>
+   862→   862→  )
+   863→   863→}
+   864→   864→
+   865→   865→// ============================================================================
+   866→   866→// Toolbar buttons
+   867→   867→// ============================================================================
+   868→   868→
+   869→   869→function ToolbarButton({
+   870→   870→  children,
+   871→   871→  onClick,
+   872→   872→  label,
+   873→   873→}: {
+   874→   874→  children: React.ReactNode
+   875→   875→  onClick: () => void
+   876→   876→  label: string
+   877→   877→}) {
+   878→   878→  return (
+   879→   879→    <Tooltip>
+   880→   880→      <TooltipTrigger asChild>
+   881→   881→        <Button
+   882→   882→          type="button"
+   883→   883→          variant="ghost"
+   884→   884→          size="sm"
+   885→   885→          className="h-8 w-8 p-0 flex-shrink-0"
+   886→   886→          onClick={onClick}
+   887→   887→          tabIndex={-1}
+   888→   888→        >
+   889→   889→          {children}
+   890→   890→        </Button>
+   891→   891→      </TooltipTrigger>
+   892→   892→      <TooltipContent side="bottom" className="text-xs">
+   893→   893→        {label}
+   894→   894→      </TooltipContent>
+   895→   895→    </Tooltip>
+   896→   896→  )
+   897→   897→}
+   898→   898→
+   899→   899→// ToolbarToggle — same as ToolbarButton but shows an ACTIVE state (voyant lumineux)
+   900→   900→// when the formatting is active for the current selection.
+   901→   901→function ToolbarToggle({
+   902→   902→  children,
+   903→   903→  onClick,
+   904→   904→  label,
+   905→   905→  active,
+   906→   906→}: {
+   907→   907→  children: React.ReactNode
+   908→   908→  onClick: () => void
+   909→   909→  label: string
+   910→   910→  active: boolean
+   911→   911→}) {
+   912→   912→  return (
+   913→   913→    <Tooltip>
+   914→   914→      <TooltipTrigger asChild>
+   915→   915→        <Button
+   916→   916→          type="button"
+   917→   917→          variant="ghost"
+   918→   918→          size="sm"
+   919→   919→          onClick={onClick}
+   920→   920→          tabIndex={-1}
+   921→   921→          className={cn(
+   922→   922→            'relative h-8 w-8 p-0 flex-shrink-0 transition-colors',
+   923→   923→            active
+   924→   924→              ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground'
+   925→   925→              : 'hover:bg-muted'
+   926→   926→          )}
+   927→   927→        >
+   928→   928→          {children}
+   929→   929→          {/* Active state indicator — small dot in the bottom-right corner */}
+   930→   930→          {active && (
+   931→   931→            <span
+   932→   932→              className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"
+   933→   933→              aria-hidden
+   934→   934→            />
+   935→   935→          )}
+   936→   936→        </Button>
+   937→   937→      </TooltipTrigger>
+   938→   938→      <TooltipContent side="bottom" className="text-xs">
+   939→   939→        {label}
+   940→   940→      </TooltipContent>
+   941→   941→    </Tooltip>
+   942→   942→  )
+   943→   943→}
+   944→   944→
+   945→   945→function Divider() {
+   946→   946→  return <span className="w-px h-6 bg-border mx-1 flex-shrink-0" />
+   947→   947→}
+   948→   948→
+   949→   949→// ============================================================================
+   950→   950→// Text color + Highlight buttons with color swatch popover
+   951→   951→// ============================================================================
+   952→   952→
+   953→   953→const TEXT_COLORS = [
+   954→   954→  '#000000', '#1a1a2e', '#581c87', '#7c3aed', '#a16207',
+   955→   955→  '#b91c1c', '#15803d', '#1d4ed8', '#0e7490', '#6b7280',
+   956→   956→  '#ffffff', '#fbbf24', '#f97316', '#ef4444', '#22c55e',
+   957→   957→]
+   958→   958→
+   959→   959→function TextColorButton({ onColor }: { onColor: (c: string) => void }) {
+   960→   960→  return (
+   961→   961→    <Popover>
+   962→   962→      <Tooltip>
+   963→   963→        <TooltipTrigger asChild>
+   964→   964→          <PopoverTrigger asChild>
+   965→   965→            <Button
+   966→   966→              type="button"
+   967→   967→              variant="ghost"
+   968→   968→              size="sm"
+   969→   969→              className="h-8 w-8 p-0 flex-shrink-0 relative"
+   970→   970→              tabIndex={-1}
+   971→   971→            >
+   972→   972→              <TypeIcon className="h-4 w-4" />
+   973→   973→              <span
+   974→   974→                className="absolute bottom-0.5 left-1 right-1 h-1 rounded-full"
+   975→   975→                style={{ backgroundColor: '#7c3aed' }}
+   976→   976→              />
+   977→   977→            </Button>
+   978→   978→          </PopoverTrigger>
+   979→   979→        </TooltipTrigger>
+   980→   980→        <TooltipContent side="bottom" className="text-xs">
+   981→   981→          Couleur du texte
+   982→   982→        </TooltipContent>
+   983→   983→      </Tooltip>
+   984→   984→      <PopoverContent className="w-56 p-2" align="start">
+   985→   985→        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+   986→   986→          Couleur du texte
+   987→   987→        </p>
+   988→   988→        <div className="grid grid-cols-5 gap-1.5">
+   989→   989→          {TEXT_COLORS.map((c) => (
+   990→   990→            <button
+   991→   991→              key={c}
+   992→   992→              onClick={() => onColor(c)}
+   993→   993→              className="w-8 h-8 rounded-md border border-border hover:scale-110 transition-transform"
+   994→   994→              style={{ backgroundColor: c }}
+   995→   995→              title={c}
+   996→   996→              tabIndex={-1}
+   997→   997→            />
+   998→   998→          ))}
+   999→   999→        </div>
+  1000→  1000→      </PopoverContent>
+  1001→  1001→    </Popover>
+  1002→  1002→  )
+  1003→  1003→}
+  1004→  1004→
+  1005→  1005→function HighlightButton({ onColor }: { onColor: (c: string) => void }) {
+  1006→  1006→  return (
+  1007→  1007→    <Popover>
+  1008→  1008→      <Tooltip>
+  1009→  1009→        <TooltipTrigger asChild>
+  1010→  1010→          <PopoverTrigger asChild>
+  1011→  1011→            <Button
+  1012→  1012→              type="button"
+  1013→  1013→              variant="ghost"
+  1014→  1014→              size="sm"
+  1015→  1015→              className="h-8 w-8 p-0 flex-shrink-0 relative"
+  1016→  1016→              tabIndex={-1}
+  1017→  1017→            >
+  1018→  1018→              <Highlighter className="h-4 w-4" />
+  1019→  1019→              <span
+  1020→  1020→                className="absolute bottom-0.5 left-1 right-1 h-1 rounded-full"
+  1021→  1021→                style={{ backgroundColor: '#fbbf24' }}
+  1022→  1022→              />
+  1023→  1023→            </Button>
+  1024→  1024→          </PopoverTrigger>
+  1025→  1025→        </TooltipTrigger>
+  1026→  1026→        <TooltipContent side="bottom" className="text-xs">
+  1027→  1027→          Surligner
+  1028→  1028→        </TooltipContent>
+  1029→  1029→      </Tooltip>
+  1030→  1030→      <PopoverContent className="w-56 p-2" align="start">
+  1031→  1031→        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+  1032→  1032→          Couleur de surlignage
+  1033→  1033→        </p>
+  1034→  1034→        <div className="grid grid-cols-5 gap-1.5">
+  1035→  1035→          {['#fef08a', '#fed7aa', '#fecaca', '#d9f99d', '#bfdbfe', '#ddd6fe', '#fbcfe8', '#bae6fd', '#fef9c3', '#e0e7ff'].map((c) => (
+  1036→  1036→            <button
+  1037→  1037→              key={c}
+  1038→  1038→              onClick={() => onColor(c)}
+  1039→  1039→              className="w-8 h-8 rounded-md border border-border hover:scale-110 transition-transform"
+  1040→  1040→              style={{ backgroundColor: c }}
+  1041→  1041→              title={c}
+  1042→  1042→              tabIndex={-1}
+  1043→  1043→            />
+  1044→  1044→          ))}
+  1045→  1045→        </div>
+  1046→  1046→      </PopoverContent>
+  1047→  1047→    </Popover>
+  1048→  1048→  )
+  1049→  1049→}
+  1050→  1050→
+  1051→  1051→// ============================================================================
+  1052→  1052→// Watermark button + popover (filigrane)
+  1053→  1053→// ============================================================================
+  1054→  1054→
+  1055→  1055→function WatermarkButton({
+  1056→  1056→  watermark,
+  1057→  1057→  onChange,
+  1058→  1058→}: {
+  1059→  1059→  watermark: { enabled: boolean; text: string; opacity: number; angle: number }
+  1060→  1060→  onChange: (w: { enabled: boolean; text: string; opacity: number; angle: number }) => void
+  1061→  1061→}) {
+  1062→  1062→  return (
+  1063→  1063→    <Popover>
+  1064→  1064→      <Tooltip>
+  1065→  1065→        <TooltipTrigger asChild>
+  1066→  1066→          <PopoverTrigger asChild>
+  1067→  1067→            <Button
+  1068→  1068→              type="button"
+  1069→  1069→              variant="ghost"
+  1070→  1070→              size="sm"
+  1071→  1071→              className={cn(
+  1072→  1072→                'h-8 px-2 flex-shrink-0 gap-1.5',
+  1073→  1073→                watermark.enabled
+  1074→  1074→                  ? 'bg-violet-500/15 text-violet-600 hover:bg-violet-500/20'
+  1075→  1075→                  : 'hover:bg-muted'
+  1076→  1076→              )}
+  1077→  1077→              tabIndex={-1}
+  1078→  1078→            >
+  1079→  1079→              <Droplet className="h-4 w-4" />
+  1080→  1080→              <span className="text-[11px] font-medium hidden sm:inline">Filigrane</span>
+  1081→  1081→              {watermark.enabled && (
+  1082→  1082→                <span
+  1083→  1083→                  className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"
+  1084→  1084→                  aria-hidden
+  1085→  1085→                />
+  1086→  1086→              )}
+  1087→  1087→            </Button>
+  1088→  1088→          </PopoverTrigger>
+  1089→  1089→        </TooltipTrigger>
+  1090→  1090→        <TooltipContent side="bottom" className="text-xs">
+  1091→  1091→          Filigrane (watermark)
+  1092→  1092→        </TooltipContent>
+  1093→  1093→      </Tooltip>
+  1094→  1094→      <PopoverContent className="w-72 p-3" align="start">
+  1095→  1095→        <div className="space-y-3">
+  1096→  1096→          <div className="flex items-center gap-2">
+  1097→  1097→            <Palette className="h-4 w-4 text-primary" />
+  1098→  1098→            <p className="text-sm font-semibold">Filigrane</p>
+  1099→  1099→          </div>
+  1100→  1100→          <p className="text-[11px] text-muted-foreground leading-relaxed">
+  1101→  1101→            Ajoute un texte en arrière-plan de la page A4. Utile pour marquer
+  1102→  1102→            un brouillon ou un document confidentiel.
+  1103→  1103→          </p>
+  1104→  1104→          <div className="flex items-center justify-between">
+  1105→  1105→            <Label htmlFor="wm-enabled" className="text-xs cursor-pointer">
+  1106→  1106→              Activer le filigrane
+  1107→  1107→            </Label>
+  1108→  1108→            <button
+  1109→  1109→              id="wm-enabled"
+  1110→  1110→              type="button"
+  1111→  1111→              role="switch"
+  1112→  1112→              aria-checked={watermark.enabled}
+  1113→  1113→              onClick={() => onChange({ ...watermark, enabled: !watermark.enabled })}
+  1114→  1114→              className={cn(
+  1115→  1115→                'w-9 h-5 rounded-full transition-colors relative',
+  1116→  1116→                watermark.enabled ? 'bg-primary' : 'bg-muted'
+  1117→  1117→              )}
+  1118→  1118→            >
+  1119→  1119→              <span
+  1120→  1120→                className={cn(
+  1121→  1121→                  'absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
+  1122→  1122→                  watermark.enabled ? 'translate-x-4' : 'translate-x-0.5'
+  1123→  1123→                )}
+  1124→  1124→              />
+  1125→  1125→            </button>
+  1126→  1126→          </div>
+  1127→  1127→          <div className="space-y-1">
+  1128→  1128→            <Label htmlFor="wm-text" className="text-xs">Texte du filigrane</Label>
+  1129→  1129→            <Input
+  1130→  1130→              id="wm-text"
+  1131→  1131→              value={watermark.text}
+  1132→  1132→              onChange={(e) => onChange({ ...watermark, text: e.target.value })}
+  1133→  1133→              placeholder="CONFIDENTIEL"
+  1134→  1134→              className="h-8 text-xs"
+  1135→  1135→            />
+  1136→  1136→          </div>
+  1137→  1137→          <div className="space-y-1">
+  1138→  1138→            <Label htmlFor="wm-opacity" className="text-xs">
+  1139→  1139→              Opacité : {Math.round(watermark.opacity * 100)}%
+  1140→  1140→            </Label>
+  1141→  1141→            <input
+  1142→  1142→              id="wm-opacity"
+  1143→  1143→              type="range"
+  1144→  1144→              min={0.02}
+  1145→  1145→              max={0.3}
+  1146→  1146→              step={0.01}
+  1147→  1147→              value={watermark.opacity}
+  1148→  1148→              onChange={(e) => onChange({ ...watermark, opacity: parseFloat(e.target.value) })}
+  1149→  1149→              className="w-full accent-primary"
+  1150→  1150→            />
+  1151→  1151→          </div>
+  1152→  1152→          <div className="space-y-1">
+  1153→  1153→            <Label htmlFor="wm-angle" className="text-xs">
+  1154→  1154→              Angle : {watermark.angle}°
+  1155→  1155→            </Label>
+  1156→  1156→            <input
+  1157→  1157→              id="wm-angle"
+  1158→  1158→              type="range"
+  1159→  1159→              min={-90}
+  1160→  1160→              max={90}
+  1161→  1161→              step={5}
+  1162→  1162→              value={watermark.angle}
+  1163→  1163→              onChange={(e) => onChange({ ...watermark, angle: parseInt(e.target.value) })}
+  1164→  1164→              className="w-full accent-primary"
+  1165→  1165→            />
+  1166→  1166→          </div>
+  1167→  1167→        </div>
+  1168→  1168→      </PopoverContent>
+  1169→  1169→    </Popover>
+  1170→  1170→  )
+  1171→  1171→}
+  1172→  1172→
+  1173→  1173→// ============================================================================
+  1174→  1174→// Utils
+  1175→  1175→// ============================================================================
+  1176→  1176→
+  1177→  1177→function escapeHtml(s: string): string {
+  1178→  1178→  return s
+  1179→  1179→    .replace(/&/g, '&amp;')
+  1180→  1180→    .replace(/</g, '&lt;')
+  1181→  1181→    .replace(/>/g, '&gt;')
+  1182→  1182→}
+  1183→  1183→
+  1184→  1184→function appendHtml(el: HTMLElement, html: string) {
+  1185→  1185→  const template = document.createElement('template')
+  1186→  1186→  template.innerHTML = html.trim()
+  1187→  1187→  el.appendChild(template.content.cloneNode(true))
+  1188→  1188→}
+  1189→  1189→
+  1190→  1190→// Tiny inline notifier — we don't want to import sonner here (kept the editor
+  1191→  1191→// dependency-free of store/UI state). The parent component can override this
+  1192→  1192→// by patching the function if needed.
+  1193→  1193→function toast_editor(msg: string) {
+  1194→  1194→  if (typeof window !== 'undefined') {
+  1195→  1195→    // Best-effort: log + brief visual cue via the active editor's parent.
+  1196→  1196→    // The EditorView (workspace.tsx) shows the actual toast via sonner when
+  1197→  1197→    // the user clicks a button. This is a fallback for selection-required actions.
+  1198→  1198→    // eslint-disable-next-line no-console
+  1199→  1199→    console.info('[A4Editor]', msg)
+  1200→  1200→  }
+  1201→  1201→}
+  1202→  1202→
