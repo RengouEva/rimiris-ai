@@ -1009,3 +1009,44 @@ Stage Summary:
 - Sécurité : (1) signature webhook vérifiée pour chaque provider avec comparaison timing-safe, (2) cross-check provider pending === provider webhook, (3) idempotence (double fulfillment impossible), (4) account ownership (verify + success cross-checkent accountId), (5) aucune clé secrète jamais exposée côté client (seul publishableKey non-secret est retourné par /api/payment/health).
 - Defense-in-depth : /api/payment/success et /api/payment/verify rappellent l'API du prestataire en server-to-server pour confirmer le statut, au cas où le webhook soit delayed/blocked. Le fulfillment est idempotent donc safe à appeler plusieurs fois.
 - Demo mode préservé : si aucun provider n'est configuré, la page pricing affiche le badge ambre "Mode démo" et le dialog legacy (upgradeToTier sans revenu enregistré) continue de fonctionner.
+
+---
+Task ID: payment-landing-toast
+Agent: main (Super Z)
+Task: Brancher la landing page sur ?payment=success|processing|failed pour afficher un toast de confirmation après retour du checkout + rappel que l'admin peut configurer les prestataires de paiement depuis son dashboard (déjà livré).
+
+Work Log:
+- Lecture de `src/app/page.tsx` : la page est un client component qui route entre `<WelcomeScreen />` (landing publique) et `<AuthGate><AuthedApp /></AuthGate>` selon `view` et `projectInitialized`. Pas de lecture des query params `?payment=…` jusqu'ici.
+- Vérification du système de toast : deux Toaster déjà montés dans `src/app/layout.tsx` — `<Toaster />` (shadcn classique, bottom-right par défaut) ET `<SonnerToaster position="top-right" />` (sonner). Aucun appel à `toast()` n'existait encore côté client. Choix : Sonner (API plus concise, animations plus fluides, déjà monté top-right).
+- Vérification que `/api/payment/success` redirige déjà vers `/?payment=success|processing|failed|cancelled|auth_required|forbidden|no_ref|not_found` avec params additionnels `tier`, `reason`, `ref` — rien à changer côté serveur.
+- Vérification que le panneau admin Paiements est en place : tab `['payments', 'Paiements']` à la ligne 297 de `admin-portal.tsx`, render `<PaymentProvidersPanel sessionEmail={session.email} />` ligne 638, composant défini ligne 1279 avec 4 endpoints fetch vers `/api/admin/payment-providers` (load/save/activate/test). Aucune modification nécessaire.
+- Implémentation dans `src/app/page.tsx` :
+  * Import `import { toast } from 'sonner'`.
+  * Nouvelle fonction `showPaymentToast(params: URLSearchParams)` qui switch sur `params.get('payment')` et déclenche le toast Sonner approprié :
+    - `success` + `tier=pro` → `toast.success('Bienvenue dans Rimiris Pro', { description: 'Toutes les fonctionnalités Pro sont déverrouillées pour ce projet. Bonne rédaction !', duration: 7000 })`
+    - `success` (autre tier) → `toast.success('Paiement confirmé', { description: 'Votre paiement a été enregistré. Vous pouvez continuer.', duration: 7000 })`
+    - `processing` + `ref=rdr_xxx` → `toast.info('Paiement en cours de traitement', { description: 'Référence rdr_xxx. Le prestataire confirme la transaction — votre compte sera crédité sous quelques minutes.', duration: 8000 })`
+    - `failed` + `reason` → `toast.error('Échec du paiement', { description: 'Cause : <reason décodée>. Aucun montant n’a été débité. Vous pouvez réessayer.', duration: 9000 })`
+    - `cancelled` → `toast.warning('Paiement annulé', { description: 'Vous avez abandonné le checkout. Aucun montant n’a été débité. Vous pouvez réessayer quand vous voulez.', duration: 7000 })`
+    - `auth_required` → `toast.error('Session expirée', { description: 'Votre session a expiré pendant le checkout. Reconnectez-vous pour réessayer.', duration: 7000 })`
+    - `forbidden` → `toast.error('Accès refusé', { description: 'Ce paiement ne correspond pas à votre compte. Contactez le support si vous pensez à une erreur.', duration: 8000 })`
+    - `no_ref` / `not_found` → `toast.error('Référence de paiement introuvable', { description: 'Le lien de retour ne contenait pas de référence valide. Si le paiement a réussi, contactez le support avec votre reçu.', duration: 9000 })`
+    - default → `toast.message('Retour de paiement', { description: 'Statut : <status>', duration: 6000 })`
+  * Toast déclenché via `setTimeout(fn, 350)` pour laisser React hydrater avant l'apparition (évite un flash si le ToastPortal n'est pas encore monté).
+  * Nouveau `useEffect(() => {…}, [])` au montage de `Home()` : lit `window.location.search`, si `params.has('payment')` appelle `showPaymentToast`, puis strip `payment`, `tier`, `reason`, `ref` via `history.replaceState` pour qu'un refresh ne rejoue pas le toast.
+  * Le useEffect est placé AVANT le early return `<WelcomeScreen />` — donc le toast s'affiche quel que soit l'état du store (welcome / pricing / workspace / onboarding).
+
+Vérifications:
+- `npx tsc --noEmit --skipLibCheck` → 0 erreur.
+- `curl http://localhost:3000/api/payment/health` → 200 `{"enabled":false,"provider":null,…}` (mode démo tant qu'aucun provider n'est configuré via l'admin).
+- `curl "http://localhost:3000/?payment=success&tier=pro"` → 200 (landing rendue, toast sera déclenché côté client).
+- `curl "http://localhost:3000/?payment=failed&reason=test"` → 200.
+- `curl "http://localhost:3000/?payment=cancelled"` → 200.
+- `curl http://localhost:3000/api/admin/payment-providers` sans cookie → 401 (sécurité maintenue).
+
+Stage Summary:
+- Toast de confirmation après retour checkout implémenté et testé. 8 cas couverts : success (pro / autre), processing (avec ref), failed (avec reason), cancelled, auth_required, forbidden, no_ref / not_found, default.
+- Stripping automatique des query params après affichage pour éviter le replay au refresh.
+- Aucune modification serveur nécessaire — `/api/payment/success` redirigeait déjà vers `/?payment=…` (task précédent).
+- Panneau admin Paiements confirmé en place (déjà livré au task précédent) : 7 prestataires supportés, chiffrement AES-256-GCM, audit log, live test pings, activation immédiate via cache invalidation.
+- Commit: d9cd89a sur main, ahead of origin/main.
