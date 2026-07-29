@@ -76,7 +76,7 @@ export interface ChatOptions {
   thinking?: 'enabled' | 'disabled'
 }
 
-export type LLMProvider = 'zai' | 'openai' | 'anthropic' | 'mistral' | 'openrouter'
+export type LLMProvider = 'zai' | 'openai' | 'anthropic' | 'mistral' | 'openrouter' | 'local'
 
 // ============================================================================
 // Runtime config — written by the admin portal, takes precedence over env
@@ -94,6 +94,8 @@ interface RuntimeLLMConfig {
   mistralApiKey?: string
   openrouterApiKey?: string
   openaiBaseUrl?: string
+  localBaseUrl?: string
+  localApiKey?: string
 }
 
 let _cachedConfig: RuntimeLLMConfig | null = null
@@ -134,13 +136,15 @@ export function invalidateLLMConfigCache() {
 // ============================================================================
 // Provider resolution — runtime config first, then env, then zai default
 // ============================================================================
+const VALID_PROVIDERS: LLMProvider[] = ['zai', 'openai', 'anthropic', 'mistral', 'openrouter', 'local']
+
 function getProvider(): LLMProvider {
   const rc = readRuntimeConfig()
-  if (rc.provider && ['zai', 'openai', 'anthropic', 'mistral', 'openrouter'].includes(rc.provider)) {
+  if (rc.provider && VALID_PROVIDERS.includes(rc.provider)) {
     return rc.provider!
   }
   const p = (process.env.LLM_PROVIDER || 'zai').toLowerCase()
-  if (['zai', 'openai', 'anthropic', 'mistral', 'openrouter'].includes(p)) {
+  if (VALID_PROVIDERS.includes(p as LLMProvider)) {
     return p as LLMProvider
   }
   return 'zai'
@@ -155,6 +159,7 @@ function getModel(provider: LLMProvider): string {
     case 'anthropic':   return 'claude-3-5-sonnet-20241022'
     case 'mistral':     return 'mistral-large-latest'
     case 'openrouter':  return 'anthropic/claude-3.5-sonnet'
+    case 'local':       return 'local-model' // overridden by user in admin UI
     default:            return '' // zai: SDK picks the default
   }
 }
@@ -166,6 +171,7 @@ function getApiKey(provider: LLMProvider): string {
     case 'anthropic':   return rc.anthropicApiKey   || process.env.ANTHROPIC_API_KEY   || ''
     case 'mistral':     return rc.mistralApiKey     || process.env.MISTRAL_API_KEY     || ''
     case 'openrouter':  return rc.openrouterApiKey  || process.env.OPENROUTER_API_KEY  || ''
+    case 'local':       return rc.localApiKey       || process.env.LOCAL_API_KEY       || ''
     default:            return ''
   }
 }
@@ -173,6 +179,11 @@ function getApiKey(provider: LLMProvider): string {
 function getOpenAIBaseUrl(): string {
   const rc = readRuntimeConfig()
   return rc.openaiBaseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
+}
+
+function getLocalBaseUrl(): string {
+  const rc = readRuntimeConfig()
+  return rc.localBaseUrl || process.env.LOCAL_BASE_URL || 'http://localhost:11434/v1'
 }
 
 // ============================================================================
@@ -214,6 +225,15 @@ export async function chatLLM(
       })
     case 'anthropic':
       return chatAnthropic(messages, opts, getApiKey('anthropic'), model)
+    case 'local':
+      // Local LLM server (Ollama, LM Studio, vLLM, llama.cpp, text-generation-webui…)
+      // All of them expose an OpenAI-compatible /v1/chat/completions endpoint.
+      // API key is optional (some servers require a dummy "Bearer sk-..." header).
+      return chatOpenAICompatible(messages, opts, {
+        baseUrl: getLocalBaseUrl(),
+        apiKey: getApiKey('local') || 'no-key-required',
+        model,
+      })
   }
 }
 

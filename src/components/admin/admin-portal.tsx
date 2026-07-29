@@ -625,6 +625,8 @@ function LLMConfigPanel() {
     mistralApiKey: '',
     openrouterApiKey: '',
     openaiBaseUrl: 'https://api.openai.com/v1',
+    localBaseUrl: 'http://localhost:11434/v1',
+    localApiKey: '',
   })
   const [testResult, setTestResult] = React.useState<{ ok: boolean; reply?: string; error?: string } | null>(null)
   const [toast, setToast] = React.useState<{ type: 'success' | 'error'; msg: string } | null>(null)
@@ -643,6 +645,8 @@ function LLMConfigPanel() {
           mistralApiKey: '',
           openrouterApiKey: '',
           openaiBaseUrl: data.openai?.baseUrl || 'https://api.openai.com/v1',
+          localBaseUrl: data.local?.baseUrl || 'http://localhost:11434/v1',
+          localApiKey: '',
         })
         setLoading(false)
       })
@@ -666,6 +670,7 @@ function LLMConfigPanel() {
         provider: form.provider,
         model: form.model,
         openaiBaseUrl: form.openaiBaseUrl,
+        localBaseUrl: form.localBaseUrl,
         test: opts.test,
       }
       // Only send keys that were entered — empty string = leave unchanged
@@ -674,6 +679,7 @@ function LLMConfigPanel() {
         anthropicApiKey: form.anthropicApiKey,
         mistralApiKey: form.mistralApiKey,
         openrouterApiKey: form.openrouterApiKey,
+        localApiKey: form.localApiKey,
       })) {
         if (v) body[k] = v
       }
@@ -692,6 +698,7 @@ function LLMConfigPanel() {
         anthropicApiKey: '',
         mistralApiKey: '',
         openrouterApiKey: '',
+        localApiKey: '',
       }))
       // Re-load config to refresh masked keys
       const refresh = await fetch('/api/admin/llm-config', { cache: 'no-store' })
@@ -709,6 +716,7 @@ function LLMConfigPanel() {
 
   const PROVIDERS = [
     { id: 'zai',        name: 'ZAI (GLM)',                desc: 'Gratuit dans cet environnement. Aucune clé requise.', needsKey: false },
+    { id: 'local',      name: 'Modèle local (Ollama, LM Studio, vLLM…)', desc: 'Hébergez votre propre modèle. Aucune limite, gratuit, privé. Nécessite un serveur local.', needsKey: false },
     { id: 'openai',     name: 'OpenAI (GPT-4o, etc.)',    desc: 'Plateforme OpenAI. Clé API requise.', needsKey: true },
     { id: 'anthropic',  name: 'Anthropic (Claude)',       desc: 'Claude 3.5 Sonnet / Haiku. Clé API requise.', needsKey: true },
     { id: 'mistral',    name: 'Mistral AI',               desc: 'Mistral Large / Small. Clé API requise.', needsKey: true },
@@ -769,12 +777,62 @@ function LLMConfigPanel() {
           <Input
             value={form.model}
             onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-            placeholder={form.provider === 'zai' ? '(défaut GLM)' : form.provider === 'openai' ? 'gpt-4o' : form.provider === 'anthropic' ? 'claude-3-5-sonnet-20241022' : form.provider === 'mistral' ? 'mistral-large-latest' : 'anthropic/claude-3.5-sonnet'}
+            placeholder={
+              form.provider === 'zai' ? '(défaut GLM)'
+              : form.provider === 'openai' ? 'gpt-4o'
+              : form.provider === 'anthropic' ? 'claude-3-5-sonnet-20241022'
+              : form.provider === 'mistral' ? 'mistral-large-latest'
+              : form.provider === 'openrouter' ? 'anthropic/claude-3.5-sonnet'
+              : form.provider === 'local' ? 'llama3.1:8b-instruct  (ou tout nom de modèle Ollama/LM Studio)'
+              : ''
+            }
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Laisser vide pour utiliser le modèle par défaut du fournisseur.
+            {form.provider === 'local' ? (
+              <>
+                Pour <strong>Ollama</strong> : <code>ollama list</code> affiche les noms. Pour <strong>LM Studio</strong> : nom du fichier GGUF.
+                Exemples : <code>llama3.1:8b-instruct</code>, <code>mistral:7b-instruct</code>, <code>qwen2.5:14b</code>.
+              </>
+            ) : (
+              'Laisser vide pour utiliser le modèle par défaut du fournisseur.'
+            )}
           </p>
         </div>
+
+        {/* Local server config — Base URL + optional API key */}
+        {form.provider === 'local' && (
+          <div className="mb-5 p-4 rounded-lg border border-primary/20 bg-primary/5 space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">URL du serveur local</label>
+              <Input
+                value={form.localBaseUrl}
+                onChange={(e) => setForm((f) => ({ ...f, localBaseUrl: e.target.value }))}
+                placeholder="http://localhost:11434/v1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                URLs selon le serveur :<br />
+                • <strong>Ollama</strong> : <code>http://localhost:11434/v1</code><br />
+                • <strong>LM Studio</strong> : <code>http://localhost:1234/v1</code><br />
+                • <strong>vLLM</strong> : <code>http://localhost:8000/v1</code><br />
+                • <strong>llama.cpp server</strong> : <code>http://localhost:8080/v1</code><br />
+                • <strong>text-generation-webui</strong> : <code>http://localhost:5000/v1</code><br />
+                Si le serveur est sur une autre machine, remplacez <code>localhost</code> par son IP.
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Clé API (optionnel)</label>
+              <Input
+                type="password"
+                value={form.localApiKey}
+                onChange={(e) => setForm((f) => ({ ...f, localApiKey: e.target.value }))}
+                placeholder={cfg?.local?.masked ? `Actuelle : ${cfg.local.masked} — laisser vide pour conserver` : 'La plupart des serveurs locaux ne nécessitent pas de clé'}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                La plupart des serveurs locaux n'exigent pas de clé. Si le vôtre en demande une (vLLM avec <code>--api-key</code>), saisissez-la ici.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* OpenAI Base URL (only for openai provider) */}
         {form.provider === 'openai' && (
@@ -859,7 +917,7 @@ function LLMConfigPanel() {
         </p>
         <div className="grid sm:grid-cols-2 gap-3">
           {PROVIDERS.filter((p) => p.needsKey && p.id !== form.provider).map((p) => {
-            const field = p.id === 'openrouter' ? 'openrouterApiKey' : `${p.id}ApiKey`
+            const field = `${p.id}ApiKey`
             return (
               <div key={p.id}>
                 <label className="text-xs font-medium mb-1 block">{p.name.split(' ')[0]}</label>

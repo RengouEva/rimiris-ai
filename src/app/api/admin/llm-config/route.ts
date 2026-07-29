@@ -19,6 +19,8 @@ interface RuntimeLLMConfig {
   mistralApiKey?: string
   openrouterApiKey?: string
   openaiBaseUrl?: string
+  localBaseUrl?: string
+  localApiKey?: string
 }
 
 // ============================================================================
@@ -85,6 +87,11 @@ export async function GET() {
       hasKey: !!(cfg.openrouterApiKey || process.env.OPENROUTER_API_KEY),
       masked: maskKey(cfg.openrouterApiKey || process.env.OPENROUTER_API_KEY),
     },
+    local: {
+      hasKey: !!(cfg.localApiKey || process.env.LOCAL_API_KEY),
+      masked: maskKey(cfg.localApiKey || process.env.LOCAL_API_KEY),
+      baseUrl: cfg.localBaseUrl || process.env.LOCAL_BASE_URL || 'http://localhost:11434/v1',
+    },
   })
 }
 
@@ -123,8 +130,11 @@ export async function POST(req: NextRequest) {
     if (typeof body.openaiBaseUrl === 'string') {
       cfg.openaiBaseUrl = body.openaiBaseUrl.trim() || undefined
     }
+    if (typeof body.localBaseUrl === 'string') {
+      cfg.localBaseUrl = body.localBaseUrl.trim() || undefined
+    }
     // API keys: empty string = leave unchanged; null = clear; otherwise set
-    const keyFields = ['openaiApiKey', 'anthropicApiKey', 'mistralApiKey', 'openrouterApiKey'] as const
+    const keyFields = ['openaiApiKey', 'anthropicApiKey', 'mistralApiKey', 'openrouterApiKey', 'localApiKey'] as const
     for (const field of keyFields) {
       const v = body[field]
       if (v === undefined) continue
