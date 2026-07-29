@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { toast } from 'sonner'
 import { useIrisStore, type ViewMode } from '@/store/iris-store'
 import { WelcomeScreen } from '@/components/iris/welcome-screen'
 import { OnboardingInterview } from '@/components/iris/onboarding-interview'
@@ -34,6 +35,102 @@ const VALID_VIEWS: ViewMode[] = [
   'pricing',
 ]
 
+// Maps the ?payment=… query param (set by /api/payment/success) to a Sonner
+// toast that confirms the checkout outcome to the user.
+function showPaymentToast(params: URLSearchParams) {
+  const status = params.get('payment')
+  if (!status) return
+  const tier = params.get('tier') // 'pro' | undefined
+  const reason = params.get('reason') // failure reason, optional
+  const ref = params.get('ref') // pending reference, optional
+
+  // Small delay so the toast mounts after the page is interactive.
+  const fire = (fn: () => void) => setTimeout(fn, 350)
+
+  switch (status) {
+    case 'success':
+      fire(() =>
+        toast.success(
+          tier === 'pro'
+            ? 'Bienvenue dans Rimiris Pro'
+            : 'Paiement confirmé',
+          {
+            description:
+              tier === 'pro'
+                ? 'Toutes les fonctionnalités Pro sont déverrouillées pour ce projet. Bonne rédaction !'
+                : 'Votre paiement a été enregistré. Vous pouvez continuer.',
+            duration: 7000,
+          },
+        ),
+      )
+      break
+    case 'processing':
+      fire(() =>
+        toast.info('Paiement en cours de traitement', {
+          description: ref
+            ? `Référence ${ref}. Le prestataire confirme la transaction — votre compte sera crédité sous quelques minutes.`
+            : 'Le prestataire confirme la transaction — votre compte sera crédité sous quelques minutes.',
+          duration: 8000,
+        }),
+      )
+      break
+    case 'failed':
+      fire(() =>
+        toast.error('Échec du paiement', {
+          description: reason
+            ? `Cause : ${decodeURIComponent(reason)}. Aucun montant n’a été débité. Vous pouvez réessayer.`
+            : 'La transaction a été refusée. Aucun montant n’a été débité. Vous pouvez réessayer.',
+          duration: 9000,
+        }),
+      )
+      break
+    case 'cancelled':
+      fire(() =>
+        toast.warning('Paiement annulé', {
+          description:
+            'Vous avez abandonné le checkout. Aucun montant n’a été débité. Vous pouvez réessayer quand vous voulez.',
+          duration: 7000,
+        }),
+      )
+      break
+    case 'auth_required':
+      fire(() =>
+        toast.error('Session expirée', {
+          description:
+            'Votre session a expiré pendant le checkout. Reconnectez-vous pour réessayer.',
+          duration: 7000,
+        }),
+      )
+      break
+    case 'forbidden':
+      fire(() =>
+        toast.error('Accès refusé', {
+          description:
+            'Ce paiement ne correspond pas à votre compte. Contactez le support si vous pensez à une erreur.',
+          duration: 8000,
+        }),
+      )
+      break
+    case 'no_ref':
+    case 'not_found':
+      fire(() =>
+        toast.error('Référence de paiement introuvable', {
+          description:
+            'Le lien de retour ne contenait pas de référence valide. Si le paiement a réussi, contactez le support avec votre reçu.',
+          duration: 9000,
+        }),
+      )
+      break
+    default:
+      fire(() =>
+        toast.message('Retour de paiement', {
+          description: `Statut : ${status}`,
+          duration: 6000,
+        }),
+      )
+  }
+}
+
 export default function Home() {
   const { view, projectInitialized, setView } = useIrisStore()
 
@@ -51,6 +148,25 @@ export default function Home() {
       window.history.replaceState({}, '', url.toString())
     }
   }, [projectInitialized, setView])
+
+  // ?payment=success|processing|failed|cancelled|... set by /api/payment/success
+  // after the user comes back from the provider's hosted checkout.
+  // We show a single confirmation toast, then strip the params so a refresh
+  // doesn't replay it.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (!params.has('payment')) return
+    showPaymentToast(params)
+    // Clean up — also redirects the user to the pricing view if they had no
+    // active project (so the toast shows in context, not on the marketing page).
+    const url = new URL(window.location.href)
+    url.searchParams.delete('payment')
+    url.searchParams.delete('tier')
+    url.searchParams.delete('reason')
+    url.searchParams.delete('ref')
+    window.history.replaceState({}, '', url.toString())
+  }, [])
 
   // Full-screen views (no app shell)
   // The WelcomeScreen (landing page) is public — no auth required.
