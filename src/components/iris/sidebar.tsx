@@ -52,23 +52,26 @@ export function Sidebar() {
       )}
     >
       {/* Brand */}
-      <div className="h-14 flex items-center gap-2 px-3 border-b border-sidebar-border">
+      <div className="h-16 flex items-center justify-center px-3 border-b border-sidebar-border">
         <button
           onClick={() => setView('workspace')}
           className="flex-shrink-0"
           aria-label="Rimiris AI — accueil"
         >
-          <RimirisLogo size="md" />
+          {sidebarCollapsed ? (
+            <RimirisLogo size="md" />
+          ) : (
+            <RimirisLogo size="lg" withWordmark centered />
+          )}
         </button>
-        {!sidebarCollapsed && (
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm leading-none">Rimiris</p>
-            <p className="text-xs text-muted-foreground leading-none mt-1 truncate">
-              {project.title || 'Nouveau mémoire'}
-            </p>
-          </div>
-        )}
       </div>
+      {!sidebarCollapsed && (
+        <div className="px-3 py-2 border-b border-sidebar-border">
+          <p className="text-xs text-muted-foreground truncate text-center">
+            {project.title || 'Nouveau mémoire'}
+          </p>
+        </div>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 p-2 space-y-1">

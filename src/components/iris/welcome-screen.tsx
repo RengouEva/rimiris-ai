@@ -50,11 +50,7 @@ export function WelcomeScreen() {
       <header className="border-b border-border/40 backdrop-blur-sm bg-background/60 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <RimirisLogo size="md" />
-            <div>
-              <p className="font-bold text-base leading-none">Rimiris</p>
-              <p className="text-xs text-muted-foreground leading-none mt-0.5">AI</p>
-            </div>
+            <RimirisLogo size="lg" withWordmark />
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />

@@ -140,11 +140,10 @@ function OnboardingHeader({ step }: { step: OnboardingStep }) {
   return (
     <header className="border-b border-border/40 backdrop-blur-sm bg-background/60 sticky top-0 z-10">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <RimirisLogo size="md" />
-          <div>
-            <p className="font-bold text-base leading-none">Rimiris</p>
-            <p className="text-xs text-muted-foreground leading-none mt-0.5">
+        <div className="flex items-center gap-3">
+          <RimirisLogo size="lg" withWordmark />
+          <div className="hidden sm:block pl-3 border-l border-border/60">
+            <p className="text-xs text-muted-foreground leading-none">
               Configuration du projet · étape {currentIdx + 1}/{steps.length}
             </p>
           </div>

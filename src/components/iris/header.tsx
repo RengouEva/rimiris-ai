@@ -43,8 +43,7 @@ export function Header() {
             </SheetContent>
           </Sheet>
           <div className="flex items-center gap-2">
-            <RimirisLogo size="sm" />
-            <span className="font-bold text-sm">Rimiris</span>
+            <RimirisLogo size="sm" withWordmark />
           </div>
         </div>
 
