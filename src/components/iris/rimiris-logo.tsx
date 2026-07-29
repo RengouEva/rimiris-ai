@@ -6,11 +6,16 @@ import Image from 'next/image'
 /**
  * RimirisLogo — the official Rimiris AI brand mark.
  *
- * Uses the optimized WebP (27 KB) with PNG fallback (77 KB).
- * Renders at multiple sizes:
+ * Source logo is 613×553 (non-square, ratio ≈ 1.108). All square formats
+ * (favicon, PWA icons, apple-touch-icon) use fit-contain so the full brand
+ * mark is preserved with transparent padding.
+ *
+ * WebP is 19.5 KB (96% reduction from the 326 KB source PNG).
+ *
+ * Sizes:
  *   - 'sm'  → 32px  (mobile header)
  *   - 'md'  → 40px  (default)
- *   - 'lg'  → 48px  (sidebar / welcome header — slightly larger per request)
+ *   - 'lg'  → 48px  (sidebar / welcome header)
  *   - 'xl'  → 80px  (large display)
  *   - '2xl' → 120px (welcome hero)
  *
@@ -18,9 +23,6 @@ import Image from 'next/image'
  * (AI sits to the right of "Rimiris", on the same baseline — NOT stacked).
  *
  * Pass `centered` to center the logo + wordmark combo inside its container.
- *
- * The logo file was converted from a 1.4 MB PNG to a 27 KB WebP — a 98%
- * reduction — making it safe to render in performance-sensitive contexts.
  */
 export type RimirisLogoProps = {
   size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'
@@ -65,21 +67,25 @@ export function RimirisLogo({
   centered = false,
 }: RimirisLogoProps) {
   const px = SIZE_PX[size]
+  // logo.webp is 512×461 (ratio ≈ 1.108). We use width=px and let the
+  // height follow the intrinsic aspect ratio — no crop, no padding.
+  // This keeps the brand mark at full visual integrity.
+  const aspectRatio = 613 / 553 // matches the source PNG
   return (
     <div
       className={`flex items-center gap-2 ${centered ? 'justify-center w-full' : ''} ${className}`}
     >
       <div
         className={`relative ${ROUNDED[size]} overflow-hidden flex-shrink-0 ${glow ? 'iris-glow' : ''}`}
-        style={{ width: px, height: px }}
+        style={{ width: px, height: Math.round(px / aspectRatio) }}
       >
         <Image
           src="/logo.webp"
           alt="Rimiris AI"
           width={px}
-          height={px}
+          height={Math.round(px / aspectRatio)}
           priority={size === 'xl' || size === '2xl'}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-contain"
         />
       </div>
       {withWordmark && (
