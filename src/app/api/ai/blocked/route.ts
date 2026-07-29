@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 import { CHAPTERS } from '@/lib/iris/chapters'
 
 export const runtime = 'nodejs'
@@ -51,18 +51,17 @@ INSTRUCTIONS :
 
 Réponds en français académique chaleureux. Maximum 350 mots. N'écris jamais de paragraphes entiers à la place de l'étudiant.`
 
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
+    const reply = await chatLLM(
+      [
         { role: 'assistant', content: systemPrompt },
         { role: 'user', content: userMessage || "Je suis bloqué, aide-moi." },
       ],
-      thinking: { type: 'disabled' },
-      temperature: 0.8,
-      max_tokens: 800,
-    })
-
-    const reply = completion.choices[0]?.message?.content || '...'
+      {
+        temperature: 0.8,
+        maxTokens: 800,
+        thinking: 'disabled',
+      },
+    ) || '...'
 
     return NextResponse.json({ reply })
   } catch (err: any) {

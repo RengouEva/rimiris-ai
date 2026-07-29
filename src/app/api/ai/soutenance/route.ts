@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 import { buildGuideContext } from '@/lib/iris/prompt-context'
 
 export const runtime = 'nodejs'
@@ -49,18 +49,17 @@ GÉNÈRE UNIQUEMENT UN OBJET JSON VALIDE :
 
 10-12 diapositives, 8-10 questions jury (réparties entre Président, Rapporteur, Directeur et Examinateur), 4-6 points faibles. Français académique.`
 
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
+    const raw = await chatLLM(
+      [
         { role: 'assistant', content: systemPrompt },
         { role: 'user', content: 'Génère le kit de soutenance.' },
       ],
-      thinking: { type: 'disabled' },
-      temperature: 0.6,
-      max_tokens: 4000,
-    })
-
-    const raw = completion.choices[0]?.message?.content || '{}'
+      {
+        temperature: 0.6,
+        maxTokens: 4000,
+        thinking: 'disabled',
+      },
+    ) || '{}'
 
     let data: any = null
     try {

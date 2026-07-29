@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -44,18 +44,17 @@ Présente chaque sujet avec un numéro, un titre en gras, puis les 5 dimensions.
 
 Réponds en français académique. Format Markdown lisible.`
 
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
+    const reply = await chatLLM(
+      [
         { role: 'assistant', content: systemPrompt },
         { role: 'user', content: `Propose-moi 5 sujets de mémoire.` },
       ],
-      thinking: { type: 'disabled' },
-      temperature: 0.9,
-      max_tokens: 2000,
-    })
-
-    const reply = completion.choices[0]?.message?.content || '...'
+      {
+        temperature: 0.9,
+        maxTokens: 2000,
+        thinking: 'disabled',
+      },
+    ) || '...'
     return NextResponse.json({ reply })
   } catch (err: any) {
     console.error('[API /ai/subjects] Error:', err)

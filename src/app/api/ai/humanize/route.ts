@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -81,7 +81,6 @@ function sanitizeHtml(html: string): string {
 }
 
 async function runPass(
-  zai: any,
   passName: string,
   passInstruction: string,
   inputHtml: string,
@@ -104,21 +103,23 @@ RÈGLES :
 - Niveau cible : ${level}.
 - Filière : ${filiere || 'non précisée'}.`
 
-  const completion = await zai.chat.completions.create({
-    messages: [
+  const completionText = await chatLLM(
+    [
       { role: 'assistant', content: systemPrompt },
       { role: 'user', content: `Applique la passe "${passName}".` },
     ],
-    thinking: { type: 'disabled' },
-    temperature: 0.5,
-    max_tokens: 2500,
-  })
+    {
+      temperature: 0.5,
+      maxTokens: 2500,
+      thinking: 'disabled',
+    },
+  )
 
-  const output = sanitizeHtml(completion.choices[0]?.message?.content || inputHtml)
+  const output = sanitizeHtml(completionText || inputHtml)
 
   // Generate a short report
-  const reportCompletion = await zai.chat.completions.create({
-    messages: [
+  const report = await chatLLM(
+    [
       {
         role: 'assistant',
         content: `Tu es l'Humaniseur de Rimiris. Résume en 1-2 phrases ce que la passe "${passName}" a modifié dans le texte. Sois concret (ex : "Corrigé 3 accords et 2 ponctuations", "Varié le vocabulaire répétitif", etc.). Ne dépasse pas 30 mots.`,
@@ -128,11 +129,12 @@ RÈGLES :
         content: `Texte initial : ${inputHtml.slice(0, 800)}\n\nTexte modifié : ${output.slice(0, 800)}`,
       },
     ],
-    thinking: { type: 'disabled' },
-    temperature: 0.4,
-    max_tokens: 100,
-  })
-  const report = reportCompletion.choices[0]?.message?.content?.trim() || ''
+    {
+      temperature: 0.4,
+      maxTokens: 100,
+      thinking: 'disabled',
+    },
+  ).then((t) => t.trim())
 
   return { output, report }
 }
@@ -153,8 +155,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'HTML requis' }, { status: 400 })
     }
 
-    const zai = await ZAI.create()
-
     // ----------------------------------------------------------------------
     // Mode "pass" — exécuter une seule passe
     // ----------------------------------------------------------------------
@@ -169,7 +169,6 @@ export async function POST(req: NextRequest) {
       const pass = PASSES[idx - 1]
       const instruction = pass.instruction.replace('{level}', level)
       const { output, report } = await runPass(
-        zai,
         pass.name,
         instruction,
         html,
@@ -191,7 +190,6 @@ export async function POST(req: NextRequest) {
     // Mode "all" (legacy) — exécuter les 5 passes en une fois
     // ----------------------------------------------------------------------
     const pass1 = await runPass(
-      zai,
       PASSES[0].name,
       PASSES[0].instruction,
       html,
@@ -200,7 +198,6 @@ export async function POST(req: NextRequest) {
       norme
     )
     const pass2 = await runPass(
-      zai,
       PASSES[1].name,
       PASSES[1].instruction,
       pass1.output,
@@ -209,7 +206,6 @@ export async function POST(req: NextRequest) {
       norme
     )
     const pass3 = await runPass(
-      zai,
       PASSES[2].name,
       PASSES[2].instruction,
       pass2.output,
@@ -218,7 +214,6 @@ export async function POST(req: NextRequest) {
       norme
     )
     const pass4 = await runPass(
-      zai,
       PASSES[3].name,
       PASSES[3].instruction,
       pass3.output,
@@ -227,7 +222,6 @@ export async function POST(req: NextRequest) {
       norme
     )
     const pass5 = await runPass(
-      zai,
       PASSES[4].name,
       PASSES[4].instruction.replace('{level}', level),
       pass4.output,

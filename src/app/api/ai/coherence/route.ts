@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -69,18 +69,17 @@ RÉPONDS UNIQUEMENT AU FORMAT JSON :
 
 Si aucune incohérence, retourne {"issues": []}. Maximum 8 problèmes.`
 
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
+    const raw = await chatLLM(
+      [
         { role: 'assistant', content: systemPrompt },
         { role: 'user', content: 'Analyse la cohérence et retourne le JSON.' },
       ],
-      thinking: { type: 'disabled' },
-      temperature: 0.3,
-      max_tokens: 2000,
-    })
-
-    const raw = completion.choices[0]?.message?.content || '{}'
+      {
+        temperature: 0.3,
+        maxTokens: 2000,
+        thinking: 'disabled',
+      },
+    ) || '{}'
 
     let issues = []
     try {

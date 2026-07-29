@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 import { AGENTS } from '@/lib/iris/agents'
 import { CHAPTERS } from '@/lib/iris/chapters'
 
@@ -116,15 +116,11 @@ ${blockedMode
       { role: 'user', content: userMessage },
     ]
 
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages,
-      thinking: { type: 'disabled' },
+    const reply = await chatLLM(messages, {
       temperature: blockedMode ? 0.85 : 0.7,
-      max_tokens: blockedMode ? 800 : 700,
-    })
-
-    const reply = completion.choices[0]?.message?.content || '...'
+      maxTokens: blockedMode ? 800 : 700,
+      thinking: 'disabled',
+    }) || '...'
 
     return NextResponse.json({
       reply,

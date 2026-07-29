@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 import { buildGuideContext } from '@/lib/iris/prompt-context'
 
 export const runtime = 'nodejs'
@@ -80,18 +80,17 @@ Réponds UNIQUEMENT en JSON :
   "globalNotes": "Résumé global du mémoire en 2-3 phrases"
 }`
 
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
+    const raw = await chatLLM(
+      [
         { role: 'assistant', content: systemPrompt },
         { role: 'user', content: 'Réalise l\'audit complet.' },
       ],
-      thinking: { type: 'disabled' },
-      temperature: 0.3,
-      max_tokens: 2200,
-    })
-
-    const raw = completion.choices[0]?.message?.content || ''
+      {
+        temperature: 0.3,
+        maxTokens: 2200,
+        thinking: 'disabled',
+      },
+    )
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
     let parsed: any
     try {

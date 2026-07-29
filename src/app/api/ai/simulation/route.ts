@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 import { buildGuideContext, buildProjectContext } from '@/lib/iris/prompt-context'
 
 export const runtime = 'nodejs'
@@ -104,8 +104,6 @@ export async function POST(req: NextRequest) {
       ? soutenanceData.weakPoints.map((wp) => `- ${wp}`).join('\n')
       : ''
 
-    const zai = await ZAI.create()
-
     // ============================================================
     // ACTION: start
     // ============================================================
@@ -135,17 +133,17 @@ CONTRAINTES :
 
 Réponds UNIQUEMENT avec le texte de ton intervention (pas de JSON, pas de préfixe).`
 
-      const completion = await zai.chat.completions.create({
-        messages: [
+      const reply = (await chatLLM(
+        [
           { role: 'assistant', content: systemPrompt },
           { role: 'user', content: 'Ouvre la soutenance.' },
         ],
-        thinking: { type: 'disabled' },
-        temperature: 0.75,
-        max_tokens: 600,
-      })
-
-      const reply = completion.choices[0]?.message?.content?.trim() || '...'
+        {
+          temperature: 0.75,
+          maxTokens: 600,
+          thinking: 'disabled',
+        },
+      )).trim() || '...'
       return NextResponse.json({
         reply,
         juryRole: 'Président',
@@ -220,17 +218,17 @@ Réponds STRICTEMENT dans ce format JSON :
   "effectiveRole": "${transitioning ? nextRole : currentRole}"
 }`
 
-      const completion = await zai.chat.completions.create({
-        messages: [
+      const raw = (await chatLLM(
+        [
           { role: 'assistant', content: systemPrompt },
           { role: 'user', content: 'Continue la soutenance.' },
         ],
-        thinking: { type: 'disabled' },
-        temperature: 0.75,
-        max_tokens: 700,
-      })
-
-      const raw = completion.choices[0]?.message?.content?.trim() || ''
+        {
+          temperature: 0.75,
+          maxTokens: 700,
+          thinking: 'disabled',
+        },
+      )).trim() || ''
       let parsed: any = { feedback: null, reply: raw, debriefReady, effectiveRole: transitioning ? nextRole : currentRole }
       try {
         const jsonMatch = raw.match(/\{[\s\S]*\}/)
@@ -302,17 +300,17 @@ Réponds STRICTEMENT dans ce format JSON :
 - Sois exigeant mais juste — un Master moyen doit obtenir ~70-75, un excellent ~85+.
 - Réponds en français.`
 
-      const completion = await zai.chat.completions.create({
-        messages: [
+      const raw = (await chatLLM(
+        [
           { role: 'assistant', content: systemPrompt },
           { role: 'user', content: 'Rends ton délibéré.' },
         ],
-        thinking: { type: 'disabled' },
-        temperature: 0.5,
-        max_tokens: 1500,
-      })
-
-      const raw = completion.choices[0]?.message?.content?.trim() || '{}'
+        {
+          temperature: 0.5,
+          maxTokens: 1500,
+          thinking: 'disabled',
+        },
+      )).trim() || '{}'
       let data: any = null
       try {
         const jsonMatch = raw.match(/\{[\s\S]*\}/)

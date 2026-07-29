@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 import { AGENTS } from '@/lib/iris/agents'
 import { buildGuideContext, buildProjectContext } from '@/lib/iris/prompt-context'
 
@@ -160,15 +160,11 @@ EXEMPLE DE FORMAT ATTENDU :
       { role: 'user', content: userInstruction || 'Génère un brouillon structuré pour cette section.' },
     ]
 
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages,
-      thinking: { type: 'disabled' },
+    let html = await chatLLM(messages, {
       temperature: 0.7,
-      max_tokens: 2200,
+      maxTokens: 2200,
+      thinking: 'disabled',
     })
-
-    let html = completion.choices[0]?.message?.content || ''
     html = sanitizeDraftHtml(html)
 
     return NextResponse.json({

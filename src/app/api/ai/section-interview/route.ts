@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -187,9 +187,8 @@ export async function POST(req: NextRequest) {
 
     // ---- Action: dont_know (AI explains the concept) ----
     if (action === 'dont_know' && nextQuestion) {
-      const zai = await ZAI.create()
-      const completion = await zai.chat.completions.create({
-        messages: [
+      const explanation = await chatLLM(
+        [
           {
             role: 'assistant',
             content: `Tu es le Coach méthodologique de Rimiris. L'étudiant ne sait pas répondre à cette question. Explique-lui le concept en français académique, en 3-4 phrases maximum, avec un exemple concret adapté à son domaine (${project.filiere || 'général'}). Ne lui donne PAS la réponse, mais aide-le à la trouver lui-même.
@@ -200,19 +199,19 @@ Domaine : ${themeUnderstanding?.domain || project.filiere || 'non précisé'}`,
           },
           { role: 'user', content: 'Je ne sais pas répondre.' },
         ],
-        thinking: { type: 'disabled' },
-        temperature: 0.6,
-        max_tokens: 400,
-      })
-      const explanation = completion.choices[0]?.message?.content || ''
+        {
+          temperature: 0.6,
+          maxTokens: 400,
+          thinking: 'disabled',
+        },
+      )
       return NextResponse.json({ explanation })
     }
 
     // ---- Action: propose (AI generates 3 proposals) ----
     if (action === 'propose' && nextQuestion) {
-      const zai = await ZAI.create()
-      const completion = await zai.chat.completions.create({
-        messages: [
+      const raw = await chatLLM(
+        [
           {
             role: 'assistant',
             content: `Tu es le Coach méthodologique de Rimiris. L'étudiant veut que tu lui proposes plusieurs réponses. Génère 3 propositions argumentées, spécifiques à son contexte.
@@ -241,11 +240,12 @@ Réponds UNIQUEMENT en JSON :
           },
           { role: 'user', content: 'Propose-moi plusieurs réponses.' },
         ],
-        thinking: { type: 'disabled' },
-        temperature: 0.75,
-        max_tokens: 900,
-      })
-      const raw = completion.choices[0]?.message?.content || ''
+        {
+          temperature: 0.75,
+          maxTokens: 900,
+          thinking: 'disabled',
+        },
+      )
       const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
       let proposals: any[] = []
       try {
@@ -259,9 +259,8 @@ Réponds UNIQUEMENT en JSON :
 
     // ---- Action: example (AI shows a domain-specific example) ----
     if (action === 'example' && nextQuestion) {
-      const zai = await ZAI.create()
-      const completion = await zai.chat.completions.create({
-        messages: [
+      const example = await chatLLM(
+        [
           {
             role: 'assistant',
             content: `Tu es le Coach méthodologique de Rimiris. L'étudiant veut voir un exemple. Affiche un exemple concret, adapté à son domaine, en 3-5 phrases.
@@ -281,19 +280,19 @@ Réponds en français académique, max 150 mots.`,
           },
           { role: 'user', content: 'Montre-moi un exemple.' },
         ],
-        thinking: { type: 'disabled' },
-        temperature: 0.7,
-        max_tokens: 500,
-      })
-      const example = completion.choices[0]?.message?.content || ''
+        {
+          temperature: 0.7,
+          maxTokens: 500,
+          thinking: 'disabled',
+        },
+      )
       return NextResponse.json({ example })
     }
 
     // ---- Action: validate (final check before redaction) ----
     if (action === 'validate') {
-      const zai = await ZAI.create()
-      const completion = await zai.chat.completions.create({
-        messages: [
+      const raw = await chatLLM(
+        [
           {
             role: 'assistant',
             content: `Tu es le Contrôleur qualité de Rimiris. Vérifie les réponses collectées pour cette section avant la rédaction.
@@ -324,11 +323,12 @@ Réponds UNIQUEMENT en JSON :
           },
           { role: 'user', content: 'Valide les réponses avant rédaction.' },
         ],
-        thinking: { type: 'disabled' },
-        temperature: 0.4,
-        max_tokens: 800,
-      })
-      const raw = completion.choices[0]?.message?.content || ''
+        {
+          temperature: 0.4,
+          maxTokens: 800,
+          thinking: 'disabled',
+        },
+      )
       const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
       let validation: any
       try {

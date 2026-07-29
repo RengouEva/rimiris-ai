@@ -831,3 +831,31 @@ Stage Summary:
 - Portail admin : tous les montants en XAF, libellés adaptés au modèle one-time (plus de MRR/ARR au sens subscription — maintenant 30j et annualisé).
 - Login screen et landing page : textes mis à jour (plus de mention de Premium ni d'€/mois).
 - Aucune modification visuelle du header/logo/sidebar (welcome-screen.tsx : seule la ligne de teaser tarifaire a été touchée, le header reste byte-pour-byte identique à l'original).
+
+---
+Task ID: 2
+Agent: general-purpose
+Task: Migrate 18 /api/ai/* endpoints from ZAI SDK direct calls to chatLLM helper
+
+Work Log:
+- Read `/home/z/my-project/worklog.md` and `/home/z/my-project/src/lib/iris/llm.ts` to understand the centralised `chatLLM(messages, { temperature, maxTokens, thinking })` helper and the work already done by Task 1.
+- For each of the 18 endpoints under `src/app/api/ai/*/route.ts`, applied the same migration pattern: (1) replaced `import ZAI from 'z-ai-web-dev-sdk'` with `import { chatLLM } from '@/lib/iris/llm'`, (2) removed the `const zai = await ZAI.create()` block, (3) replaced `zai.chat.completions.create({ messages, thinking: { type: ... }, temperature, max_tokens })` + `completion.choices[0]?.message?.content || ''` with a single `await chatLLM(messages, { temperature, maxTokens, thinking })` call. Preserved all surrounding logic (try/catch, JSON parsing, sanitization, NextResponse) and kept the same variable name (`raw`, `html`, `reply`, etc.) so the rest of each function did not need changes.
+- Special cases handled:
+  - `interview/route.ts` (2 call sites): both ZAI calls replaced; in the first site the original code did `.content?.trim()`, so I chained `.then((t) => t.trim())` on the `chatLLM` promise to preserve the trim behaviour. Also explicitly typed `let nextQuestion: string` because the previous `any`-typed SDK return masked the literal-type narrowing from `INTERVIEW_STEPS` (`as const`); without this annotation TypeScript correctly flagged the assignment of `string` (from chatLLM) to the inferred literal type.
+  - `draft-all/route.ts`: `zai` was created once outside the loop and reused per section; removed the shared instantiation and called `chatLLM` inside the loop. Used `rawHtml` for the chatLLM result then `let html = sanitizeDraftHtml(rawHtml)` so the downstream `drafts.push({ html })` and word-count logic remained unchanged.
+  - `section-interview/route.ts` (4 call sites: dont_know, propose, example, validate): each `const zai = await ZAI.create()` block removed and replaced inline. Variables preserved (`explanation`, `raw`, `example`, `raw`).
+  - `humanize/route.ts` (2 call sites in shared `runPass` helper): removed the `zai: any` parameter from `runPass` signature and the shared `const zai = await ZAI.create()` in POST. Both `zai.chat.completions.create` calls (HTML pass + report pass) replaced with `chatLLM`. Used `.then((t) => t.trim())` on the report call to match the original `?.trim()` behaviour. All 5 `runPass(...)` call sites (mode 'pass' + 4 in mode 'all') had their first argument removed.
+  - `simulation/route.ts` (3 call sites: start, next, debrief): removed shared `const zai = await ZAI.create()` and replaced each call. Used `(await chatLLM(...)).trim() || '...'` (or `'{}'` or `''`) to preserve the original `.content?.trim() || ...` fallback semantics.
+  - `plagiarism/route.ts`: the ZAI call is inside a `try { ... } catch` best-effort block. Replaced it inline with `(await chatLLM(...)).trim() || '{}'` so the `raw.match(/\{[\s\S]*\}/)` regex still works on the trimmed string.
+  - `soutenance/route.ts`, `subjects/route.ts`, `blocked/route.ts`: preserved the `|| '{...}'` / `|| '...'` fallbacks from the original code by appending them after the `await chatLLM(...)` call.
+- Confirmed no `stream: true` call sites exist among the 18 files (none needed a `// TODO: streaming not yet supported by chatLLM` comment).
+- After migration, verified via ripgrep that no functional `ZAI`/`z-ai-web-dev-sdk` references remain in `src/app/api/ai/` (the only match is a stale comment in `draft-all/route.ts`: `// Each section takes ~5-10s with ZAI.`).
+- Ran `npx tsc --noEmit 2>&1 | grep -E "api/ai/"` to verify type-check. Stashed my changes first and confirmed that 2 pre-existing errors existed before migration: (1) `audit/route.ts(48,23)` — `filière` (with accent) typo in the system prompt, unrelated to migration; (2) `coherence/route.ts(91,9)` — `let issues = []` inferred as `never[]`. After restoring my changes the same 2 pre-existing errors remain — no NEW TypeScript errors were introduced by the migration. The only transient error introduced (interview/route.ts literal-type narrowing) was fixed with an explicit `let nextQuestion: string` annotation.
+
+Stage Summary:
+- All 18 endpoints under `src/app/api/ai/*/route.ts` now route their LLM calls through the centralised `chatLLM` helper in `src/lib/iris/llm.ts`. No file imports `z-ai-web-dev-sdk` directly anymore (only `src/lib/iris/llm.ts` does, internally).
+- Total call sites migrated: 24 (interview: 2, draft-all: 1, section-interview: 4, humanize: 2 in shared helper, simulation: 3, plus 12 single-call endpoints = scientific-check, plan, validate, problem-build, plagiarism, soutenance, audit, subjects, blocked, understand, draft, chat, coherence). Actually: 2+1+4+2+3+12 = 24 call sites across 18 files.
+- Zero call sites skipped (no streaming was used).
+- Runtime behaviour is identical: same prompts, same temperatures (0.3/0.4/0.5/0.6/0.7/0.75/0.8/0.85/0.9 depending on endpoint), same max_tokens (200/300/400/500/600/700/800/900/1500/1800/2000/2200/2500/4000 depending on endpoint), same thinking='disabled' setting. The `chatLLM` helper applies identical defaults (temperature 0.7, maxTokens 2200) when an option is omitted, but all original explicit values were preserved verbatim.
+- TypeScript check confirms migration introduced no new errors in any `api/ai/` file. The only 2 remaining errors in `api/ai/` are pre-existing (`audit/route.ts` `filière` accent typo and `coherence/route.ts` `let issues = []` inference) and were present before the migration.
+- To switch providers globally (e.g. to OpenAI, Anthropic, Mistral, OpenRouter), the user now sets `LLM_PROVIDER` + matching API key env var — no code changes in any of the 18 endpoints needed.

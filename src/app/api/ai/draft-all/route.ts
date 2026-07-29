@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 import { AGENTS } from '@/lib/iris/agents'
 import { buildGuideContext, buildProjectContext } from '@/lib/iris/prompt-context'
 
@@ -72,7 +72,6 @@ export async function POST(req: NextRequest) {
     }
 
     const agent = AGENTS.find((a) => a.id === 'redacteur') || AGENTS[0]
-    const zai = await ZAI.create()
 
     const projectContext = buildProjectContext(project)
     const guideContext = buildGuideContext(project)
@@ -131,21 +130,21 @@ INSTRUCTIONS DE RÉDACTION :
 7. Adapte le niveau de langue au niveau d'étude (${project.level || 'Master'}).
 ${guideContext ? `8. RESPECTE strictement les exigences du guide méthodologique de l'université fourni ci-dessus.` : ''}`
 
-        const completion = await zai.chat.completions.create({
-          messages: [
+        const rawHtml = await chatLLM(
+          [
             { role: 'assistant', content: sectionPrompt },
             {
               role: 'user',
               content: `Génère le brouillon de la section "${sec.title}".`,
             },
           ],
-          thinking: { type: 'disabled' },
-          temperature: 0.7,
-          max_tokens: 2200,
-        })
-
-        let html = completion.choices[0]?.message?.content || ''
-        html = sanitizeDraftHtml(html)
+          {
+            temperature: 0.7,
+            maxTokens: 2200,
+            thinking: 'disabled',
+          },
+        )
+        let html = sanitizeDraftHtml(rawHtml)
         const plainText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
         const wordCount = plainText ? plainText.split(/\s+/).length : 0
         totalWords += wordCount

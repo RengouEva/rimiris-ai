@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 import { buildProjectContext } from '@/lib/iris/prompt-context'
 
 export const runtime = 'nodejs'
@@ -243,17 +243,17 @@ Réponds STRICTEMENT dans ce format JSON :
 - Ignore les affirmations qui sont manifestement l'opinion de l'étudiant (marquées par "nous pensons", "il nous semble", etc.).
 - Réponds en français.`
 
-        const zai = await ZAI.create()
-        const completion = await zai.chat.completions.create({
-          messages: [
+        const raw = (await chatLLM(
+          [
             { role: 'assistant', content: aiPrompt },
             { role: 'user', content: 'Analyse.' },
           ],
-          thinking: { type: 'disabled' },
-          temperature: 0.3,
-          max_tokens: 800,
-        })
-        const raw = completion.choices[0]?.message?.content?.trim() || '{}'
+          {
+            temperature: 0.3,
+            maxTokens: 800,
+            thinking: 'disabled',
+          },
+        )).trim() || '{}'
         const jsonMatch = raw.match(/\{[\s\S]*\}/)
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0])

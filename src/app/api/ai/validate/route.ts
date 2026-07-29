@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 import { buildGuideContext } from '@/lib/iris/prompt-context'
 
 export const runtime = 'nodejs'
@@ -22,9 +22,8 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as ValidateRequestBody
     const guideContext = buildGuideContext(body.project)
 
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
+    const raw = await chatLLM(
+      [
         {
           role: 'assistant',
           content: `Tu es le Contrôleur qualité de Rimiris AI. Vérifie les réponses collectées pour cette section avant la rédaction.
@@ -57,12 +56,12 @@ Réponds UNIQUEMENT en JSON :
         },
         { role: 'user', content: 'Valide les réponses.' },
       ],
-      thinking: { type: 'disabled' },
-      temperature: 0.4,
-      max_tokens: 800,
-    })
-
-    const raw = completion.choices[0]?.message?.content || ''
+      {
+        temperature: 0.4,
+        maxTokens: 800,
+        thinking: 'disabled',
+      },
+    )
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
     let validation: any
     try {

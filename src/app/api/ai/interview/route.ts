@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { chatLLM } from '@/lib/iris/llm'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -86,15 +86,14 @@ export async function POST(req: NextRequest) {
 
     // Build a small contextual nudge using the AI: rephrase the next question
     // slightly based on what the student just said. Keeps it natural.
-    let nextQuestion = step.question
+    let nextQuestion: string = step.question
     let suggestions: string[] = []
 
     const lastAnswer = answers[answers.length - 1]
     if (lastAnswer) {
       try {
-        const zai = await ZAI.create()
-        const completion = await zai.chat.completions.create({
-          messages: [
+        const reformulated = await chatLLM(
+          [
             {
               role: 'assistant',
               content: `Tu es Pr. Rimiris, directeur de mémoire. L'étudiant vient de répondre à la question "${lastAnswer.question}". Sa réponse : "${lastAnswer.answer}".
@@ -113,11 +112,12 @@ INSTRUCTIONS :
               content: lastAnswer.answer,
             },
           ],
-          thinking: { type: 'disabled' },
-          temperature: 0.7,
-          max_tokens: 200,
-        })
-        const reformulated = completion.choices[0]?.message?.content?.trim()
+          {
+            temperature: 0.7,
+            maxTokens: 200,
+            thinking: 'disabled',
+          },
+        ).then((t) => t.trim())
         if (reformulated && reformulated.length > 0 && reformulated.length < 400) {
           nextQuestion = reformulated
         }
@@ -131,9 +131,8 @@ INSTRUCTIONS :
         const levelAnswer = answers.find((a) => a.questionId === 'level')
         if (topicAnswer) {
           try {
-            const zai = await ZAI.create()
-            const completion = await zai.chat.completions.create({
-              messages: [
+            const raw = await chatLLM(
+              [
                 {
                   role: 'assistant',
                   content: `Tu es Pr. Rimiris. À partir du sujet "${topicAnswer.answer}" (niveau ${levelAnswer?.answer || 'Master'}), propose 3 problématiques académiques formulées sous forme de questions de recherche. Chaque problématique doit être :
@@ -145,11 +144,12 @@ Réponds UNIQUEMENT avec les 3 questions, une par ligne, sans numérotation ni c
                 },
                 { role: 'user', content: topicAnswer.answer },
               ],
-              thinking: { type: 'disabled' },
-              temperature: 0.8,
-              max_tokens: 300,
-            })
-            const raw = completion.choices[0]?.message?.content || ''
+              {
+                temperature: 0.8,
+                maxTokens: 300,
+                thinking: 'disabled',
+              },
+            )
             suggestions = raw
               .split('\n')
               .map((s) => s.replace(/^[\s\-\*\d\.\)]+/, '').trim())
