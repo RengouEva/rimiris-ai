@@ -24,16 +24,23 @@ import { buildDocumentTypeContext } from '../document-types'
 import type { DocumentTypeSkill } from './types'
 
 import { dissertationPhilosophiqueSkill } from './dissertation-philosophique'
+import { memoireLicenceSkill } from './memoire-licence'
+import { memoireMasterSkill } from './memoire-master'
+import { theseDoctoratSkill } from './these-doctorat'
+import { monographieSkill } from './monographie'
 
 // ----------------------------------------------------------------------------
 // 1. Registre de tous les skills
 // ----------------------------------------------------------------------------
 
 export const ALL_SKILLS: DocumentTypeSkill[] = [
+  memoireLicenceSkill,
+  memoireMasterSkill,
+  theseDoctoratSkill,
+  monographieSkill,
   dissertationPhilosophiqueSkill,
-  // (autres skills à ajouter : memoire-licence, memoire-master, these-doctorat,
-  //  monographie, article-scientifique, rapport-stage, projet-fin-etudes,
-  //  essai-court, rapport-recherche — non disponibles dans cet état du repo)
+  // (autres skills à ajouter : article-scientifique, rapport-stage,
+  //  projet-fin-etudes, essai-court, rapport-recherche — non disponibles)
 ]
 
 // ----------------------------------------------------------------------------
@@ -46,8 +53,8 @@ export function getSkill(id: string | undefined): DocumentTypeSkill | undefined 
 }
 
 export function getDefaultSkill(): DocumentTypeSkill {
-  // La dissertation philosophique est le skill par défaut dans cet état du repo
-  return dissertationPhilosophiqueSkill
+  // Le mémoire de master est le skill par défaut (cas d'usage le plus fréquent)
+  return memoireMasterSkill
 }
 
 // ----------------------------------------------------------------------------
@@ -186,6 +193,10 @@ ${skill.extraPromptContext({
 
 export {
   dissertationPhilosophiqueSkill,
+  memoireLicenceSkill,
+  memoireMasterSkill,
+  theseDoctoratSkill,
+  monographieSkill,
 }
 
 export type { DocumentTypeSkill, PlanType } from './types'

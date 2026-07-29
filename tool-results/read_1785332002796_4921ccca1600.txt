@@ -1,0 +1,1364 @@
+     1→'use client'
+     2→
+     3→import * as React from 'react'
+     4→import {
+     5→  FileText,
+     6→  FileType2,
+     7→  FileSpreadsheet,
+     8→  Download,
+     9→  Eye,
+    10→  Loader2,
+    11→  CheckCircle2,
+    12→  Printer,
+    13→  FileCode2,
+    14→  FileDown,
+    15→  Settings2,
+    16→  Layers,
+    17→  Hash,
+    18→  Calendar,
+    19→  User,
+    20→  BookOpen,
+    21→  ChevronLeft,
+    22→  Type,
+    23→  Palette,
+    24→  FileSignature,
+    25→  CircleDot,
+    26→  ZoomIn,
+    27→  ZoomOut,
+    28→  Maximize2,
+    29→} from 'lucide-react'
+    30→import { useIrisStore } from '@/store/iris-store'
+    31→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    32→import { Button } from '@/components/ui/button'
+    33→import { Badge } from '@/components/ui/badge'
+    34→import { toast } from 'sonner'
+    35→import {
+    36→  Dialog,
+    37→  DialogContent,
+    38→  DialogHeader,
+    39→  DialogTitle,
+    40→  DialogTrigger,
+    41→} from '@/components/ui/dialog'
+    42→import { ScrollArea } from '@/components/ui/scroll-area'
+    43→import { cn } from '@/lib/utils'
+    44→
+    45→// ============================================================================
+    46→// ExportView — page indépendante avec sa propre sidebar
+    47→// Organisation :
+    48→//   - Sidebar gauche : navigation entre les sections d'export
+    49→//     (Vue d'ensemble, Aperçu, PDF, Word, HTML, Markdown, Impression, Paramètres)
+    50→//   - Zone principale : panneau correspondant à la section sélectionnée
+    51→// ============================================================================
+    52→
+    53→type ExportSection =
+    54→  | 'overview'
+    55→  | 'preview'
+    56→  | 'pdf'
+    57→  | 'word'
+    58→  | 'html'
+    59→  | 'markdown'
+    60→  | 'print'
+    61→  | 'settings'
+    62→
+    63→const SIDEBAR_ITEMS: {
+    64→  id: ExportSection
+    65→  label: string
+    66→  icon: any
+    67→  desc: string
+    68→  group: 'formats' | 'tools' | 'config'
+    69→}[] = [
+    70→  { id: 'overview', label: 'Vue d\'ensemble', icon: Layers,     desc: 'Stats et contenu du mémoire', group: 'tools' },
+    71→  { id: 'preview',  label: 'Aperçu',         icon: Eye,         desc: 'Aperçu A4 paginé avec zoom', group: 'tools' },
+    72→  { id: 'pdf',      label: 'PDF',            icon: FileType2,   desc: 'Format portable pour impression', group: 'formats' },
+    73→  { id: 'word',     label: 'Word',           icon: FileText,    desc: 'Document Microsoft Word éditable', group: 'formats' },
+    74→  { id: 'html',     label: 'HTML',           icon: FileCode2,   desc: 'Page web autonome', group: 'formats' },
+    75→  { id: 'markdown', label: 'Markdown',       icon: Hash,        desc: 'Texte structuré léger', group: 'formats' },
+    76→  { id: 'print',    label: 'Impression',     icon: Printer,     desc: 'Imprimer ou sauvegarder en PDF', group: 'tools' },
+    77→  { id: 'settings', label: 'Paramètres',     icon: Settings2,   desc: 'Format, marges, police', group: 'config' },
+    78→]
+    79→
+    80→export function ExportView() {
+    81→  const { project, sections, setView } = useIrisStore()
+    82→  const [activeSection, setActiveSection] = React.useState<ExportSection>('overview')
+    83→
+    84→  const totalWords = sections.reduce((sum, s) => sum + s.wordCount, 0)
+    85→  const draftedCount = sections.filter((s) => s.wordCount > 100).length
+    86→  const completedCount = sections.filter((s) => s.status === 'completed').length
+    87→
+    88→  return (
+    89→    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+    90→      {/* ====== Sidebar propre à l'Export ====== */}
+    91→      <aside className="w-64 border-r border-border bg-muted/20 flex flex-col flex-shrink-0">
+    92→        {/* Header de la sidebar */}
+    93→        <div className="p-4 border-b border-border">
+    94→          <button
+    95→            onClick={() => setView('workspace')}
+    96→            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
+    97→          >
+    98→            <ChevronLeft className="h-3.5 w-3.5" />
+    99→            Retour au mémoire
+   100→          </button>
+   101→          <div className="flex items-center gap-2">
+   102→            <div className="w-8 h-8 rounded-lg iris-gradient flex items-center justify-center">
+   103→              <FileDown className="h-4 w-4 text-white" />
+   104→            </div>
+   105→            <div>
+   106→              <p className="font-bold text-sm leading-none">Exporter</p>
+   107→              <p className="text-[10px] text-muted-foreground mt-1 leading-none">
+   108→                {sections.length} sections · {totalWords} mots
+   109→              </p>
+   110→            </div>
+   111→          </div>
+   112→        </div>
+   113→
+   114→        {/* Navigation par groupe */}
+   115→        <nav className="flex-1 overflow-y-auto p-2 space-y-4">
+   116→          <SidebarGroup title="Formats">
+   117→            {SIDEBAR_ITEMS.filter((i) => i.group === 'formats').map((item) => (
+   118→              <SidebarItem
+   119→                key={item.id}
+   120→                item={item}
+   121→                active={activeSection === item.id}
+   122→                onClick={() => setActiveSection(item.id)}
+   123→              />
+   124→            ))}
+   125→          </SidebarGroup>
+   126→          <SidebarGroup title="Outils">
+   127→            {SIDEBAR_ITEMS.filter((i) => i.group === 'tools').map((item) => (
+   128→              <SidebarItem
+   129→                key={item.id}
+   130→                item={item}
+   131→                active={activeSection === item.id}
+   132→                onClick={() => setActiveSection(item.id)}
+   133→              />
+   134→            ))}
+   135→          </SidebarGroup>
+   136→          <SidebarGroup title="Configuration">
+   137→            {SIDEBAR_ITEMS.filter((i) => i.group === 'config').map((item) => (
+   138→              <SidebarItem
+   139→                key={item.id}
+   140→                item={item}
+   141→                active={activeSection === item.id}
+   142→                onClick={() => setActiveSection(item.id)}
+   143→              />
+   144→            ))}
+   145→          </SidebarGroup>
+   146→        </nav>
+   147→
+   148→        {/* Stats en bas */}
+   149→        <div className="p-3 border-t border-border space-y-1.5">
+   150→          <div className="flex items-center justify-between text-[11px]">
+   151→            <span className="text-muted-foreground">Rédigées</span>
+   152→            <span className="font-semibold">{draftedCount}/{sections.length}</span>
+   153→          </div>
+   154→          <div className="flex items-center justify-between text-[11px]">
+   155→            <span className="text-muted-foreground">Terminées</span>
+   156→            <span className="font-semibold text-emerald-500">{completedCount}/{sections.length}</span>
+   157→          </div>
+   158→        </div>
+   159→      </aside>
+   160→
+   161→      {/* ====== Zone principale ====== */}
+   162→      <main className="flex-1 overflow-y-auto bg-background">
+   163→        {/* Aperçu plein écran — pagination A4 avec zoom */}
+   164→        {activeSection === 'preview' && (
+   165→          <PreviewPanel project={project} sections={sections} />
+   166→        )}
+   167→
+   168→        {/* Les autres panneaux dans un conteneur centré max-w-4xl */}
+   169→        {activeSection !== 'preview' && (
+   170→          <div className="max-w-4xl mx-auto px-6 py-8">
+   171→            {activeSection === 'overview' && (
+   172→              <OverviewPanel
+   173→                project={project}
+   174→                sections={sections}
+   175→                totalWords={totalWords}
+   176→                draftedCount={draftedCount}
+   177→                onSelectSection={setActiveSection}
+   178→              />
+   179→            )}
+   180→            {activeSection === 'pdf' && (
+   181→              <FormatPanel
+   182→                format="pdf"
+   183→                project={project}
+   184→                sections={sections}
+   185→                draftedCount={draftedCount}
+   186→              />
+   187→            )}
+   188→            {activeSection === 'word' && (
+   189→              <FormatPanel
+   190→                format="word"
+   191→                project={project}
+   192→                sections={sections}
+   193→                draftedCount={draftedCount}
+   194→              />
+   195→            )}
+   196→            {activeSection === 'html' && (
+   197→              <FormatPanel
+   198→                format="html"
+   199→                project={project}
+   200→                sections={sections}
+   201→                draftedCount={draftedCount}
+   202→              />
+   203→            )}
+   204→            {activeSection === 'markdown' && (
+   205→              <FormatPanel
+   206→                format="markdown"
+   207→                project={project}
+   208→                sections={sections}
+   209→                draftedCount={draftedCount}
+   210→              />
+   211→            )}
+   212→            {activeSection === 'print' && <PrintPanel project={project} sections={sections} />}
+   213→            {activeSection === 'settings' && <SettingsPanel project={project} />}
+   214→          </div>
+   215→        )}
+   216→
+   217→        {/* ====== Rendu imprimable masqué ======
+   218→            Ce bloc est invisible à l'écran mais devient la seule chose visible
+   219→            quand l'utilisateur imprime (Ctrl+P ou bouton Imprimer).
+   220→            Il contient le mémoire complet au format A4 avec marges 25mm. */}
+   221→        <PrintableMemoire project={project} sections={sections} />
+   222→      </main>
+   223→    </div>
+   224→  )
+   225→}
+   226→
+   227→// ============================================================================
+   228→// PrintableMemoire — rendu A4 caché, visible uniquement à l'impression
+   229→// ============================================================================
+   230→
+   231→function PrintableMemoire({ project, sections }: { project: any; sections: any[] }) {
+   232→  return (
+   233→    <div className="printable-memoire hidden print:block">
+   234→      {/* Page de titre */}
+   235→      <div className="printable-title-page">
+   236→        <h1>{project.title || 'Mémoire sans titre'}</h1>
+   237→        <p className="subtitle">{project.university || ''}</p>
+   238→        <p>{project.faculty || ''}</p>
+   239→        <p>
+   240→          {project.level || ''}
+   241→          {project.filiere ? ` · ${project.filiere}` : ''}
+   242→        </p>
+   243→        <p className="norm">Norme : {project.norme || 'APA'}</p>
+   244→      </div>
+   245→
+   246→      {/* Sections */}
+   247→      {sections.map((s, idx) => {
+   248→        if (!s.content || !s.content.trim()) return null
+   249→        return (
+   250→          <div key={s.id} className="printable-section">
+   251→            <h2>
+   252→              {idx + 1}. {s.title}
+   253→            </h2>
+   254→            <div dangerouslySetInnerHTML={{ __html: s.content }} />
+   255→          </div>
+   256→        )
+   257→      })}
+   258→    </div>
+   259→  )
+   260→}
+   261→
+   262→// ============================================================================
+   263→// PreviewPanel — Aperçu A4 paginé avec contrôle de zoom (défaut 100%)
+   264→// Affiche le mémoire tel qu'il sera exporté : page de titre + sections
+   265→// dans des "pages A4" visuelles, avec barre de zoom collée en haut.
+   266→// ============================================================================
+   267→
+   268→function PreviewPanel({ project, sections }: { project: any; sections: any[] }) {
+   269→  // Zoom par défaut : 100%. L'utilisateur peut ajuster entre 50% et 200%.
+   270→  const [zoom, setZoom] = React.useState<number>(100)
+   271→  const drafted = sections.filter((s) => s.content && s.content.trim())
+   272→
+   273→  function changeZoom(delta: number) {
+   274→    setZoom((z) => Math.min(200, Math.max(50, z + delta)))
+   275→  }
+   276→
+   277→  function resetZoom() {
+   278→    setZoom(100)
+   279→  }
+   280→
+   281→  return (
+   282→    <div className="flex flex-col h-full">
+   283→      {/* Barre de zoom — collée en haut, ne défile pas */}
+   284→      <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm px-4 py-2 flex items-center justify-between gap-3">
+   285→        <div className="flex items-center gap-2 min-w-0">
+   286→          <Eye className="h-4 w-4 text-primary flex-shrink-0" />
+   287→          <div className="min-w-0">
+   288→            <p className="text-sm font-semibold leading-none truncate">
+   289→              Aperçu — {project.title || 'Mémoire sans titre'}
+   290→            </p>
+   291→            <p className="text-[11px] text-muted-foreground mt-0.5 leading-none">
+   292→              {drafted.length} section{drafted.length > 1 ? 's' : ''} · {sections.reduce((sum, s) => sum + s.wordCount, 0)} mots
+   293→            </p>
+   294→          </div>
+   295→        </div>
+   296→
+   297→        {/* Contrôles de zoom */}
+   298→        <div className="flex items-center gap-1.5 flex-shrink-0">
+   299→          <Button
+   300→            variant="outline"
+   301→            size="sm"
+   302→            onClick={() => changeZoom(-10)}
+   303→            disabled={zoom <= 50}
+   304→            className="h-8 w-8 p-0"
+   305→            title="Dézoomer"
+   306→          >
+   307→            <ZoomOut className="h-3.5 w-3.5" />
+   308→          </Button>
+   309→          <button
+   310→            onClick={resetZoom}
+   311→            className="h-8 min-w-[60px] px-2 rounded-md border border-border bg-background text-xs font-medium tabular-nums hover:bg-muted transition-colors"
+   312→            title="Réinitialiser le zoom à 100%"
+   313→          >
+   314→            {zoom}%
+   315→          </button>
+   316→          <Button
+   317→            variant="outline"
+   318→            size="sm"
+   319→            onClick={() => changeZoom(10)}
+   320→            disabled={zoom >= 200}
+   321→            className="h-8 w-8 p-0"
+   322→            title="Zoomer"
+   323→          >
+   324→            <ZoomIn className="h-3.5 w-3.5" />
+   325→          </Button>
+   326→          {/* Slider de zoom */}
+   327→          <input
+   328→            type="range"
+   329→            min={50}
+   330→            max={200}
+   331→            step={10}
+   332→            value={zoom}
+   333→            onChange={(e) => setZoom(parseInt(e.target.value))}
+   334→            className="w-24 accent-primary hidden sm:block"
+   335→            title={`Zoom : ${zoom}%`}
+   336→          />
+   337→          <Button
+   338→            variant="ghost"
+   339→            size="sm"
+   340→            onClick={() => setZoom(100)}
+   341→            className="h-8 px-2 hidden sm:flex"
+   342→            title="Réinitialiser"
+   343→          >
+   344→            <Maximize2 className="h-3.5 w-3.5" />
+   345→          </Button>
+   346→        </div>
+   347→      </div>
+   348→
+   349→      {/* Zone défilante contenant les pages A4 */}
+   350→      <div className="flex-1 overflow-y-auto bg-muted/40 p-4 sm:p-8">
+   351→        {drafted.length === 0 ? (
+   352→          <div className="flex flex-col items-center justify-center h-full text-center max-w-md mx-auto">
+   353→            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-3">
+   354→              <Eye className="h-7 w-7 text-muted-foreground" />
+   355→            </div>
+   356→            <p className="font-semibold text-base mb-1">Rien à afficher</p>
+   357→            <p className="text-sm text-muted-foreground">
+   358→              Aucune section n'a encore été rédigée. Retournez au mémoire pour
+   359→              commencer l'écriture, puis revenez ici pour voir l'aperçu.
+   360→            </p>
+   361→          </div>
+   362→        ) : (
+   363→          <div
+   364→            className="flex flex-col items-center gap-6 mx-auto"
+   365→            style={{
+   366→              transform: `scale(${zoom / 100})`,
+   367→              transformOrigin: 'top center',
+   368→              transition: 'transform 0.2s ease',
+   369→            }}
+   370→          >
+   371→            {/* Page de titre */}
+   372→            <PreviewPage>
+   373→              <div className="flex flex-col items-center justify-center text-center py-16">
+   374→                <h1 className="font-bold text-3xl mb-6" style={{ fontFamily: 'Inter, sans-serif' }}>
+   375→                  {project.title || 'Mémoire sans titre'}
+   376→                </h1>
+   377→                <p className="text-lg text-muted-foreground mb-1">
+   378→                  {project.university || ''}
+   379→                </p>
+   380→                <p className="text-base text-muted-foreground mb-1">
+   381→                  {project.faculty || ''}
+   382→                </p>
+   383→                <p className="text-base text-muted-foreground mb-6">
+   384→                  {project.level || ''}
+   385→                  {project.filiere ? ` · ${project.filiere}` : ''}
+   386→                </p>
+   387→                <p className="text-sm text-muted-foreground italic">
+   388→                  Norme : {project.norme || 'APA'}
+   389→                </p>
+   390→              </div>
+   391→            </PreviewPage>
+   392→
+   393→            {/* Pages de contenu */}
+   394→            {drafted.map((s, idx) => (
+   395→              <PreviewPage key={s.id}>
+   396→                <h2
+   397→                  className="font-bold text-xl mb-3"
+   398→                  style={{ fontFamily: 'Inter, sans-serif' }}
+   399→                >
+   400→                  {idx + 1}. {s.title}
+   401→                </h2>
+   402→                <div
+   403→                  className="prose-iris text-sm leading-relaxed"
+   404→                  dangerouslySetInnerHTML={{ __html: s.content }}
+   405→                />
+   406→              </PreviewPage>
+   407→            ))}
+   408→          </div>
+   409→        )}
+   410→      </div>
+   411→    </div>
+   412→  )
+   413→}
+   414→
+   415→// Une "page A4" visuelle pour l'aperçu — 210×297mm, marges 25mm, fond blanc.
+   416→function PreviewPage({ children }: { children: React.ReactNode }) {
+   417→  return (
+   418→    <div
+   419→      className="bg-white text-black shadow-xl flex-shrink-0"
+   420→      style={{
+   421→        width: '210mm',
+   422→        minHeight: '297mm',
+   423→        padding: '25mm 25mm 30mm 25mm',
+   424→        fontFamily: "'Times New Roman', Georgia, serif",
+   425→        fontSize: '12pt',
+   426→        lineHeight: 1.6,
+   427→      }}
+   428→    >
+   429→      {children}
+   430→    </div>
+   431→  )
+   432→}
+   433→
+   434→// ============================================================================
+   435→// Sidebar components
+   436→// ============================================================================
+   437→
+   438→function SidebarGroup({ title, children }: { title: string; children: React.ReactNode }) {
+   439→  return (
+   440→    <div>
+   441→      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-2 mb-1.5">
+   442→        {title}
+   443→      </p>
+   444→      <div className="space-y-0.5">{children}</div>
+   445→    </div>
+   446→  )
+   447→}
+   448→
+   449→function SidebarItem({
+   450→  item,
+   451→  active,
+   452→  onClick,
+   453→}: {
+   454→  item: { id: ExportSection; label: string; icon: any; desc: string }
+   455→  active: boolean
+   456→  onClick: () => void
+   457→}) {
+   458→  const Icon = item.icon
+   459→  return (
+   460→    <button
+   461→      onClick={onClick}
+   462→      className={cn(
+   463→        'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors text-left',
+   464→        active
+   465→          ? 'bg-primary text-primary-foreground shadow-sm'
+   466→          : 'hover:bg-card text-foreground/80'
+   467→      )}
+   468→    >
+   469→      <Icon className="h-4 w-4 flex-shrink-0" />
+   470→      <div className="flex-1 min-w-0">
+   471→        <p className="font-medium leading-none">{item.label}</p>
+   472→        <p
+   473→          className={cn(
+   474→            'text-[10px] mt-0.5 leading-none truncate',
+   475→            active ? 'text-primary-foreground/70' : 'text-muted-foreground'
+   476→          )}
+   477→        >
+   478→          {item.desc}
+   479→        </p>
+   480→      </div>
+   481→    </button>
+   482→  )
+   483→}
+   484→
+   485→// ============================================================================
+   486→// Overview panel — vue d'ensemble + sélection rapide
+   487→// ============================================================================
+   488→
+   489→function OverviewPanel({
+   490→  project,
+   491→  sections,
+   492→  totalWords,
+   493→  draftedCount,
+   494→  onSelectSection,
+   495→}: {
+   496→  project: any
+   497→  sections: any[]
+   498→  totalWords: number
+   499→  draftedCount: number
+   500→  onSelectSection: (s: ExportSection) => void
+   501→}) {
+   502→  const formats = [
+   503→    { id: 'pdf' as const, name: 'PDF', icon: FileType2, color: 'red' },
+   504→    { id: 'word' as const, name: 'Word', icon: FileText, color: 'blue' },
+   505→    { id: 'html' as const, name: 'HTML', icon: FileCode2, color: 'orange' },
+   506→    { id: 'markdown' as const, name: 'Markdown', icon: Hash, color: 'gray' },
+   507→  ]
+   508→
+   509→  return (
+   510→    <div className="space-y-6">
+   511→      <div>
+   512→        <h1 className="text-2xl sm:text-3xl font-bold mb-2">Exporter votre mémoire</h1>
+   513→        <p className="text-muted-foreground text-sm leading-relaxed">
+   514→          Téléchargez votre mémoire dans le format exigé par votre établissement.
+   515→          Choisissez un format dans la sidebar à gauche, ou cliquez sur une carte ci-dessous
+   516→          pour un export rapide.
+   517→        </p>
+   518→      </div>
+   519→
+   520→      {/* Project info card */}
+   521→      <Card>
+   522→        <CardContent className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
+   523→          <Stat label="Mots rédigés" value={totalWords} icon={Type} />
+   524→          <Stat label="Sections rédigées" value={`${draftedCount}/${sections.length}`} icon={Layers} />
+   525→          <Stat label="Niveau" value={project.level || '—'} icon={BookOpen} />
+   526→          <Stat label="Norme" value={project.norme || 'APA'} icon={FileSignature} />
+   527→        </CardContent>
+   528→      </Card>
+   529→
+   530→      {/* Quick format selection */}
+   531→      <div>
+   532→        <h2 className="text-base font-semibold mb-3">Formats disponibles</h2>
+   533→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   534→          {formats.map((f) => {
+   535→            const Icon = f.icon
+   536→            return (
+   537→              <button
+   538→                key={f.id}
+   539→                onClick={() => onSelectSection(f.id)}
+   540→                disabled={draftedCount === 0}
+   541→                className={cn(
+   542→                  'group rounded-xl border p-4 text-left transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed',
+   543→                  'border-border hover:border-primary/40 bg-card'
+   544→                )}
+   545→              >
+   546→                <div
+   547→                  className={cn(
+   548→                    'w-10 h-10 rounded-lg flex items-center justify-center mb-3 transition-transform group-hover:scale-110',
+   549→                    f.color === 'red' && 'bg-red-500/10 text-red-600',
+   550→                    f.color === 'blue' && 'bg-blue-500/10 text-blue-600',
+   551→                    f.color === 'orange' && 'bg-orange-500/10 text-orange-600',
+   552→                    f.color === 'gray' && 'bg-gray-500/10 text-gray-600'
+   553→                  )}
+   554→                >
+   555→                  <Icon className="h-5 w-5" />
+   556→                </div>
+   557→                <p className="font-semibold text-sm">{f.name}</p>
+   558→                <p className="text-[11px] text-muted-foreground mt-0.5">Cliquer pour configurer</p>
+   559→              </button>
+   560→            )
+   561→          })}
+   562→        </div>
+   563→      </div>
+   564→
+   565→      {/* Sections list */}
+   566→      <Card>
+   567→        <CardHeader>
+   568→          <CardTitle className="text-base flex items-center gap-2">
+   569→            <Layers className="h-4 w-4 text-primary" />
+   570→            Contenu du mémoire
+   571→          </CardTitle>
+   572→        </CardHeader>
+   573→        <CardContent>
+   574→          <div className="space-y-2">
+   575→            {sections.length === 0 ? (
+   576→              <p className="text-sm text-muted-foreground text-center py-6">
+   577→                Aucune section pour le moment.
+   578→              </p>
+   579→            ) : (
+   580→              sections.map((s, idx) => {
+   581→                const hasContent = s.content.trim().length > 0
+   582→                return (
+   583→                  <div
+   584→                    key={s.id}
+   585→                    className="flex items-center justify-between p-3 rounded-lg border border-border bg-card"
+   586→                  >
+   587→                    <div className="flex items-center gap-3 min-w-0">
+   588→                      <div
+   589→                        className={cn(
+   590→                          'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-semibold',
+   591→                          hasContent
+   592→                            ? 'bg-emerald-500/15 text-emerald-600'
+   593→                            : 'bg-muted text-muted-foreground'
+   594→                        )}
+   595→                      >
+   596→                        {hasContent ? <CheckCircle2 className="h-4 w-4" /> : idx + 1}
+   597→                      </div>
+   598→                      <div className="min-w-0">
+   599→                        <p className="text-sm font-medium truncate">{s.title}</p>
+   600→                        <p className="text-xs text-muted-foreground">
+   601→                          {s.wordCount > 0 ? `${s.wordCount} mots` : 'Vide'}
+   602→                        </p>
+   603→                      </div>
+   604→                    </div>
+   605→                    <Badge variant={hasContent ? 'default' : 'outline'} className="ml-2">
+   606→                      {hasContent ? 'Prêt' : 'Vide'}
+   607→                    </Badge>
+   608→                  </div>
+   609→                )
+   610→              })
+   611→            )}
+   612→          </div>
+   613→        </CardContent>
+   614→      </Card>
+   615→    </div>
+   616→  )
+   617→}
+   618→
+   619→// ============================================================================
+   620→// Format panel — générique pour PDF / Word / HTML / Markdown
+   621→// ============================================================================
+   622→
+   623→function FormatPanel({
+   624→  format,
+   625→  project,
+   626→  sections,
+   627→  draftedCount,
+   628→}: {
+   629→  format: 'pdf' | 'word' | 'html' | 'markdown'
+   630→  project: any
+   631→  sections: any[]
+   632→  draftedCount: number
+   633→}) {
+   634→  const [exporting, setExporting] = React.useState(false)
+   635→  const [previewOpen, setPreviewOpen] = React.useState(false)
+   636→  // Zoom par défaut du dialog d'aperçu = 100%.
+   637→  const [previewZoom, setPreviewZoom] = React.useState<number>(100)
+   638→  const [options, setOptions] = React.useState({
+   639→    includeTitlePage: true,
+   640→    includeTableOfContents: false,
+   641→    includePageNumbers: true,
+   642→    embedCss: true,
+   643→  })
+   644→
+   645→  const config = {
+   646→    pdf: {
+   647→      name: 'PDF',
+   648→      icon: FileType2,
+   649→      color: 'red',
+   650→      desc: 'Format portable pour impression et partage. Généré via le moteur d\'impression du navigateur.',
+   651→      ext: 'pdf',
+   652→      tips: [
+   653→        'Le PDF est généré via la fonction d\'impression de votre navigateur.',
+   654→        'Dans la boîte d\'impression, choisissez "Enregistrer en PDF" comme destination.',
+   655→        'Les marges A4 (25mm) et la pagination sont automatiquement appliquées.',
+   656→      ],
+   657→    },
+   658→    word: {
+   659→      name: 'Word',
+   660→      icon: FileText,
+   661→      color: 'blue',
+   662→      desc: 'Document Microsoft Word éditable (.doc). Compatible avec Word, LibreOffice et Google Docs.',
+   663→      ext: 'doc',
+   664→      tips: [
+   665→        'Le fichier .doc est un HTML que Word ouvre nativement comme un document éditable.',
+   666→        'Toutes les mises en forme (titres, gras, listes) sont conservées.',
+   667→        'Idéal pour remettre un brouillon à votre directeur de mémoire.',
+   668→      ],
+   669→    },
+   670→    html: {
+   671→      name: 'HTML',
+   672→      icon: FileCode2,
+   673→      color: 'orange',
+   674→      desc: 'Page web autonome avec CSS inclus. Ouvrable dans tout navigateur.',
+   675→      ext: 'html',
+   676→      tips: [
+   677→        'Le HTML inclut le CSS en ligne (aucun fichier externe nécessaire).',
+   678→        'Idéal pour publier en ligne ou partager par email.',
+   679→        'Le rendu visuel est identique à l\'aperçu dans IRIS.',
+   680→      ],
+   681→    },
+   682→    markdown: {
+   683→      name: 'Markdown',
+   684→      icon: Hash,
+   685→      color: 'gray',
+   686→      desc: 'Texte structuré léger (.md). Compatible avec GitHub, Notion, Obsidian, etc.',
+   687→      ext: 'md',
+   688→      tips: [
+   689→        'Le Markdown préserve la structure (titres, listes, citations) sans formatage visuel.',
+   690→        'Idéal pour importer dans un autre outil d\'écriture.',
+   691→        'Le HTML des sections est converti en Markdown basique.',
+   692→      ],
+   693→    },
+   694→  }[format]
+   695→
+   696→  async function handleExport() {
+   697→    if (draftedCount === 0) {
+   698→      toast.error('Aucune section rédigée à exporter.')
+   699→      return
+   700→    }
+   701→    setExporting(true)
+   702→    try {
+   703→      // Small delay for UX feedback
+   704→      await new Promise((r) => setTimeout(r, 600))
+   705→
+   706→      let blob: Blob
+   707→      let filename: string
+   708→
+   709→      if (format === 'pdf') {
+   710→        // PDF = ouvre la boîte d'impression du navigateur (l'utilisateur choisit "Enregistrer en PDF")
+   711→        toast.info('La boîte d\'impression va s\'ouvrir. Choisissez "Enregistrer en PDF".')
+   712→        setTimeout(() => window.print(), 500)
+   713→        setExporting(false)
+   714→        return
+   715→      } else if (format === 'word') {
+   716→        const html = buildWordHtml(project, sections, options)
+   717→        blob = new Blob([html], { type: 'application/msword;charset=utf-8' })
+   718→        filename = `${slugify(project.title || 'memoire-iris')}.doc`
+   719→      } else if (format === 'html') {
+   720→        const html = buildStandaloneHtml(project, sections, options)
+   721→        blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+   722→        filename = `${slugify(project.title || 'memoire-iris')}.html`
+   723→      } else {
+   724→        // markdown
+   725→        const md = buildMarkdown(project, sections, options)
+   726→        blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+   727→        filename = `${slugify(project.title || 'memoire-iris')}.md`
+   728→      }
+   729→
+   730→      const url = URL.createObjectURL(blob)
+   731→      const a = document.createElement('a')
+   732→      a.href = url
+   733→      a.download = filename
+   734→      document.body.appendChild(a)
+   735→      a.click()
+   736→      document.body.removeChild(a)
+   737→      URL.revokeObjectURL(url)
+   738→      toast.success(`Export ${config.name} généré`)
+   739→    } catch (e: any) {
+   740→      toast.error(`Erreur : ${e?.message || 'inconnue'}`)
+   741→    } finally {
+   742→      setExporting(false)
+   743→    }
+   744→  }
+   745→
+   746→  const Icon = config.icon
+   747→
+   748→  return (
+   749→    <div className="space-y-6">
+   750→      {/* Header */}
+   751→      <div className="flex items-start gap-4">
+   752→        <div
+   753→          className={cn(
+   754→            'w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0',
+   755→            config.color === 'red' && 'bg-red-500/10 text-red-600',
+   756→            config.color === 'blue' && 'bg-blue-500/10 text-blue-600',
+   757→            config.color === 'orange' && 'bg-orange-500/10 text-orange-600',
+   758→            config.color === 'gray' && 'bg-gray-500/10 text-gray-600'
+   759→          )}
+   760→        >
+   761→          <Icon className="h-6 w-6" />
+   762→        </div>
+   763→        <div className="flex-1">
+   764→          <h1 className="text-2xl font-bold">Export {config.name}</h1>
+   765→          <p className="text-muted-foreground text-sm mt-1 leading-relaxed">{config.desc}</p>
+   766→        </div>
+   767→      </div>
+   768→
+   769→      {/* Tips */}
+   770→      <Card>
+   771→        <CardHeader>
+   772→          <CardTitle className="text-sm flex items-center gap-2">
+   773→            <CircleDot className="h-3.5 w-3.5 text-primary" />
+   774→            Bon à savoir
+   775→          </CardTitle>
+   776→        </CardHeader>
+   777→        <CardContent>
+   778→          <ul className="space-y-1.5">
+   779→            {config.tips.map((tip, i) => (
+   780→              <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
+   781→                <span className="text-primary mt-0.5">•</span>
+   782→                <span>{tip}</span>
+   783→              </li>
+   784→            ))}
+   785→          </ul>
+   786→        </CardContent>
+   787→      </Card>
+   788→
+   789→      {/* Options */}
+   790→      <Card>
+   791→        <CardHeader>
+   792→          <CardTitle className="text-sm flex items-center gap-2">
+   793→            <Settings2 className="h-3.5 w-3.5 text-primary" />
+   794→            Options d'export
+   795→          </CardTitle>
+   796→        </CardHeader>
+   797→        <CardContent className="space-y-3">
+   798→          <OptionRow
+   799→            label="Page de titre"
+   800→            desc="Inclure une page de garde avec le titre, l'université et le niveau"
+   801→            checked={options.includeTitlePage}
+   802→            onChange={(v) => setOptions((o) => ({ ...o, includeTitlePage: v }))}
+   803→          />
+   804→          <OptionRow
+   805→            label="Table des matières"
+   806→            desc="Générer une table des matières à partir des titres de sections"
+   807→            checked={options.includeTableOfContents}
+   808→            onChange={(v) => setOptions((o) => ({ ...o, includeTableOfContents: v }))}
+   809→          />
+   810→          <OptionRow
+   811→            label="Numérotation"
+   812→            desc="Afficher les numéros de page en bas de chaque page"
+   813→            checked={options.includePageNumbers}
+   814→            onChange={(v) => setOptions((o) => ({ ...o, includePageNumbers: v }))}
+   815→          />
+   816→          {format === 'html' && (
+   817→            <OptionRow
+   818→              label="CSS inclus"
+   819→              desc='Embarquer le CSS dans le HTML (sinon lien vers /globals.css)'
+   820→              checked={options.embedCss}
+   821→              onChange={(v) => setOptions((o) => ({ ...o, embedCss: v }))}
+   822→            />
+   823→          )}
+   824→        </CardContent>
+   825→      </Card>
+   826→
+   827→      {/* Actions */}
+   828→      <div className="flex flex-col sm:flex-row gap-2">
+   829→        <Button
+   830→          onClick={handleExport}
+   831→          disabled={exporting || draftedCount === 0}
+   832→          className="iris-gradient text-white rounded-full flex-1 sm:flex-initial"
+   833→          size="lg"
+   834→        >
+   835→          {exporting ? (
+   836→            <>
+   837→              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+   838→              Génération…
+   839→            </>
+   840→          ) : (
+   841→            <>
+   842→              <Download className="h-4 w-4 mr-2" />
+   843→              Exporter en .{config.ext}
+   844→            </>
+   845→          )}
+   846→        </Button>
+   847→
+   848→        <Dialog
+   849→          open={previewOpen}
+   850→          onOpenChange={(open) => {
+   851→            setPreviewOpen(open)
+   852→            if (open) setPreviewZoom(100) // réinitialise le zoom à 100% à chaque ouverture
+   853→          }}
+   854→        >
+   855→          <DialogTrigger asChild>
+   856→            <Button variant="outline" size="lg" className="rounded-full">
+   857→              <Eye className="h-4 w-4 mr-2" />
+   858→              Aperçu
+   859→            </Button>
+   860→          </DialogTrigger>
+   861→          <DialogContent className="max-w-5xl max-h-[90vh] p-0">
+   862→            <DialogHeader className="px-6 pt-6 pb-3 border-b">
+   863→              <DialogTitle className="flex items-center justify-between gap-2">
+   864→                <span className="flex items-center gap-2">
+   865→                  <Icon className="h-4 w-4" />
+   866→                  Aperçu — {project.title || 'Mémoire sans titre'}
+   867→                </span>
+   868→                {/* Mini-barre de zoom dans le dialog — défaut 100% */}
+   869→                <div className="flex items-center gap-1">
+   870→                  <Button
+   871→                    variant="outline"
+   872→                    size="sm"
+   873→                    onClick={() => setPreviewZoom((z) => Math.max(50, z - 10))}
+   874→                    disabled={previewZoom <= 50}
+   875→                    className="h-7 w-7 p-0"
+   876→                    title="Dézoomer"
+   877→                  >
+   878→                    <ZoomOut className="h-3 w-3" />
+   879→                  </Button>
+   880→                  <button
+   881→                    onClick={() => setPreviewZoom(100)}
+   882→                    className="h-7 min-w-[52px] px-2 rounded-md border border-border bg-background text-[11px] font-medium tabular-nums hover:bg-muted"
+   883→                    title="Réinitialiser le zoom à 100%"
+   884→                  >
+   885→                    {previewZoom}%
+   886→                  </button>
+   887→                  <Button
+   888→                    variant="outline"
+   889→                    size="sm"
+   890→                    onClick={() => setPreviewZoom((z) => Math.min(200, z + 10))}
+   891→                    disabled={previewZoom >= 200}
+   892→                    className="h-7 w-7 p-0"
+   893→                    title="Zoomer"
+   894→                  >
+   895→                    <ZoomIn className="h-3 w-3" />
+   896→                  </Button>
+   897→                </div>
+   898→              </DialogTitle>
+   899→            </DialogHeader>
+   900→            <ScrollArea className="h-[75vh] px-6 py-4">
+   901→              <div
+   902→                style={{
+   903→                  transform: `scale(${previewZoom / 100})`,
+   904→                  transformOrigin: 'top center',
+   905→                  transition: 'transform 0.15s ease',
+   906→                }}
+   907→              >
+   908→                <PreviewContent project={project} sections={sections} />
+   909→              </div>
+   910→            </ScrollArea>
+   911→          </DialogContent>
+   912→        </Dialog>
+   913→      </div>
+   914→
+   915→      {draftedCount === 0 && (
+   916→        <p className="text-xs text-muted-foreground text-center">
+   917→          Vous n'avez pas encore rédigé de section. Retournez au mémoire pour commencer.
+   918→        </p>
+   919→      )}
+   920→    </div>
+   921→  )
+   922→}
+   923→
+   924→// ============================================================================
+   925→// Print panel
+   926→// ============================================================================
+   927→
+   928→function PrintPanel({ project, sections }: { project: any; sections: any[] }) {
+   929→  const [printing, setPrinting] = React.useState(false)
+   930→  const draftedCount = sections.filter((s) => s.wordCount > 100).length
+   931→
+   932→  function handlePrint() {
+   933→    setPrinting(true)
+   934→    setTimeout(() => {
+   935→      window.print()
+   936→      setPrinting(false)
+   937→    }, 300)
+   938→  }
+   939→
+   940→  return (
+   941→    <div className="space-y-6">
+   942→      <div>
+   943→        <h1 className="text-2xl font-bold mb-2">Impression</h1>
+   944→        <p className="text-muted-foreground text-sm leading-relaxed">
+   945→          Imprimez directement votre mémoire ou enregistrez-le en PDF via la boîte d'impression
+   946→          de votre navigateur. Le format A4, les marges (25mm) et la pagination sont automatiquement
+   947→          appliqués grâce aux règles CSS d'impression.
+   948→        </p>
+   949→      </div>
+   950→
+   951→      <Card>
+   952→        <CardContent className="p-5 space-y-3">
+   953→          <div className="flex items-center gap-3">
+   954→            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+   955→              <Printer className="h-5 w-5" />
+   956→            </div>
+   957→            <div className="flex-1">
+   958→              <p className="font-semibold text-sm">Impression native du navigateur</p>
+   959→              <p className="text-xs text-muted-foreground">
+   960→                Ctrl/Cmd + P — choisissez « Enregistrer en PDF » pour un fichier PDF.
+   961→              </p>
+   962→            </div>
+   963→          </div>
+   964→          <Button
+   965→            onClick={handlePrint}
+   966→            disabled={printing || draftedCount === 0}
+   967→            className="w-full iris-gradient text-white rounded-full"
+   968→            size="lg"
+   969→          >
+   970→            {printing ? (
+   971→              <>
+   972→                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+   973→                Ouverture de la boîte d'impression…
+   974→              </>
+   975→            ) : (
+   976→              <>
+   977→                <Printer className="h-4 w-4 mr-2" />
+   978→                Imprimer / Enregistrer en PDF
+   979→              </>
+   980→            )}
+   981→          </Button>
+   982→        </CardContent>
+   983→      </Card>
+   984→
+   985→      <Card>
+   986→        <CardHeader>
+   987→          <CardTitle className="text-sm">Conseils d'impression</CardTitle>
+   988→        </CardHeader>
+   989→        <CardContent>
+   990→          <ul className="space-y-1.5 text-xs text-muted-foreground">
+   991→            <li className="flex items-start gap-2">
+   992→              <span className="text-primary">•</span>
+   993→              <span>Vérifiez que le format est bien A4 (210 × 297 mm) dans les paramètres d'impression.</span>
+   994→            </li>
+   995→            <li className="flex items-start gap-2">
+   996→              <span className="text-primary">•</span>
+   997→              <span>Les marges par défaut (25mm) sont déjà incluses — ne les ajoutez pas une seconde fois.</span>
+   998→            </li>
+   999→            <li className="flex items-start gap-2">
+  1000→              <span className="text-primary">•</span>
+  1001→              <span>Activez « Arrière-plans et graphiques » si vous voulez les couleurs des titres.</span>
+  1002→            </li>
+  1003→            <li className="flex items-start gap-2">
+  1004→              <span className="text-primary">•</span>
+  1005→              <span>Désactivez les en-têtes/pieds de page du navigateur pour un rendu propre.</span>
+  1006→            </li>
+  1007→          </ul>
+  1008→        </CardContent>
+  1009→      </Card>
+  1010→    </div>
+  1011→  )
+  1012→}
+  1013→
+  1014→// ============================================================================
+  1015→// Settings panel
+  1016→// ============================================================================
+  1017→
+  1018→function SettingsPanel({ project }: { project: any }) {
+  1019→  return (
+  1020→    <div className="space-y-6">
+  1021→      <div>
+  1022→        <h1 className="text-2xl font-bold mb-2">Paramètres d'export</h1>
+  1023→        <p className="text-muted-foreground text-sm leading-relaxed">
+  1024→          Ces informations sont utilisées pour la page de titre et les métadonnées du fichier exporté.
+  1025→          Modifiez-les dans l'onboarding si nécessaire.
+  1026→        </p>
+  1027→      </div>
+  1028→
+  1029→      <Card>
+  1030→        <CardContent className="p-5 space-y-4">
+  1031→          <InfoRow icon={User} label="Titre" value={project.title || '—'} />
+  1032→          <InfoRow icon={Calendar} label="Université" value={project.university || '—'} />
+  1033→          <InfoRow icon={BookOpen} label="Faculté" value={project.faculty || '—'} />
+  1034→          <InfoRow icon={Type} label="Niveau" value={project.level || '—'} />
+  1035→          <InfoRow icon={Layers} label="Filière" value={project.filiere || '—'} />
+  1036→          <InfoRow icon={FileSignature} label="Norme bibliographique" value={project.norme || 'APA'} />
+  1037→          <InfoRow icon={Palette} label="Langue" value={project.language || 'Français'} />
+  1038→        </CardContent>
+  1039→      </Card>
+  1040→
+  1041→      <Card>
+  1042→        <CardHeader>
+  1043→          <CardTitle className="text-sm flex items-center gap-2">
+  1044→            <Settings2 className="h-3.5 w-3.5 text-primary" />
+  1045→            Format d'export par défaut
+  1046→          </CardTitle>
+  1047→        </CardHeader>
+  1048→        <CardContent>
+  1049→          <p className="text-xs text-muted-foreground">
+  1050→            Le format d'export par défaut est <strong>PDF</strong> (via impression navigateur).
+  1051→            Les autres formats (Word, HTML, Markdown) sont disponibles dans la sidebar.
+  1052→          </p>
+  1053→        </CardContent>
+  1054→      </Card>
+  1055→    </div>
+  1056→  )
+  1057→}
+  1058→
+  1059→// ============================================================================
+  1060→// Shared components
+  1061→// ============================================================================
+  1062→
+  1063→function Stat({ label, value, icon: Icon }: { label: string; value: any; icon: any }) {
+  1064→  return (
+  1065→    <div className="text-center">
+  1066→      <Icon className="h-4 w-4 text-muted-foreground mx-auto mb-1.5" />
+  1067→      <p className="text-2xl font-bold">{value}</p>
+  1068→      <p className="text-xs text-muted-foreground mt-1">{label}</p>
+  1069→    </div>
+  1070→  )
+  1071→}
+  1072→
+  1073→function OptionRow({
+  1074→  label,
+  1075→  desc,
+  1076→  checked,
+  1077→  onChange,
+  1078→}: {
+  1079→  label: string
+  1080→  desc: string
+  1081→  checked: boolean
+  1082→  onChange: (v: boolean) => void
+  1083→}) {
+  1084→  return (
+  1085→    <label className="flex items-start gap-3 cursor-pointer">
+  1086→      <button
+  1087→        type="button"
+  1088→        role="switch"
+  1089→        aria-checked={checked}
+  1090→        onClick={() => onChange(!checked)}
+  1091→        className={cn(
+  1092→          'mt-0.5 w-9 h-5 rounded-full transition-colors flex-shrink-0 relative',
+  1093→          checked ? 'bg-primary' : 'bg-muted'
+  1094→        )}
+  1095→      >
+  1096→        <span
+  1097→          className={cn(
+  1098→            'absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
+  1099→            checked ? 'translate-x-4' : 'translate-x-0.5'
+  1100→          )}
+  1101→        />
+  1102→      </button>
+  1103→      <div className="flex-1">
+  1104→        <p className="text-sm font-medium">{label}</p>
+  1105→        <p className="text-xs text-muted-foreground">{desc}</p>
+  1106→      </div>
+  1107→    </label>
+  1108→  )
+  1109→}
+  1110→
+  1111→function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+  1112→  return (
+  1113→    <div className="flex items-center gap-3 pb-3 border-b border-border last:border-0 last:pb-0">
+  1114→      <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+  1115→        <Icon className="h-4 w-4 text-muted-foreground" />
+  1116→      </div>
+  1117→      <div className="flex-1 min-w-0">
+  1118→        <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</p>
+  1119→        <p className="text-sm font-medium truncate">{value}</p>
+  1120→      </div>
+  1121→    </div>
+  1122→  )
+  1123→}
+  1124→
+  1125→function PreviewContent({ project, sections }: { project: any; sections: any[] }) {
+  1126→  return (
+  1127→    <div className="prose prose-sm max-w-none">
+  1128→      <div className="text-center mb-8 pb-6 border-b">
+  1129→        <h1 className="text-2xl font-bold mb-2">{project.title || 'Mémoire sans titre'}</h1>
+  1130→        <p className="text-sm text-muted-foreground">
+  1131→          {project.university} - {project.faculty}
+  1132→        </p>
+  1133→        <p className="text-sm text-muted-foreground">
+  1134→          {project.level} · {project.filiere}
+  1135→        </p>
+  1136→        <p className="text-xs text-muted-foreground mt-2">
+  1137→          Norme : {project.norme || 'APA'}
+  1138→        </p>
+  1139→      </div>
+  1140→
+  1141→      {sections.map((s, idx) => {
+  1142→        if (!s.content.trim()) return null
+  1143→        return (
+  1144→          <div key={s.id} className="mb-6">
+  1145→            <h2 className="text-lg font-bold mb-2">
+  1146→              {idx + 1}. {s.title}
+  1147→            </h2>
+  1148→            <div
+  1149→              className="text-sm leading-relaxed prose-iris"
+  1150→              dangerouslySetInnerHTML={{ __html: s.content }}
+  1151→            />
+  1152→          </div>
+  1153→        )
+  1154→      })}
+  1155→    </div>
+  1156→  )
+  1157→}
+  1158→
+  1159→// ============================================================================
+  1160→// Builders — generate the actual file content
+  1161→// ============================================================================
+  1162→
+  1163→function slugify(s: string): string {
+  1164→  return s
+  1165→    .toLowerCase()
+  1166→    .normalize('NFD')
+  1167→    .replace(/[\u0300-\u036f]/g, '')
+  1168→    .replace(/[^a-z0-9]+/g, '-')
+  1169→    .replace(/^-+|-+$/g, '')
+  1170→    .slice(0, 60) || 'memoire-iris'
+  1171→}
+  1172→
+  1173→function buildSectionsHtml(sections: any[]): string {
+  1174→  return sections
+  1175→    .map((s, idx) => {
+  1176→      if (!s.content || !s.content.trim()) return ''
+  1177→      return `<h2>${idx + 1}. ${escapeHtml(s.title)}</h2>\n${s.content}\n`
+  1178→    })
+  1179→    .filter(Boolean)
+  1180→    .join('\n')
+  1181→}
+  1182→
+  1183→function buildStandaloneHtml(
+  1184→  project: any,
+  1185→  sections: any[],
+  1186→  options: { includeTitlePage: boolean; includeTableOfContents: boolean; includePageNumbers: boolean; embedCss: boolean }
+  1187→): string {
+  1188→  const css = `
+  1189→body { font-family: 'Times New Roman', Georgia, serif; font-size: 12pt; line-height: 1.6; color: #111; max-width: 800px; margin: 2em auto; padding: 0 1em; }
+  1190→h1 { font-family: 'Inter', Arial, sans-serif; font-size: 22pt; text-align: center; text-transform: uppercase; margin: 0 0 18pt 0; }
+  1191→h2 { font-family: 'Inter', Arial, sans-serif; font-size: 16pt; margin: 24pt 0 12pt 0; page-break-after: avoid; }
+  1192→h3 { font-family: 'Inter', Arial, sans-serif; font-size: 13pt; margin: 18pt 0 8pt 0; page-break-after: avoid; }
+  1193→p { margin: 0 0 10pt 0; text-align: justify; }
+  1194→ul, ol { margin: 0 0 10pt 0; padding-left: 20mm; }
+  1195→blockquote { margin: 12pt 0; padding: 8pt 16pt; border-left: 3px solid #7c3aed; background: #faf8ff; font-style: italic; }
+  1196→strong { color: #1a1a2e; }
+  1197→.title-page { text-align: center; padding: 4cm 0; page-break-after: always; }
+  1198→.title-page h1 { font-size: 28pt; margin-bottom: 1cm; }
+  1199→.title-page p { font-size: 14pt; color: #444; }
+  1200→.toc { page-break-after: always; }
+  1201→.toc h2 { text-align: center; }
+  1202→.toc ol { list-style: none; padding-left: 0; }
+  1203→.toc li { margin-bottom: 6pt; }
+  1204→@media print { @page { size: A4; margin: 25mm; } body { max-width: none; } }
+  1205→`
+  1206→  const titlePage = options.includeTitlePage
+  1207→    ? `<div class="title-page">
+  1208→         <h1>${escapeHtml(project.title || 'Mémoire sans titre')}</h1>
+  1209→         <p>${escapeHtml(project.university || '')}</p>
+  1210→         <p>${escapeHtml(project.faculty || '')}</p>
+  1211→         <p>${escapeHtml(project.level || '')} · ${escapeHtml(project.filiere || '')}</p>
+  1212→         <p>Norme : ${escapeHtml(project.norme || 'APA')}</p>
+  1213→       </div>`
+  1214→    : ''
+  1215→
+  1216→  const toc = options.includeTableOfContents
+  1217→    ? `<div class="toc">
+  1218→         <h2>Table des matières</h2>
+  1219→         <ol>
+  1220→           ${sections
+  1221→             .map((s, idx) => `<li>${idx + 1}. ${escapeHtml(s.title)}</li>`)
+  1222→             .join('\n')}
+  1223→         </ol>
+  1224→       </div>`
+  1225→    : ''
+  1226→
+  1227→  return `<!DOCTYPE html>
+  1228→<html lang="fr">
+  1229→<head>
+  1230→  <meta charset="UTF-8">
+  1231→  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  1232→  <title>${escapeHtml(project.title || 'Mémoire')}</title>
+  1233→  ${options.embedCss ? `<style>${css}</style>` : '<link rel="stylesheet" href="/globals.css">'}
+  1234→</head>
+  1235→<body>
+  1236→  ${titlePage}
+  1237→  ${toc}
+  1238→  ${buildSectionsHtml(sections)}
+  1239→</body>
+  1240→</html>`
+  1241→}
+  1242→
+  1243→function buildWordHtml(
+  1244→  project: any,
+  1245→  sections: any[],
+  1246→  options: { includeTitlePage: boolean; includeTableOfContents: boolean }
+  1247→): string {
+  1248→  // Word ouvre le HTML avec un Content-Type application/msword comme un document éditable.
+  1249→  // On inclut le CSS en inline pour que les mises en forme soient conservées.
+  1250→  const css = `
+  1251→body { font-family: 'Times New Roman', Georgia, serif; font-size: 12pt; line-height: 1.6; }
+  1252→h1 { font-family: 'Calibri', Arial, sans-serif; font-size: 22pt; text-align: center; text-transform: uppercase; }
+  1253→h2 { font-family: 'Calibri', Arial, sans-serif; font-size: 16pt; color: #1a1a2e; }
+  1254→h3 { font-family: 'Calibri', Arial, sans-serif; font-size: 13pt; color: #2a2a3e; }
+  1255→p { text-align: justify; margin: 0 0 10pt 0; }
+  1256→ul, ol { padding-left: 20mm; }
+  1257→blockquote { border-left: 3px solid #7c3aed; padding-left: 16pt; font-style: italic; }
+  1258→`
+  1259→  const titlePage = options.includeTitlePage
+  1260→    ? `<div style="text-align: center; padding: 4cm 0; page-break-after: always;">
+  1261→         <h1>${escapeHtml(project.title || 'Mémoire sans titre')}</h1>
+  1262→         <p style="font-size: 14pt; color: #444;">${escapeHtml(project.university || '')}</p>
+  1263→         <p style="font-size: 14pt; color: #444;">${escapeHtml(project.faculty || '')}</p>
+  1264→         <p style="font-size: 14pt; color: #444;">${escapeHtml(project.level || '')} · ${escapeHtml(project.filiere || '')}</p>
+  1265→         <p style="font-size: 12pt; color: #666;">Norme : ${escapeHtml(project.norme || 'APA')}</p>
+  1266→       </div>`
+  1267→    : ''
+  1268→
+  1269→  const toc = options.includeTableOfContents
+  1270→    ? `<div style="page-break-after: always;">
+  1271→         <h2 style="text-align: center;">Table des matières</h2>
+  1272→         <ol>
+  1273→           ${sections
+  1274→             .map((s, idx) => `<li>${idx + 1}. ${escapeHtml(s.title)}</li>`)
+  1275→             .join('\n')}
+  1276→         </ol>
+  1277→       </div>`
+  1278→    : ''
+  1279→
+  1280→  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+  1281→<head>
+  1282→  <meta charset="UTF-8">
+  1283→  <title>${escapeHtml(project.title || 'Mémoire')}</title>
+  1284→  <!--[if gte mso 9]>
+  1285→  <xml>
+  1286→    <w:WordDocument>
+  1287→      <w:View>Print</w:View>
+  1288→      <w:Zoom>100</w:Zoom>
+  1289→    </w:WordDocument>
+  1290→  </xml>
+  1291→  <![endif]-->
+  1292→  <style>${css}</style>
+  1293→</head>
+  1294→<body>
+  1295→  ${titlePage}
+  1296→  ${toc}
+  1297→  ${buildSectionsHtml(sections)}
+  1298→</body>
+  1299→</html>`
+  1300→}
+  1301→
+  1302→function buildMarkdown(
+  1303→  project: any,
+  1304→  sections: any[],
+  1305→  options: { includeTitlePage: boolean; includeTableOfContents: boolean }
+  1306→): string {
+  1307→  const parts: string[] = []
+  1308→  if (options.includeTitlePage) {
+  1309→    parts.push(`# ${project.title || 'Mémoire sans titre'}`)
+  1310→    parts.push('')
+  1311→    parts.push(`**${project.university || ''}**  `)
+  1312→    parts.push(`**${project.faculty || ''}**  `)
+  1313→    parts.push(`**${project.level || ''} · ${project.filiere || ''}**  `)
+  1314→    parts.push('')
+  1315→    parts.push(`*Norme : ${project.norme || 'APA'}*`)
+  1316→    parts.push('')
+  1317→    parts.push('---')
+  1318→    parts.push('')
+  1319→  }
+  1320→  if (options.includeTableOfContents) {
+  1321→    parts.push('## Table des matières')
+  1322→    parts.push('')
+  1323→    sections.forEach((s, idx) => {
+  1324→      parts.push(`${idx + 1}. ${s.title}`)
+  1325→    })
+  1326→    parts.push('')
+  1327→    parts.push('---')
+  1328→    parts.push('')
+  1329→  }
+  1330→  sections.forEach((s, idx) => {
+  1331→    if (!s.content || !s.content.trim()) return
+  1332→    parts.push(`## ${idx + 1}. ${s.title}`)
+  1333→    parts.push('')
+  1334→    // Convert HTML → Markdown (basic)
+  1335→    let md = s.content
+  1336→    md = md.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n')
+  1337→    md = md.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n')
+  1338→    md = md.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n')
+  1339→    md = md.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**')
+  1340→    md = md.replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**')
+  1341→    md = md.replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
+  1342→    md = md.replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
+  1343→    md = md.replace(/<u[^>]*>(.*?)<\/u>/gi, '$1')
+  1344→    md = md.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, '> $1\n')
+  1345→    md = md.replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
+  1346→    md = md.replace(/<\/?(ul|ol)[^>]*>/gi, '\n')
+  1347→    md = md.replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
+  1348→    md = md.replace(/<br\s*\/?>/gi, '\n')
+  1349→    md = md.replace(/<[^>]+>/g, '') // strip remaining tags
+  1350→    md = md.replace(/\n{3,}/g, '\n\n')
+  1351→    parts.push(md.trim())
+  1352→    parts.push('')
+  1353→  })
+  1354→  return parts.join('\n')
+  1355→}
+  1356→
+  1357→function escapeHtml(s: string): string {
+  1358→  return (s || '')
+  1359→    .replace(/&/g, '&amp;')
+  1360→    .replace(/</g, '&lt;')
+  1361→    .replace(/>/g, '&gt;')
+  1362→    .replace(/"/g, '&quot;')
+  1363→}
+  1364→

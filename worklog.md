@@ -418,3 +418,30 @@ Stage Summary:
 - Tous les outils demandés sont implémentés : insertion tableau, feuille de calcul (style Excel), disposition (retraits + interligne), bordures et trames (12 presets de bordures + 20 couleurs de fond), désélection du surlignage.
 - Bonus : recherche/remplacement avec compteur d'occurrences, notes de bas de page automatiques avec liens `[N]`↔`#fn-N`, saut de page manuel (visible en édition, réel à l'impression), 150+ caractères spéciaux, raccourcis clavier Google Docs-style (Ctrl+K, Ctrl+Shift+Enter, Ctrl+Shift+7/8).
 - Tout est testé end-to-end via agent-browser : tableau 4×3 inséré avec caption, feuille 3×4 insérée avec en-têtes A/B/C/D, popover grids interactives, 0 erreur TypeScript sur les fichiers modifiés, serveur dev compile en <500ms.
+
+---
+Task ID: skills-uqac-monographie
+Agent: main (Super Z)
+Task: Créer les presets UQAC (licence/master/doctorat) et les skills manquants (mémoire-licence, mémoire-master, thèse-doctorat, monographie) après lecture du PDF UdeM uploadé.
+
+Work Log:
+- Lu et extrait le PDF upload/CHE_GuideMemoiresTheses.pdf (53 pages, Guide UdeM avril 2022 / rév. mars 2025) avec pdftotext.
+- Identifié les normes de forme (Annexe C) : format Lettre, marges 2,5 cm, Times New Roman 12pt, interligne 1,5, pagination chiffres arabes, souligné proscrit, citations >3 lignes en retrait.
+- Vérifié l'état du codebase : seul dissertation-philosophique.ts existait. Les skills UQAC et monographie mentionnés dans le résumé précédent n'existaient PAS réellement.
+- Créé src/lib/iris/uqac-rules.ts : 3 presets (licence, master, doctorat) + alias historiques + buildUQACContextBlock().
+- Créé src/lib/iris/skills/memoire-licence.ts (30-60 pages, appliesUQAC=true, preset=licence).
+- Créé src/lib/iris/skills/memoire-master.ts (80-120 pages, appliesUQAC=true, preset=master).
+- Créé src/lib/iris/skills/these-doctorat.ts (200-400 pages, appliesUQAC=true, preset=doctorat).
+- Créé src/lib/iris/skills/monographie.ts (40-80 pages, appliesUQAC=false, format A4, contexte ENIEG/Université de Maroua/Cameroun).
+- Mis à jour src/lib/iris/skills/index.ts : enregistrement des 5 skills, getDefaultSkill() → memoireMaster, réexport des 5 skills.
+- Corrigé le bug de marge inférieure dans l'éditeur A4 : ajout de hachures d'avertissement diagonales rouges/violettes dans la zone de marge (30mm), ligne épaisse rouge à la limite, étiquettes "⚠ Marge 30 mm" sur chaque page A4, et règles break-inside:avoid pour l'impression.
+- Créé et exécuté scripts/smoke-test-skills.ts : 10 tests, tous passent.
+
+Stage Summary:
+- 5 skills désormais disponibles : Mémoire Licence, Mémoire Master, Thèse Doctorat, Monographie (ENIEG), Dissertation philosophique.
+- UQAC-DALL s'applique automatiquement aux types Mémoire et Thèse (appliesUQAC=true) ; la Monographie et la Dissertation ont leur propre canevas.
+- Presets UQAC : licence (30-60p, résumé 150 mots), master (80-120p, résumé 250 mots), doctorat (200-400p, résumé 500 mots). Mise en page commune : Lettre, marges 25mm, TNR 12pt, interligne 1.5.
+- Similitudes UdeM/UQAC confirmées : format, marges, police, interligne, pagination, règles typographiques (souligné proscrit, gras/italique avec discernement).
+- Différences : UdeM = Lettre, UQAC-DALL = Lettre aussi ; les deux proscrivent les chiffres romains.
+- Bug marge inférieure : amélioration visuelle significative (hachures + labels) ; pour une vraie pagination automatique (séparation du contenu en pages distinctes), il faudrait un moteur type PagedJS — non implémenté car trop risqué pour l'expérience d'édition.
+- Build Next.js : OK. TypeScript : mes fichiers compilent sans erreur (erreurs pré-existantes dans iris-store.ts, audit route, coherence route, websocket examples — non liées).

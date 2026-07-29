@@ -228,26 +228,33 @@
 
 .a4-page.a4-paginated {
   /* Dessine un séparateur visuel à chaque bord de page A4 (297mm)
-     et une BANDE colorée dans la marge inférieure (30mm) pour bien montrer
-     que le contenu ne doit PAS déborder dedans.
-     Repète tous les 297mm. */
+     et une BANDE de diagonales d'avertissement dans la marge inférieure
+     (30mm) pour bien montrer que le contenu ne doit PAS déborder dedans.
+     Répète tous les 297mm. */
   background-image:
-    /* 1) Bande teintée dans la marge inférieure (de 267mm à 297mm) :
-          indique visuellement la zone interdite au texte. */
+    /* 1) Bande diagonale d'avertissement dans la marge inférieure (de 267mm à 297mm) :
+          indique visuellement la zone INTERDITE au texte. Motif hachuré rouge/violet. */
+    repeating-linear-gradient(
+      135deg,
+      transparent 0,
+      transparent 6px,
+      oklch(0.58 0.22 25 / 0.06) 6px,
+      oklch(0.58 0.22 25 / 0.06) 12px),
+    /* 1b) Fond teinté violet sous les hachures pour la marge inférieure */
     linear-gradient(to bottom,
       transparent 0,
       transparent calc(100% - 30mm),
-      oklch(0.42 0.18 285 / 0.05) calc(100% - 30mm),
+      oklch(0.42 0.18 285 / 0.04) calc(100% - 30mm),
       oklch(0.42 0.18 285 / 0.08) calc(100% - 30mm + 1px),
       oklch(0.42 0.18 285 / 0.08) 100%),
-    /* 2) Ligne marquant le bord bas de la zone de texte (à 267mm du haut de page) */
+    /* 2) Ligne ÉPAISSE marquant le bord bas de la zone de texte (à 267mm du haut) */
     linear-gradient(to bottom,
       transparent calc(100% - 30mm),
-      oklch(0.42 0.18 285 / 0.45) calc(100% - 30mm),
-      oklch(0.42 0.18 285 / 0.45) calc(100% - 30mm + 1.5px),
-      transparent calc(100% - 30mm + 1.5px)),
+      oklch(0.58 0.22 25 / 0.55) calc(100% - 30mm),
+      oklch(0.58 0.22 25 / 0.55) calc(100% - 30mm + 2px),
+      transparent calc(100% - 30mm + 2px)),
     /* 3) Ombre douce en haut de chaque page suivante (effet de tranche) */
-    linear-gradient(to bottom, rgba(0,0,0,0.06) 0px, rgba(0,0,0,0) 8px),
+    linear-gradient(to bottom, rgba(0,0,0,0.08) 0px, rgba(0,0,0,0) 10px),
     /* 4) Ligne fine à 25mm du haut (limite de la marge supérieure) */
     linear-gradient(to bottom,
       transparent 25mm,
@@ -258,6 +265,69 @@
   background-size: 100% 297mm;
   background-position: 0 0;
 }
+
+/* Étiquette "MARGE — 30 mm" répétée dans la zone de marge inférieure de chaque page.
+   Utilise un pseudo-élément sur le conteneur parent (la div .relative qui enveloppe
+   la page A4). On ne peut pas mettre un ::after sur .a4-page car son contenu est
+   éditable ; on l'applique donc via la classe .a4-page-wrap adjacente. */
+.a4-page-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    /* Petit texte "MARGE" répété tous les 297mm, à 282mm du haut de chaque page */
+    linear-gradient(to bottom, transparent 0, transparent 0);
+  background-repeat: repeat-y;
+  background-size: 100% 297mm;
+  z-index: 0;
+}
+
+/* Étiquettes de marge — petites pastilles "MARGE 30 mm" placées dans la marge
+   inférieure de chaque page A4. Générées en JS par le composant A4Page. */
+.a4-margin-label {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Inter', sans-serif;
+  font-size: 7pt;
+  font-weight: 600;
+  color: oklch(0.58 0.22 25 / 0.5);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  white-space: nowrap;
+}
+@media print {
+  .a4-margin-label { display: none !important; }
+}
+
+/* Règles de coupure de page pour l'impression — empêchent les éléments
+   de bloc d'être coupés en plein milieu d'une page. */
+.prose-iris p,
+.prose-iris li,
+.prose-iris blockquote,
+.prose-iris tr,
+.prose-iris .iris-footnotes p {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.prose-iris h1,
+.prose-iris h2,
+.prose-iris h3,
+.prose-iris h4 {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+.prose-iris table,
+.prose-iris .iris-table,
+.prose-iris .iris-spreadsheet {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
 
 /* Calque filigrane — placé derrière le contenu de la page A4.
    Ne capture pas les clics (pointer-events: none) pour ne pas bloquer

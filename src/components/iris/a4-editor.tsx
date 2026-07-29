@@ -1135,13 +1135,26 @@ const A4Page = React.forwardRef<
           Only rendered in the editor (hidden in print via CSS). */}
       {Array.from({ length: pageCount }, (_, i) => (
         <span
-          key={i}
+          key={`pg-${i}`}
           className="a4-page-marker"
           style={{
             top: `calc(${(i + 1) * 297}mm - 18mm)`,
           }}
         >
           — {i + 1} —
+        </span>
+      ))}
+      {/* Margin labels — "MARGE 30 mm" in the bottom margin zone of each A4 page,
+          reinforcing visually that the bottom margin must be respected. */}
+      {Array.from({ length: pageCount }, (_, i) => (
+        <span
+          key={`ml-${i}`}
+          className="a4-margin-label"
+          style={{
+            top: `calc(${(i + 1) * 297}mm - 15mm)`,
+          }}
+        >
+          ⚠ Marge 30 mm
         </span>
       ))}
     </div>
