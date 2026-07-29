@@ -393,6 +393,7 @@ export function seedDemoData() {
   const DAY = 86400000
 
   for (let i = 0; i < 32; i++) {
+    const name = names[i % names.length]
     const createdAt = now - Math.floor(Math.random() * 90) * DAY - Math.floor(Math.random() * DAY)
     const lastSeenAt = createdAt + Math.floor(Math.random() * (now - createdAt))
     const tierRoll = Math.random()
@@ -435,8 +436,8 @@ export function seedDemoData() {
       createdAt,
       lastSeenAt,
       tier,
-      email: `${names[i].toLowerCase().replace(/[^a-z]+/g, '.')}@gmail.com`,
-      name: names[i],
+      email: `${name.toLowerCase().replace(/[^a-z]+/g, '.')}@gmail.com`,
+      name,
       country: countries[Math.floor(Math.random() * countries.length)],
       institution: institutions[Math.floor(Math.random() * institutions.length)],
       events,
