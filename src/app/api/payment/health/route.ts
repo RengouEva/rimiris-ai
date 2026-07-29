@@ -11,7 +11,7 @@ export const runtime = 'nodejs'
 // upgrade dialog to know which provider SDK to load.
 // ============================================================================
 export async function GET() {
-  const active = getActiveProvider()
+  const active = await getActiveProvider()
   if (!active) {
     return NextResponse.json({
       enabled: false,

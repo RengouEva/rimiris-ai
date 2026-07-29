@@ -12,69 +12,34 @@
  *
  * WHAT IT DOES
  * ------------
- *   1. Looks up the pending payment by reference.
+ *   1. Looks up the pending payment by reference (Prisma).
  *   2. Validates it's in 'pending' status (idempotency — webhook may fire
  *      multiple times; we only fulfill once).
- *   3. Loads the account store, finds the user by accountId.
- *   4. Upgrades the user's tier to 'pro'.
- *   5. Records the revenue in .rimiris-revenue.json (this is what makes the
- *      admin panel display non-zero XAF — finally!).
- *   6. Marks the pending payment as 'paid'.
+ *   3. Loads the account row, upgrades the user's tier to 'pro'.
+ *   4. Records the revenue in the `revenues` table.
+ *   5. Marks the pending payment as 'paid'.
+ *
+ * BACKEND
+ * -------
+ * All persistence goes through Prisma (MySQL). Account + Revenue tables.
  *
  * SECURITY
  * --------
- * This function is server-only and is only called after webhook signature
- * verification (or after a server-to-server provider API call confirms the
- * payment status). It does NOT trust any client input — the only argument
- * is the payment reference, and we look up the amount + accountId from
- * the pending store (which was written by /api/payment/initiate, also
- * server-side).
+ * Server-only. Only called after webhook signature verification (or after a
+ * server-to-server provider API call confirms the payment status). Does NOT
+ * trust any client input — the only argument is the payment reference, and
+ * we look up the amount + accountId from the pending store (which was
+ * written by /api/payment/initiate, also server-side).
  */
 
-import * as fs from 'fs'
-import * as path from 'path'
-import { readStore, writeStore, applySuperAdminRule } from '@/app/api/auth/login/route'
+import { prisma } from '@/lib/db'
+import { findAccountById, updateAccount, applySuperAdminRule } from '@/app/api/auth/login/route'
 import { ADMIN_EMAIL } from '@/lib/iris/security'
-import { migrateLegacyTier, type TierId } from '@/lib/iris/tiers'
+import { type TierId } from '@/lib/iris/tiers'
 import { getPending, markPaid, markFailed } from './payment-pending'
 import type { PaymentProviderId } from './payment-providers'
 
 export const runtime = 'nodejs'
-
-// ============================================================================
-// Revenue record (shared with /api/auth/upgrade — same file, same schema)
-// ============================================================================
-const REVENUE_PATH = path.join(process.cwd(), '.rimiris-revenue.json')
-
-interface RevenueRecord {
-  total: number
-  history: Array<{
-    ts: number
-    amount: number
-    tier: TierId
-    accountId: string
-    provider?: string
-    reference?: string
-  }>
-}
-
-function readRevenue(): RevenueRecord {
-  try {
-    if (fs.existsSync(REVENUE_PATH)) {
-      return JSON.parse(fs.readFileSync(REVENUE_PATH, 'utf8'))
-    }
-  } catch {
-    /* corrupt */
-  }
-  return { total: 0, history: [] }
-}
-
-function writeRevenue(r: RevenueRecord) {
-  // Atomic write
-  const tmp = REVENUE_PATH + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(r, null, 2), 'utf8')
-  fs.renameSync(tmp, REVENUE_PATH)
-}
 
 // ============================================================================
 // Fulfillment result
@@ -99,11 +64,11 @@ export interface FulfillResult {
 // ============================================================================
 // fulfillPayment — the main entry point.
 // ============================================================================
-export function fulfillPayment(
+export async function fulfillPayment(
   reference: string,
   provider: Exclude<PaymentProviderId, 'none'>,
-): FulfillResult {
-  const pending = getPending(reference)
+): Promise<FulfillResult> {
+  const pending = await getPending(reference)
   if (!pending) {
     return { ok: false, fulfilled: false, error: 'Paiement introuvable.' }
   }
@@ -137,38 +102,47 @@ export function fulfillPayment(
   }
 
   // 1. Upgrade the account tier
-  const store = readStore()
-  const idx = store.accounts.findIndex((a) => a.id === pending.accountId)
-  if (idx === -1) {
-    markFailed(reference, `Account ${pending.accountId} not found`)
+  const stored = await findAccountById(pending.accountId)
+  if (!stored) {
+    await markFailed(reference, `Account ${pending.accountId} not found`)
     return { ok: false, fulfilled: false, error: 'Compte introuvable.' }
   }
-  store.accounts[idx].tier = pending.tier
-  store.accounts[idx] = applySuperAdminRule(store.accounts[idx])
-  writeStore(store)
+  const account = applySuperAdminRule(stored)
+  const updated = await updateAccount(account.id, {
+    tier: pending.tier,
+    role: account.role,
+  })
+  if (!updated) {
+    await markFailed(reference, `Failed to update account ${account.id}`)
+    return { ok: false, fulfilled: false, error: 'Échec mise à jour du compte.' }
+  }
 
   // 2. Record revenue (ONLY for non-admin accounts — admin is auto-Pro)
-  if (pending.amountXAF > 0 && store.accounts[idx].email !== ADMIN_EMAIL) {
-    const r = readRevenue()
-    r.total += pending.amountXAF
-    r.history.push({
-      ts: Date.now(),
-      amount: pending.amountXAF,
-      tier: pending.tier,
-      accountId: pending.accountId,
-      provider,
-      reference,
-    })
-    writeRevenue(r)
+  if (pending.amountXAF > 0 && account.email !== ADMIN_EMAIL) {
+    try {
+      await prisma.revenue.create({
+        data: {
+          ts: BigInt(Date.now()),
+          amount: pending.amountXAF,
+          tier: pending.tier,
+          accountId: account.id,
+          provider,
+          reference,
+        },
+      })
+    } catch (e) {
+      console.error('[fulfill] revenue insert failed:', e)
+      // Don't abort — the user is already upgraded. We'll reconcile later.
+    }
   }
 
   // 3. Mark pending as paid
-  markPaid(reference)
+  await markPaid(reference)
 
   return {
     ok: true,
     fulfilled: true,
-    accountId: pending.accountId,
+    accountId: account.id,
     tier: pending.tier,
     amountXAF: pending.amountXAF,
     provider,

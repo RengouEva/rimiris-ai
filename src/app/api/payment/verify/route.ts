@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Référence manquante.' }, { status: 400 })
   }
 
-  const pending = getPending(ref)
+  const pending = await getPending(ref)
   if (!pending) {
     return NextResponse.json({ error: 'Paiement introuvable.' }, { status: 404 })
   }
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   // and fulfill if the payment has succeeded but our webhook hasn't fired yet.
   if (pending.provider === 'campay' && pending.status === 'pending' && pending.providerRef) {
     try {
-      const active = getActiveProvider()
+      const active = await getActiveProvider()
       if (active && active.id === 'campay') {
         const creds = active.creds
         const baseUrl = creds.mode === 'test'
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
               if (statusData?.status === 'SUCCESSFUL') {
                 // Fulfill now (defense-in-depth if webhook is delayed)
                 const { fulfillPayment } = await import('@/lib/iris/payment-fulfillment')
-                fulfillPayment(ref, 'campay')
+                await fulfillPayment(ref, 'campay')
               }
             }
           }
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Re-read the pending (may have been updated by the poll above)
-  const updated = getPending(ref)
+  const updated = await getPending(ref)
 
   return NextResponse.json({
     ok: true,

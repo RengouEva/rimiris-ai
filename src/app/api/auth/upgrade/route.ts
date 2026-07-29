@@ -13,10 +13,10 @@
  * request from an authenticated session but log a warning. In production
  * the payment provider (Stripe, FedaPay, Campay…) would call this endpoint
  * server-side with the secret after a successful payment.
+ *
+ * BACKEND: MySQL via Prisma. Account + Revenue tables.
  */
 import { NextRequest, NextResponse } from 'next/server'
-import * as fs from 'fs'
-import * as path from 'path'
 import * as crypto from 'crypto'
 import {
   requireSession,
@@ -24,11 +24,12 @@ import {
   ADMIN_EMAIL,
 } from '@/lib/iris/security'
 import {
-  readStore,
-  writeStore,
+  findAccountById,
+  updateAccount,
   applySuperAdminRule,
 } from '../login/route'
 import { TIERS, migrateLegacyTier, type TierId } from '@/lib/iris/tiers'
+import { prisma } from '@/lib/db'
 
 export const runtime = 'nodejs'
 
@@ -37,27 +38,7 @@ const PAYMENT_SECRET =
   process.env.PAYMENT_SECRET ||
   ''
 
-const REVENUE_PATH = path.join(process.cwd(), '.rimiris-revenue.json')
-
-interface RevenueRecord {
-  total: number
-  history: { ts: number; amount: number; tier: TierId; accountId: string }[]
-}
-
-function readRevenue(): RevenueRecord {
-  try {
-    if (fs.existsSync(REVENUE_PATH)) {
-      return JSON.parse(fs.readFileSync(REVENUE_PATH, 'utf8'))
-    }
-  } catch {
-    /* corrupt */
-  }
-  return { total: 0, history: [] }
-}
-
-function writeRevenue(r: RevenueRecord) {
-  fs.writeFileSync(REVENUE_PATH, JSON.stringify(r, null, 2), 'utf8')
-}
+let demoModeWarned = false
 
 function verifyPaymentSignature(
   accountId: string,
@@ -72,7 +53,10 @@ function verifyPaymentSignature(
     // CRITICAL: in demo mode NO REVENUE is recorded — the admin panel
     // must never display fictitious amounts. Revenue is only recorded
     // when a real payment provider signs the request with the secret.
-    console.warn('[payment] RIMIRIS_PAYMENT_SECRET not set — running in demo mode. Upgrades are free, NO revenue is recorded.')
+    if (!demoModeWarned) {
+      console.warn('[payment] RIMIRIS_PAYMENT_SECRET not set — running in demo mode. Upgrades are free, NO revenue is recorded.')
+      demoModeWarned = true
+    }
     return { valid: true, realPayment: false }
   }
   // Replay protection: timestamp must be within ±5 minutes
@@ -133,31 +117,42 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Apply the upgrade in the server store
-  const store = readStore()
-  const idx = store.accounts.findIndex((a) => a.id === session.accountId)
-  if (idx === -1) {
+  // Apply the upgrade in the DB
+  const stored = await findAccountById(session.accountId)
+  if (!stored) {
     return NextResponse.json({ error: 'Compte introuvable.' }, { status: 404 })
   }
-  store.accounts[idx].tier = tier
-  store.accounts[idx] = applySuperAdminRule(store.accounts[idx])
-  writeStore(store)
+  const account = applySuperAdminRule({ ...stored, tier })
+  const updated = await updateAccount(account.id, {
+    tier: account.tier,
+    role: account.role,
+  })
+  if (!updated) {
+    return NextResponse.json({ error: 'Échec de la mise à jour du compte.' }, { status: 500 })
+  }
 
-  // Record revenue ONLY when a real payment signature was verified
-  // (i.e., PAYMENT_SECRET is set AND the signature matched).
-  // In demo mode (no secret), NO revenue is recorded — the admin panel
-  // shows 0 XAF until a real payment provider is wired up.
+  // Record revenue ONLY when a real payment signature was verified.
+  // In demo mode (no secret), NO revenue is recorded.
   if (sigCheck.realPayment && amountXAF > 0 && session.email !== ADMIN_EMAIL && tier !== 'free') {
-    const r = readRevenue()
-    r.total += amountXAF
-    r.history.push({ ts: Date.now(), amount: amountXAF, tier, accountId: session.accountId })
-    writeRevenue(r)
+    try {
+      await prisma.revenue.create({
+        data: {
+          ts: BigInt(Date.now()),
+          amount: amountXAF,
+          tier,
+          accountId: account.id,
+        },
+      })
+    } catch (e) {
+      console.error('[upgrade] revenue insert failed:', e)
+      // Don't fail the upgrade — the user already paid. We'll reconcile later.
+    }
   }
 
   const newSession = {
     ...session,
-    tier: store.accounts[idx].tier,
-    role: store.accounts[idx].role,
+    tier: account.tier,
+    role: account.role,
   }
 
   // Re-set the cookie with the new tier (the cookie is HMAC-signed server-side,
@@ -166,9 +161,7 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json({
     ok: true,
     session: newSession,
-    tier: store.accounts[idx].tier,
-    // Tell the client whether a real payment was recorded. The client MUST NOT
-    // invent a revenue amount if realPayment is false.
+    tier: account.tier,
     realPayment: sigCheck.realPayment,
   })
   setSessionCookie(res, newSession)

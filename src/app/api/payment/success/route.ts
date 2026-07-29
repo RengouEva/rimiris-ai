@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL('/?payment=no_ref', req.url))
   }
 
-  const pending = getPending(ref)
+  const pending = await getPending(ref)
   if (!pending) {
     return NextResponse.redirect(new URL('/?payment=not_found', req.url))
   }
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   // If cancelled, mark as failed
   if (status === 'cancel' && pending.status === 'pending') {
     const { markFailed } = await import('@/lib/iris/payment-pending')
-    markFailed(ref, 'User cancelled the checkout')
+    await markFailed(ref, 'User cancelled the checkout')
     return NextResponse.redirect(new URL('/?payment=cancelled', req.url))
   }
 
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   if (pending.provider === 'campay' && pending.status === 'pending' && pending.providerRef) {
     try {
       const { getActiveProvider } = await import('@/lib/iris/payment-providers')
-      const active = getActiveProvider()
+      const active = await getActiveProvider()
       if (active && active.id === 'campay') {
         const creds = active.creds
         const baseUrl = creds.mode === 'test'
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
               const statusData = await statusRes.json()
               if (statusData?.status === 'SUCCESSFUL') {
                 const { fulfillPayment } = await import('@/lib/iris/payment-fulfillment')
-                fulfillPayment(ref, 'campay')
+                await fulfillPayment(ref, 'campay')
               }
             }
           }
@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
   if (pending.provider === 'stripe' && pending.status === 'pending' && pending.providerRef) {
     try {
       const { getActiveProvider } = await import('@/lib/iris/payment-providers')
-      const active = getActiveProvider()
+      const active = await getActiveProvider()
       if (active && active.id === 'stripe' && active.creds.secretKey) {
         const sessionRes = await fetch(
           `https://api.stripe.com/v1/checkout/sessions/${pending.providerRef}`,
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
           const sessionData = await sessionRes.json()
           if (sessionData?.payment_status === 'paid') {
             const { fulfillPayment } = await import('@/lib/iris/payment-fulfillment')
-            fulfillPayment(ref, 'stripe')
+            await fulfillPayment(ref, 'stripe')
           }
         }
       }
@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
   if (pending.provider === 'paystack' && pending.status === 'pending') {
     try {
       const { getActiveProvider } = await import('@/lib/iris/payment-providers')
-      const active = getActiveProvider()
+      const active = await getActiveProvider()
       if (active && active.id === 'paystack' && active.creds.secretKey) {
         const verifyRes = await fetch(
           `https://api.paystack.co/transaction/verify/${encodeURIComponent(ref)}`,
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
           const verifyData = await verifyRes.json()
           if (verifyData?.data?.status === 'success') {
             const { fulfillPayment } = await import('@/lib/iris/payment-fulfillment')
-            fulfillPayment(ref, 'paystack')
+            await fulfillPayment(ref, 'paystack')
           }
         }
       }
@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
   if (pending.provider === 'flutterwave' && pending.status === 'pending') {
     try {
       const { getActiveProvider } = await import('@/lib/iris/payment-providers')
-      const active = getActiveProvider()
+      const active = await getActiveProvider()
       if (active && active.id === 'flutterwave' && active.creds.secretKey) {
         const verifyRes = await fetch(
           `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(ref)}`,
@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
           const verifyData = await verifyRes.json()
           if (verifyData?.data?.status === 'successful') {
             const { fulfillPayment } = await import('@/lib/iris/payment-fulfillment')
-            fulfillPayment(ref, 'flutterwave')
+            await fulfillPayment(ref, 'flutterwave')
           }
         }
       }
@@ -153,7 +153,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Re-read after polling
-  const updated = getPending(ref)
+  const updated = await getPending(ref)
   const paid = updated?.status === 'paid'
   const stillPending = updated?.status === 'pending'
 

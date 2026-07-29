@@ -46,8 +46,6 @@
  * check or a "retrieve account" call.
  */
 
-import * as fs from 'fs'
-import * as path from 'path'
 import * as crypto from 'crypto'
 import { encryptSecret, decryptSecret } from './security'
 
@@ -272,12 +270,16 @@ export const PROVIDER_REGISTRY: ProviderDescriptor[] = [
 ]
 
 // ============================================================================
-// Config file path + in-memory cache
+// Database-backed config storage (MySQL via Prisma) + in-memory cache.
+//
+// Previously a JSON file at `.payment-config.json`. Now persisted in the
+// `PaymentConfig` table (single row, key='default'). The cache is invalidated
+// on every push so the next read fetches the fresh row from the DB.
 // ============================================================================
-const CONFIG_PATH = path.join(process.cwd(), '.payment-config.json')
-const AUDIT_PATH = path.join(process.cwd(), '.payment-config.audit.jsonl')
+import { prisma } from '@/lib/db'
 
 let cachedConfig: RuntimePaymentConfig | null = null
+let cacheLoading: Promise<RuntimePaymentConfig> | null = null
 
 // ============================================================================
 // Encryption helpers — wrap security.ts functions but adapt to our shape
@@ -330,56 +332,85 @@ function decryptProviderCreds(creds: ProviderCredentials): ProviderCredentials {
 }
 
 // ============================================================================
-// Read / write the runtime config file
+// Read / write the runtime config — MySQL-backed via Prisma
 // ============================================================================
-function readConfigFile(): RuntimePaymentConfig {
+async function readConfigFromDb(): Promise<RuntimePaymentConfig> {
+  const row = await prisma.paymentConfig.findUnique({ where: { key: 'default' } })
+  if (!row) {
+    return { activeProvider: 'stripe', providers: {} }
+  }
   try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      const raw = fs.readFileSync(CONFIG_PATH, 'utf8')
-      const parsed = JSON.parse(raw) as RuntimePaymentConfig
-      // Shape validation
-      if (!parsed.providers || typeof parsed.providers !== 'object') {
-        return { activeProvider: 'stripe', providers: {} }
-      }
-      return parsed
+    const parsed = JSON.parse(row.configJson) as RuntimePaymentConfig
+    if (!parsed.providers || typeof parsed.providers !== 'object') {
+      return { activeProvider: (row.activeProvider as Exclude<PaymentProviderId, 'none'>) || 'stripe', providers: {} }
+    }
+    return {
+      activeProvider: (row.activeProvider as Exclude<PaymentProviderId, 'none'>) || parsed.activeProvider,
+      providers: parsed.providers,
+      updatedAt: row.updatedAt ? new Date(Number(row.updatedAt)).toISOString() : undefined,
+      updatedBy: row.updatedBy || undefined,
     }
   } catch {
-    /* corrupt JSON — return empty */
+    return { activeProvider: 'stripe', providers: {} }
   }
-  return { activeProvider: 'stripe', providers: {} }
 }
 
-function writeConfigFile(cfg: RuntimePaymentConfig) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8')
+async function writeConfigToDb(cfg: RuntimePaymentConfig): Promise<void> {
+  const now = Date.now()
+  const configJson = JSON.stringify({ providers: cfg.providers })
+  await prisma.paymentConfig.upsert({
+    where: { key: 'default' },
+    create: {
+      key: 'default',
+      activeProvider: cfg.activeProvider,
+      configJson,
+      updatedAt: BigInt(now),
+      updatedBy: cfg.updatedBy || null,
+    },
+    update: {
+      activeProvider: cfg.activeProvider,
+      configJson,
+      updatedAt: BigInt(now),
+      updatedBy: cfg.updatedBy || null,
+    },
+  })
 }
 
 /**
  * Read the runtime config (DECRYPTED) for server-side use.
- * Results are cached in memory and invalidated on `invalidateCache()`.
+ * Results are cached in memory and invalidated on `invalidatePaymentConfigCache()`.
+ *
+ * ASYNC now (was sync when file-based). All callers must `await` it.
  */
-export function getRuntimeConfig(): RuntimePaymentConfig {
+export async function getRuntimeConfig(): Promise<RuntimePaymentConfig> {
   if (cachedConfig) return cachedConfig
-  const raw = readConfigFile()
-  // Decrypt secret fields on read
-  const decrypted: RuntimePaymentConfig = {
-    ...raw,
-    providers: {},
-  }
-  for (const [id, creds] of Object.entries(raw.providers)) {
-    if (creds) {
-      ;(decrypted.providers as any)[id] = decryptProviderCreds(creds)
+  if (cacheLoading) return cacheLoading
+
+  cacheLoading = (async () => {
+    const raw = await readConfigFromDb()
+    const decrypted: RuntimePaymentConfig = {
+      ...raw,
+      providers: {},
     }
-  }
-  cachedConfig = decrypted
-  return decrypted
+    for (const [id, creds] of Object.entries(raw.providers)) {
+      if (creds) {
+        ;(decrypted.providers as any)[id] = decryptProviderCreds(creds)
+      }
+    }
+    cachedConfig = decrypted
+    cacheLoading = null
+    return decrypted
+  })()
+  return cacheLoading
 }
 
 /**
  * Invalidate the in-memory cache. Called after every push so the next read
- * picks up the new config.
+ * picks up the new config from the DB.
  */
 export function invalidatePaymentConfigCache() {
   cachedConfig = null
+  cacheLoading = null
 }
 
 /**
@@ -387,32 +418,31 @@ export function invalidatePaymentConfigCache() {
  * Used by the admin GET endpoint so the admin can verify which key is set
  * without the actual secret ever leaving the server.
  */
-export function getMaskedConfig(): {
+export async function getMaskedConfig(): Promise<{
   activeProvider: RuntimePaymentConfig['activeProvider']
-  providers: Partial<Record<Exclude<PaymentProviderId, 'none'>, Record<string, { value: string; masked: boolean; hasValue: boolean }>>>
+  providers: Partial<Record<Exclude<PaymentProviderId, 'none'>, Record<string, { value: string; masked: string; hasValue: boolean }>>>
   updatedAt?: string
   updatedBy?: string
-} {
-  const cfg = getRuntimeConfig()
+}> {
+  const cfg = await getRuntimeConfig()
   const masked: any = {}
   for (const [id, creds] of Object.entries(cfg.providers)) {
     if (!creds) continue
     const fields: any = {}
     for (const [field, value] of Object.entries(creds)) {
       if (typeof value !== 'string' || value.length === 0) {
-        fields[field] = { value: '', masked: false, hasValue: false }
+        fields[field] = { value: '', masked: '', hasValue: false }
         continue
       }
       const isSecret = isSecretField(field as keyof ProviderCredentials)
       fields[field] = {
-        value: isSecret ? '' : value, // non-secret values can be returned as-is
+        value: isSecret ? '' : value,
         masked: isSecret ? maskKey(value) : '',
         hasValue: true,
       }
     }
-    // Always include the mode field
     if (!fields.mode) {
-      fields.mode = { value: creds.mode || 'test', masked: false, hasValue: true }
+      fields.mode = { value: creds.mode || 'test', masked: '', hasValue: true }
     }
     masked[id] = fields
   }
@@ -455,8 +485,8 @@ export interface PushResult {
   updatedAt: string
 }
 
-export function pushProviderConfig(input: PushInput): PushResult {
-  const cfg = readConfigFile() // re-read fresh from disk (avoid stale cache)
+export async function pushProviderConfig(input: PushInput): Promise<PushResult> {
+  const cfg = await readConfigFromDb() // re-read fresh from DB (avoid stale cache)
   const providerId = input.provider
   const existing = cfg.providers[providerId] || { mode: input.mode }
 
@@ -518,11 +548,11 @@ export function pushProviderConfig(input: PushInput): PushResult {
   cfg.updatedAt = new Date().toISOString()
   cfg.updatedBy = input.adminEmail
 
-  writeConfigFile(cfg)
+  await writeConfigToDb(cfg)
   invalidatePaymentConfigCache()
 
   // Append audit log
-  appendAuditLog({
+  await appendAuditLog({
     ts: cfg.updatedAt,
     admin: input.adminEmail,
     action: input.setActive ? 'activate' : 'update',
@@ -542,8 +572,8 @@ export function pushProviderConfig(input: PushInput): PushResult {
 /**
  * Remove a provider entirely from the config.
  */
-export function removeProvider(providerId: Exclude<PaymentProviderId, 'none'>, adminEmail: string): PushResult {
-  const cfg = readConfigFile()
+export async function removeProvider(providerId: Exclude<PaymentProviderId, 'none'>, adminEmail: string): Promise<PushResult> {
+  const cfg = await readConfigFromDb()
   delete cfg.providers[providerId]
   if (cfg.activeProvider === providerId) {
     // Fall back to first remaining provider, or stripe by default
@@ -552,10 +582,10 @@ export function removeProvider(providerId: Exclude<PaymentProviderId, 'none'>, a
   }
   cfg.updatedAt = new Date().toISOString()
   cfg.updatedBy = adminEmail
-  writeConfigFile(cfg)
+  await writeConfigToDb(cfg)
   invalidatePaymentConfigCache()
 
-  appendAuditLog({
+  await appendAuditLog({
     ts: cfg.updatedAt,
     admin: adminEmail,
     action: 'remove',
@@ -573,7 +603,7 @@ export function removeProvider(providerId: Exclude<PaymentProviderId, 'none'>, a
 }
 
 // ============================================================================
-// Audit log (JSONL — one line per push)
+// Audit log — stored in `PaymentConfigAudit` table (was JSONL file).
 // ============================================================================
 interface AuditEntry {
   ts: string
@@ -584,25 +614,39 @@ interface AuditEntry {
   fields: string[]
 }
 
-function appendAuditLog(entry: AuditEntry) {
+async function appendAuditLog(entry: AuditEntry): Promise<void> {
   try {
-    fs.appendFileSync(AUDIT_PATH, JSON.stringify(entry) + '\n', 'utf8')
-  } catch {
+    const tsNum = new Date(entry.ts).getTime() || Date.now()
+    await prisma.paymentConfigAudit.create({
+      data: {
+        ts: BigInt(tsNum),
+        admin: entry.admin,
+        action: entry.action,
+        provider: entry.provider,
+        mode: entry.mode,
+        fields: JSON.stringify(entry.fields),
+      },
+    })
+  } catch (e) {
+    console.warn('[payment-config] audit log insert failed:', e)
     /* audit log is best-effort */
   }
 }
 
-export function readAuditLog(limit = 50): AuditEntry[] {
+export async function readAuditLog(limit = 50): Promise<AuditEntry[]> {
   try {
-    if (!fs.existsSync(AUDIT_PATH)) return []
-    const lines = fs.readFileSync(AUDIT_PATH, 'utf8').trim().split('\n').slice(-limit)
-    return lines
-      .filter(Boolean)
-      .map((l) => {
-        try { return JSON.parse(l) as AuditEntry } catch { return null }
-      })
-      .filter((x): x is AuditEntry => x !== null)
-      .reverse()
+    const rows = await prisma.paymentConfigAudit.findMany({
+      orderBy: { ts: 'desc' },
+      take: limit,
+    })
+    return rows.map((r) => ({
+      ts: new Date(Number(r.ts)).toISOString(),
+      admin: r.admin,
+      action: r.action as 'activate' | 'update' | 'remove',
+      provider: r.provider,
+      mode: r.mode,
+      fields: (() => { try { return JSON.parse(r.fields) as string[] } catch { return [] } })(),
+    }))
   } catch {
     return []
   }
@@ -819,7 +863,7 @@ const TESTERS: Record<Exclude<PaymentProviderId, 'none'>, (c: ProviderCredential
 }
 
 export async function testProvider(providerId: Exclude<PaymentProviderId, 'none'>): Promise<ProviderTestResult> {
-  const cfg = getRuntimeConfig()
+  const cfg = await getRuntimeConfig()
   const creds = cfg.providers[providerId]
   if (!creds) {
     return { ok: false, detail: `Aucune credential enregistrée pour ${providerId}. Enregistrez d'abord, puis testez.` }
@@ -834,19 +878,19 @@ export async function testProvider(providerId: Exclude<PaymentProviderId, 'none'
 // but the surface is here so the future payment-initiation routes can read
 // the active provider's decrypted credentials at runtime).
 // ============================================================================
-export function getActiveProvider(): {
+export async function getActiveProvider(): Promise<{
   id: Exclude<PaymentProviderId, 'none'>
   creds: ProviderCredentials
-} | null {
-  const cfg = getRuntimeConfig()
+} | null> {
+  const cfg = await getRuntimeConfig()
   const id = cfg.activeProvider
   const creds = cfg.providers[id]
   if (!creds) return null
   return { id, creds }
 }
 
-export function isPaymentEnabled(): boolean {
-  return getActiveProvider() !== null
+export async function isPaymentEnabled(): Promise<boolean> {
+  return (await getActiveProvider()) !== null
 }
 
 // ============================================================================
@@ -1247,7 +1291,7 @@ const INITIATORS: Record<
 export async function initiatePayment(
   input: InitiatePaymentInput,
 ): Promise<InitiatePaymentResult & { provider: Exclude<PaymentProviderId, 'none'> }> {
-  const active = getActiveProvider()
+  const active = await getActiveProvider()
   if (!active) {
     return { ok: false, provider: 'stripe', error: 'Aucun prestataire de paiement actif.' }
   }
@@ -1567,7 +1611,7 @@ export async function verifyWebhook(
   body: string,
   headers: Headers,
 ): Promise<WebhookVerifyResult> {
-  const cfg = getRuntimeConfig()
+  const cfg = await getRuntimeConfig()
   const creds = cfg.providers[provider]
   if (!creds) {
     return { valid: false, error: `Aucune credential pour ${provider}.` }

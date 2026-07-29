@@ -1050,3 +1050,124 @@ Stage Summary:
 - Aucune modification serveur nécessaire — `/api/payment/success` redirigeait déjà vers `/?payment=…` (task précédent).
 - Panneau admin Paiements confirmé en place (déjà livré au task précédent) : 7 prestataires supportés, chiffrement AES-256-GCM, audit log, live test pings, activation immédiate via cache invalidation.
 - Commit: d9cd89a sur main, ahead of origin/main.
+
+---
+Task ID: mysql-migration
+Agent: main (Super Z)
+Task: Migrer le backend de Rimiris AI de fichiers JSON vers MySQL (Hostinger VPS) pour le déploiement production.
+
+Work Log:
+- Lecture de tous les fichiers qui utilisaient `.rimiris-accounts.json`, `.payment-pending.json`, `.payment-webhook-log.json`, `.rimiris-revenue.json`, `.payment-config.json` :
+  * src/app/api/auth/login/route.ts (readStore/writeStore/applySuperAdminRule)
+  * src/app/api/auth/signup/route.ts (readStore/writeStore)
+  * src/app/api/auth/upgrade/route.ts (readStore/writeStore + revenue file)
+  * src/lib/iris/payment-pending.ts (file-backed CRUD)
+  * src/lib/iris/payment-webhook-log.ts (file-backed CRUD)
+  * src/lib/iris/payment-fulfillment.ts (account + revenue files)
+  * src/lib/iris/payment-providers.ts (config file + audit JSONL)
+
+- Création de `prisma/schema.prisma` (MySQL) avec 6 nouveaux modèles :
+  * `Account` (id, email unique, name, passwordHash, salt, role ENUM, tier ENUM, createdAt, lastLoginAt)
+  * `PendingPayment` (reference unique, provider, providerRef, accountId FK, status ENUM)
+  * `PaymentWebhookEvent` (ts, provider, status, reference, signatureHeader masqué, bodyPreview 500 chars)
+  * `Revenue` (ts, amount, tier, accountId FK, provider, reference)
+  * `PaymentConfig` (single row key='default', activeProvider, configJson LongText chiffré)
+  * `PaymentConfigAudit` (ts, admin, action, provider, mode, fields JSON)
+  * Enums : AccountRole (user/admin/super_admin), AccountTier (free/pro), PendingStatus (pending/paid/expired/failed)
+  * Indexes sur email, accountId, (provider, providerRef), (status, createdAt), ts, (provider, ts)
+
+- Création de `src/lib/db.ts` : singleton PrismaClient avec globalThis pour éviter les leaks en dev (hot reload).
+
+- Refactor `src/app/api/auth/login/route.ts` :
+  * Suppression de `ACCOUNTS_PATH`, `readStore()`, `writeStore()` (file-based)
+  * Nouvelles fonctions async : `findAccountByEmail`, `findAccountById`, `createAccount`, `updateAccount`
+  * Conservation de `ServerAccount` (interface) + `toServerAccount(row)` (convert Prisma row → legacy shape)
+  * Conservation de `applySuperAdminRule`, `hashPassword`, `verifyPassword`, `randomSalt`, `uuid`, `normalizeEmail`, `toSession` (mêmes signatures)
+  * `readStore()` reste mais retourne `{ accounts: ServerAccount[] }` async (utilisé par le panneau admin via listAccounts côté client)
+
+- Refactor `src/app/api/auth/signup/route.ts` :
+  * Remplacement de `readStore/writeStore` par `findAccountByEmail + createAccount`
+  * Catch P2002 (unique constraint) pour la race condition signup simultané
+
+- Refactor `src/app/api/auth/upgrade/route.ts` :
+  * Remplacement de `readStore/writeStore` par `findAccountById + updateAccount`
+  * Remplacement de `.rimiris-revenue.json` par `prisma.revenue.create`
+
+- Refactor `src/lib/iris/payment-pending.ts` :
+  * Toutes les fonctions deviennent `async` : `createPending`, `getPending`, `findPendingByProviderRef`, `updatePending`, `markPaid`, `markFailed`
+  * Cleanup stale throttled à 5 min (pas de cron nécessaire)
+  * Conversion BigInt ↔ number gérée dans `toPending(row)`
+
+- Refactor `src/lib/iris/payment-webhook-log.ts` :
+  * Toutes les fonctions deviennent `async` : `logWebhookEvent`, `getRecentWebhookEvents`, `clearWebhookLog`
+  * Cap 200 entries via post-insert trim (findMany oldest + deleteMany)
+  * `buildEventInput` reste sync (helper pur, pas de DB)
+
+- Refactor `src/lib/iris/payment-fulfillment.ts` :
+  * `fulfillPayment` devient async
+  * Utilise `findAccountById + updateAccount + prisma.revenue.create`
+  * Idempotence préservée (si pending.status === 'paid', retourne sans refulfill)
+
+- Refactor `src/lib/iris/payment-providers.ts` (gros morceau) :
+  * Suppression des imports `fs` et `path` (n'est plus file-based)
+  * `readConfigFile/writeConfigFile` → `readConfigFromDb/writeConfigToDb` (prisma.paymentConfig.upsert)
+  * `getRuntimeConfig()` devient async, garde le cache en mémoire (`cachedConfig` + `cacheLoading` promise pour dédupliquer les appels concurrents)
+  * `getMaskedConfig()`, `pushProviderConfig()`, `removeProvider()`, `testProvider()`, `getActiveProvider()`, `isPaymentEnabled()`, `initiatePayment()`, `verifyWebhook()`, `readAuditLog()` : toutes deviennent async
+  * `appendAuditLog` → `prisma.paymentConfigAudit.create`
+  * `readAuditLog` → `prisma.paymentConfigAudit.findMany` + JSON.parse pour `fields`
+
+- Mise à jour de tous les callers des fonctions async :
+  * `src/app/api/admin/payment-providers/route.ts` : await getMaskedConfig, await readAuditLog, await pushProviderConfig, await removeProvider
+  * `src/app/api/admin/payment-weblogs/route.ts` : await getRecentWebhookEvents, await clearWebhookLog
+  * `src/app/api/payment/health/route.ts` : await getActiveProvider
+  * `src/app/api/payment/initiate/route.ts` : await getActiveProvider, await createPending, await markFailed, await updatePending
+  * `src/app/api/payment/verify/route.ts` : await getPending, await getActiveProvider, await fulfillPayment
+  * `src/app/api/payment/success/route.ts` : await getPending (×3), await getActiveProvider (×4), await fulfillPayment (×4), await markFailed
+  * `src/app/api/payment/webhook/[provider]/route.ts` : await fulfillPayment, await logWebhookEvent (×4 branches)
+
+- Nouveaux endpoints admin server-side (remplacent les reads localStorage) :
+  * `src/app/api/admin/accounts/route.ts` (GET super_admin → liste tous les comptes depuis MySQL)
+  * `src/app/api/admin/stats/route.ts` (GET super_admin → agrège totalUsers, activeUsers7d/30d, tierDistribution, totalRevenue, mrr, arpu, conversionRate, revenueSeries 30j, userSeries 30j)
+  * Le panneau admin peut désormais fetch `/api/admin/accounts` et `/api/admin/stats` pour afficher des données réelles DB (au lieu du miroir localStorage incomplet)
+
+- Configuration MySQL :
+  * `prisma/schema.prisma` : `provider = "mysql"`, `url = env("DATABASE_URL")`
+  * `.env` et `.env.local` : `DATABASE_URL="mysql://rimiris:rimiris_password@127.0.0.1:3306/rimiris_prod"`
+  * `prisma/migrations/20260730000001_init/migration.sql` (généré via `prisma migrate diff`) : CREATE TABLE accounts, pending_payments, payment_webhook_events, revenues, payment_configs, payment_config_audits + tous les indexes + ENUMs
+  * `prisma/migrations/migration_lock.toml` : `provider = "mysql"`
+
+- Script de seed :
+  * `scripts/seed-admin.ts` : crée ou reset le compte `admin@rimiris.com` (super_admin, pro) avec un mot de passe PBKDF2. Idempotent. Configurable via `ADMIN_PASSWORD` env var (default `RimirisAdmin2026!`).
+  * Ajout de `tsx` en devDependency pour exécuter le script TypeScript
+  * Ajout des scripts npm : `npm run seed:admin`, `npm run db:deploy` (prisma migrate deploy)
+
+- Documentation :
+  * `download/HOSTINGER_DEPLOY.md` (~600 lignes) : guide complet de déploiement VPS Hostinger
+    - Achat VPS KVM 1 (4GB RAM, 50GB NVMe)
+    - Installation Ubuntu 22.04 + Node 20 + PM2 + Nginx + MySQL + Certbot + UFW + Fail2ban
+    - Configuration MySQL (mysql_secure_installation + CREATE DATABASE/USER)
+    - Déploiement code (git clone + npm ci + prisma migrate deploy + seed:admin + npm run build)
+    - PM2 ecosystem (start, save, startup, restart après git pull)
+    - Nginx config (reverse proxy + static cache + upload 25M pour PDFs)
+    - DNS Hostinger (A record @ et www vers VPS_IP)
+    - SSL Let's Encrypt (certbot --nginx avec redirect auto + cron renouvellement)
+    - Sécurité (UFW 22/80/443, deny 3306; Fail2ban SSH 5 retry → ban 1h; SSH key-only)
+    - Backup MySQL quotidien (mysqldump + gzip + rotation 7j)
+    - Vérifications finales (curl santé, login admin, config provider test, checkout 4242)
+    - Monitoring (PM2 monit, Nginx logs, MySQL slow queries)
+    - Workflow mise à jour (git pull → ci → prisma migrate → build → pm2 restart)
+    - Troubleshooting (Prisma Client init, DATABASE_URL, max_connections, SSL expiré)
+
+Vérifications:
+- `npx prisma generate` → Prisma Client généré avec succès (mode MySQL).
+- `npx tsc --noEmit --skipLibCheck` → 0 erreur TypeScript.
+- Migration SQL valide (CREATE TABLE syntaxe MySQL, ENUMs, indexes).
+
+Stage Summary:
+- Migration complète du backend Rimiris AI de fichiers JSON vers MySQL via Prisma.
+- 6 nouveaux modèles créés (Account, PendingPayment, PaymentWebhookEvent, Revenue, PaymentConfig, PaymentConfigAudit) avec enums, indexes et contraintes FK.
+- Toutes les routes API impactées (auth/login, auth/signup, auth/upgrade, payment/initiate, payment/webhook, payment/verify, payment/success, payment/health, admin/payment-providers, admin/payment-weblogs) ont été mises à jour pour utiliser Prisma (async).
+- 2 nouveaux endpoints admin (admin/accounts, admin/stats) pour exposer les données DB au panneau admin (au lieu du miroir localStorage).
+- Conservation du mode démo : localStorage reste utilisé côté client pour la réactivité UI (session, miroir account), mais la source de vérité est maintenant MySQL.
+- Documentation de déploiement Hostinger VPS complète (600 lignes) : achat, install, DB, code, PM2, Nginx, SSL, sécurité, backup, monitoring, troubleshooting.
+- Prêt pour le déploiement production sur Hostinger VPS.

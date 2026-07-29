@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const session = auth.session!
 
   // Verify payment is enabled
-  const active = getActiveProvider()
+  const active = await getActiveProvider()
   if (!active) {
     return NextResponse.json(
       { error: 'Aucun prestataire de paiement configuré. Contactez l\'administrateur.' },
@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
 
   // Store the pending payment BEFORE calling the provider (so the webhook
   // can fulfill even if the user closes the browser right after redirect)
-  createPending({
+  await createPending({
     reference,
     provider: active.id,
     accountId: session.accountId,
@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
   if (!result.ok) {
     // Mark the pending as failed and return the error
     const { markFailed } = await import('@/lib/iris/payment-pending')
-    markFailed(reference, result.error || 'Échec de l\'initiation')
+    await markFailed(reference, result.error || 'Échec de l\'initiation')
     return NextResponse.json(
       { error: result.error, provider: result.provider, reference },
       { status: 502 },
@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
   // Update the pending record with the provider's reference
   if (result.providerRef) {
     const { updatePending } = await import('@/lib/iris/payment-pending')
-    updatePending(reference, { providerRef: result.providerRef })
+    await updatePending(reference, { providerRef: result.providerRef })
   }
 
   // Determine the flow type

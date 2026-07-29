@@ -6,6 +6,7 @@
  *  - The server ALSO sets an HMAC-signed httpOnly cookie that all
  *    authenticated endpoints verify.
  *  - Login is rate-limited (VULN-07).
+ *  - Account store is backed by MySQL via Prisma (was .rimiris-accounts.json).
  *
  * Routes:
  *   POST /api/auth/login    { email, password } -> sets cookie, returns session
@@ -13,8 +14,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import * as fs from 'fs'
-import * as path from 'path'
 import * as crypto from 'crypto'
 import {
   setSessionCookie,
@@ -24,15 +23,16 @@ import {
   ADMIN_EMAIL,
 } from '@/lib/iris/security'
 import { migrateLegacyTier, type TierId } from '@/lib/iris/tiers'
+import { prisma } from '@/lib/db'
+import type { Account, AccountRole, AccountTier } from '@prisma/client'
 
 export const runtime = 'nodejs'
 
 // ============================================================================
-// File-backed account store (shared with signup route via the same file)
+// Types — kept compatible with the old ServerAccount so the rest of the
+// codebase (signup, upgrade, fulfillment) doesn't need to change.
 // ============================================================================
-const ACCOUNTS_PATH = path.join(process.cwd(), '.rimiris-accounts.json')
-
-interface ServerAccount {
+export interface ServerAccount {
   id: string
   email: string
   name: string
@@ -44,37 +44,117 @@ interface ServerAccount {
   lastLoginAt: number | null
 }
 
-export type { ServerAccount }
-
-interface AccountStore {
-  accounts: ServerAccount[]
-}
-
-export function readStore(): AccountStore {
-  try {
-    if (fs.existsSync(ACCOUNTS_PATH)) {
-      return JSON.parse(fs.readFileSync(ACCOUNTS_PATH, 'utf8'))
-    }
-  } catch {
-    /* corrupt */
+// ============================================================================
+// Helpers — convert Prisma row ↔ ServerAccount (the legacy in-memory shape)
+// ============================================================================
+export function toServerAccount(row: Account): ServerAccount {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    passwordHash: row.passwordHash,
+    salt: row.salt,
+    role: row.role as 'user' | 'admin' | 'super_admin',
+    tier: migrateLegacyTier(row.tier as TierId),
+    createdAt: Number(row.createdAt),
+    lastLoginAt: row.lastLoginAt ? Number(row.lastLoginAt) : null,
   }
-  return { accounts: [] }
 }
 
-export function writeStore(store: AccountStore) {
-  fs.writeFileSync(ACCOUNTS_PATH, JSON.stringify(store, null, 2), 'utf8')
+// ============================================================================
+// File-backed account store has been REMOVED. All persistence goes through
+// Prisma. The following helpers wrap the DB calls and keep the old function
+// signatures so the rest of the codebase works unchanged.
+// ============================================================================
+
+/**
+ * Read ALL accounts from the DB.
+ * Used by admin portal (via listAccounts client-side) and the revenue
+ * aggregation in the analytics module.
+ *
+ * Note: this is read-heavy on purpose. If perf becomes an issue, switch to
+ * specific `findUnique`/`findMany` calls in each consumer.
+ */
+export async function readStore(): Promise<{ accounts: ServerAccount[] }> {
+  const rows = await prisma.account.findMany()
+  return { accounts: rows.map(toServerAccount) }
 }
 
-// Server-side password hashing: PBKDF2 (1000 iterations, SHA-256, 64 bytes).
-// For legacy accounts created client-side (single SHA-256), verify falls
-// back to the weaker algorithm to allow migration.
-function hashPassword(password: string, salt: string): string {
+/**
+ * Find a single account by email. Returns null if not found.
+ */
+export async function findAccountByEmail(email: string): Promise<ServerAccount | null> {
+  const row = await prisma.account.findUnique({ where: { email } })
+  return row ? toServerAccount(row) : null
+}
+
+/**
+ * Find a single account by ID.
+ */
+export async function findAccountById(id: string): Promise<ServerAccount | null> {
+  const row = await prisma.account.findUnique({ where: { id } })
+  return row ? toServerAccount(row) : null
+}
+
+/**
+ * Create a new account row. Throws on duplicate email (caught by caller).
+ */
+export async function createAccount(account: ServerAccount): Promise<ServerAccount> {
+  const row = await prisma.account.create({
+    data: {
+      id: account.id,
+      email: account.email,
+      name: account.name,
+      passwordHash: account.passwordHash,
+      salt: account.salt,
+      role: account.role as AccountRole,
+      tier: account.tier as AccountTier,
+      createdAt: BigInt(account.createdAt),
+      lastLoginAt: account.lastLoginAt ? BigInt(account.lastLoginAt) : null,
+    },
+  })
+  return toServerAccount(row)
+}
+
+/**
+ * Update an account. Only the fields passed in `patch` are touched.
+ * Returns the updated ServerAccount, or null if not found.
+ */
+export async function updateAccount(
+  id: string,
+  patch: Partial<Omit<ServerAccount, 'id'>>,
+): Promise<ServerAccount | null> {
+  try {
+    const data: Record<string, unknown> = {}
+    if (patch.email !== undefined) data.email = patch.email
+    if (patch.name !== undefined) data.name = patch.name
+    if (patch.passwordHash !== undefined) data.passwordHash = patch.passwordHash
+    if (patch.salt !== undefined) data.salt = patch.salt
+    if (patch.role !== undefined) data.role = patch.role as AccountRole
+    if (patch.tier !== undefined) data.tier = patch.tier as AccountTier
+    if (patch.lastLoginAt !== undefined) {
+      data.lastLoginAt = patch.lastLoginAt ? BigInt(patch.lastLoginAt) : null
+    }
+    const row = await prisma.account.update({
+      where: { id },
+      data,
+    })
+    return toServerAccount(row)
+  } catch {
+    return null
+  }
+}
+
+// ============================================================================
+// Password hashing (PBKDF2 — same algo as before, just inline now)
+// ============================================================================
+export function hashPassword(password: string, salt: string): string {
   return crypto
     .pbkdf2Sync(password, salt, 1000, 64, 'sha256')
     .toString('hex')
 }
 
-function verifyPassword(password: string, salt: string, storedHash: string): boolean {
+export function verifyPassword(password: string, salt: string, storedHash: string): boolean {
   // Try PBKDF2 first (server-created accounts)
   const pbkdf2 = hashPassword(password, salt)
   if (pbkdf2.length === storedHash.length) {
@@ -101,6 +181,18 @@ function verifyPassword(password: string, salt: string, storedHash: string): boo
   return false
 }
 
+export function randomSalt(): string {
+  return crypto.randomBytes(32).toString('hex')
+}
+
+export function uuid(): string {
+  return crypto.randomUUID()
+}
+
+// ============================================================================
+// Super-admin rule — applied on every read so admin@rimiris.com is always
+// super_admin + pro, even if a DB row says otherwise (defense-in-depth).
+// ============================================================================
 export function applySuperAdminRule(account: ServerAccount): ServerAccount {
   const tier = migrateLegacyTier(account.tier)
   if (account.email === ADMIN_EMAIL) {
@@ -126,10 +218,6 @@ export function toSession(account: ServerAccount) {
     loginAt: Date.now(),
   }
 }
-
-export { hashPassword, verifyPassword, randomSalt, uuid }
-function randomSalt(): string { return crypto.randomBytes(32).toString('hex') }
-function uuid(): string { return crypto.randomUUID() }
 
 // ============================================================================
 // POST /api/auth/login
@@ -165,9 +253,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Adresse email invalide.' }, { status: 400 })
   }
 
-  const store = readStore()
-  const idx = store.accounts.findIndex((a) => a.email === email)
-  if (idx === -1) {
+  const stored = await findAccountByEmail(email)
+  if (!stored) {
     // Same error as wrong password to avoid email enumeration.
     return NextResponse.json(
       { error: 'Email ou mot de passe incorrect.' },
@@ -175,7 +262,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const account = applySuperAdminRule(store.accounts[idx])
+  const account = applySuperAdminRule(stored)
   if (!verifyPassword(password, account.salt, account.passwordHash)) {
     return NextResponse.json(
       { error: 'Email ou mot de passe incorrect.' },
@@ -183,10 +270,13 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  store.accounts[idx].lastLoginAt = Date.now()
-  store.accounts[idx].role = account.role
-  store.accounts[idx].tier = account.tier
-  writeStore(store)
+  // Persist lastLoginAt (and the enforced role/tier in case the super-admin
+  // rule changed something).
+  await updateAccount(account.id, {
+    lastLoginAt: Date.now(),
+    role: account.role,
+    tier: account.tier,
+  })
 
   const session = toSession(account)
   const res = NextResponse.json({ ok: true, session })

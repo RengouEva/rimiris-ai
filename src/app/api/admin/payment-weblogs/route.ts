@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10) || 50),
   )
 
-  const events: WebhookEvent[] = getRecentWebhookEvents(limit)
+  const events: WebhookEvent[] = await getRecentWebhookEvents(limit)
 
   // Aggregate stats for the dashboard header
   const last24h = events.filter((e) => Date.now() - e.ts < 24 * 60 * 60 * 1000)
@@ -49,6 +49,6 @@ export async function DELETE(req: NextRequest) {
   const forbidden = requireSuperAdmin(req)
   if (forbidden) return forbidden.response!
 
-  clearWebhookLog()
+  await clearWebhookLog()
   return NextResponse.json({ ok: true, message: 'Webhook log cleared.' })
 }

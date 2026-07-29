@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
   const forbidden = requireSuperAdmin(req)
   if (forbidden) return forbidden.response!
 
-  const masked = getMaskedConfig()
-  const audit = readAuditLog(30)
+  const masked = await getMaskedConfig()
+  const audit = await readAuditLog(30)
 
   return NextResponse.json({
     config: masked,
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       if (!body.provider) {
         return NextResponse.json({ error: 'Provider requis.' }, { status: 400 })
       }
-      const result = removeProvider(
+      const result = await removeProvider(
         body.provider as Exclude<PaymentProviderId, 'none'>,
         adminEmail,
       )
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Mode invalide (test|live).' }, { status: 400 })
     }
 
-    const result = pushProviderConfig({
+    const result = await pushProviderConfig({
       provider: body.provider as Exclude<PaymentProviderId, 'none'>,
       mode: body.mode || 'test',
       fields: body.fields || {},

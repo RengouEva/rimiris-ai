@@ -1,204 +1,203 @@
 /**
- * File-backed pending payment store.
+ * Pending payment store — MySQL-backed via Prisma.
  *
- * WHY THIS FILE EXISTS
- * --------------------
- * When a user starts a checkout (e.g. Stripe Checkout Session), the payment
- * isn't complete yet — the user is being redirected to the provider. We need
- * to remember:
- *   - WHO initiated the payment (accountId + email)
- *   - WHAT they're paying for (tier, amountXAF, docType)
- *   - WHICH provider is processing it (and the reference they assigned)
- *   - WHEN it was initiated (so we can expire stale entries)
- *
- * When the provider's webhook fires later (could be seconds or minutes),
- * we look up the pending payment by reference and "fulfill" it: upgrade
- * the user's tier and record the revenue.
+ * Previously a JSON file at `.payment-pending.json`. Now uses the
+ * `PendingPayment` table. Public API (function signatures) is preserved
+ * so consumers (initiate, webhook, success, verify, fulfillment) don't
+ * need to change — but every function is now `async`.
  *
  * STORAGE
  * -------
- * JSON file at `.payment-pending.json` in the project root. Schema:
- *   {
- *     "pending": [
- *       {
- *         "reference": "rdr_abc123",
- *         "provider": "stripe",
- *         "providerRef": "cs_test_...",   // provider's own session/tx id
- *         "accountId": "...",
- *         "email": "...",
- *         "name": "...",
- *         "tier": "pro",
- *         "amountXAF": 7000,
- *         "docType": "memoire",
- *         "mode": "test" | "live",
- *         "status": "pending" | "paid" | "expired" | "failed",
- *         "createdAt": 1234567890,
- *         "paidAt": 1234567890,
- *         "failureReason": "..."
- *       }
- *     ]
- *   }
+ * Table `pending_payments`:
+ *   - reference (unique)  rdr_xxx
+ *   - provider             stripe | campay | ...
+ *   - providerRef          provider's own session/tx ID
+ *   - accountId            Rimiris account ID (FK)
+ *   - email / name         payer info, denormalized for the audit trail
+ *   - tier / amountXAF     what they paid for
+ *   - status               pending | paid | expired | failed
+ *   - createdAt / paidAt   lifecycle timestamps
+ *   - failureReason        set when status = failed
  *
  * SAFETY
  * ------
- * - Reads are synchronous (small file, single-node deployment).
- * - Writes use a temp file + rename for atomicity.
- * - Stale entries (status='pending', older than 24h) are cleaned up on every
- *   read so the file doesn't grow unboundedly.
+ * - Atomic updates via Prisma transactions where needed.
+ * - Stale cleanup (pending > 24h → expired, resolved > 7d → deleted) runs
+ *   lazily inside `getPending` and `createPending`.
  */
 
-import * as fs from 'fs'
-import * as path from 'path'
+import { prisma } from '@/lib/db'
+import type { PendingPayment as PrismaPendingPayment } from '@prisma/client'
 import type { PaymentProviderId, ProviderMode } from './payment-providers'
 import type { TierId } from './tiers'
 
-const PENDING_PATH = path.join(process.cwd(), '.payment-pending.json')
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000 // 24h
 
 // ============================================================================
-// Types
+// Types (kept identical to the old file-based API)
 // ============================================================================
 export type PendingStatus = 'pending' | 'paid' | 'expired' | 'failed'
 
 export interface PendingPayment {
-  /** Our reference (also used as the provider's external reference / tx_ref). */
   reference: string
-  /** Which provider is processing this payment. */
   provider: Exclude<PaymentProviderId, 'none'>
-  /** Provider's own session/transaction ID (filled when initiate succeeds). */
   providerRef?: string
-  /** Account being upgraded. */
   accountId: string
   email: string
   name: string
-  /** Target tier (always 'pro' for now). */
   tier: TierId
-  /** Amount in XAF (integer). */
   amountXAF: number
-  /** Document type, for reduced pricing (dissertation/exposé = 2000 XAF). */
   docType?: string
-  /** Mode at the time of initiation. */
   mode: ProviderMode
-  /** Current lifecycle state. */
   status: PendingStatus
   createdAt: number
   paidAt?: number
   failureReason?: string
 }
 
-interface PendingStore {
-  pending: PendingPayment[]
-}
-
 // ============================================================================
-// I/O helpers (atomic write)
+// Convert Prisma row → PendingPayment (the legacy in-memory shape)
 // ============================================================================
-function readStore(): PendingStore {
-  try {
-    if (fs.existsSync(PENDING_PATH)) {
-      const raw = fs.readFileSync(PENDING_PATH, 'utf8')
-      const parsed = JSON.parse(raw) as PendingStore
-      if (!parsed.pending || !Array.isArray(parsed.pending)) {
-        return { pending: [] }
-      }
-      return parsed
-    }
-  } catch {
-    /* corrupt — return empty */
+function toPending(row: PrismaPendingPayment): PendingPayment {
+  return {
+    reference: row.reference,
+    provider: row.provider as Exclude<PaymentProviderId, 'none'>,
+    providerRef: row.providerRef || undefined,
+    accountId: row.accountId,
+    email: row.email,
+    name: row.name,
+    tier: row.tier as TierId,
+    amountXAF: row.amountXAF,
+    docType: row.docType || undefined,
+    mode: row.mode as ProviderMode,
+    status: row.status as PendingStatus,
+    createdAt: Number(row.createdAt),
+    paidAt: row.paidAt ? Number(row.paidAt) : undefined,
+    failureReason: row.failureReason || undefined,
   }
-  return { pending: [] }
-}
-
-function writeStore(store: PendingStore) {
-  // Atomic write: write to .tmp, then rename
-  const tmp = PENDING_PATH + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(store, null, 2), 'utf8')
-  fs.renameSync(tmp, PENDING_PATH)
 }
 
 // ============================================================================
-// Stale cleanup — drop pending entries older than STALE_AFTER_MS that are
-// still in 'pending' status (mark them 'expired' rather than deleting, so
-// the audit trail is preserved for 7 days).
+// Stale cleanup — mark pendings older than 24h as 'expired', and delete
+// resolved entries older than 7 days. Runs at most once per request via a
+// simple throttle (no need for a cron — this is cheap and idempotent).
 // ============================================================================
-function cleanupStale(store: PendingStore): PendingStore {
+let lastCleanup = 0
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000 // 5 min
+
+async function maybeCleanup(): Promise<void> {
   const now = Date.now()
-  let changed = false
-  for (const p of store.pending) {
-    if (p.status === 'pending' && now - p.createdAt > STALE_AFTER_MS) {
-      p.status = 'expired'
-      changed = true
-    }
+  if (now - lastCleanup < CLEANUP_INTERVAL_MS) return
+  lastCleanup = now
+
+  try {
+    // 1. Expire stale pending
+    await prisma.pendingPayment.updateMany({
+      where: {
+        status: 'pending',
+        createdAt: { lt: BigInt(now - STALE_AFTER_MS) },
+      },
+      data: { status: 'expired' },
+    })
+
+    // 2. Delete resolved entries older than 7 days
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
+    await prisma.pendingPayment.deleteMany({
+      where: {
+        status: { in: ['paid', 'failed', 'expired'] },
+        OR: [
+          { paidAt: { lt: BigInt(now - SEVEN_DAYS) } },
+          {
+            paidAt: null,
+            createdAt: { lt: BigInt(now - SEVEN_DAYS) },
+          },
+        ],
+      },
+    })
+  } catch (e) {
+    console.warn('[payment-pending] cleanup failed:', e)
   }
-  // Drop fully-resolved entries (paid/failed/expired) older than 7 days
-  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
-  const before = store.pending.length
-  store.pending = store.pending.filter((p) => {
-    if (p.status === 'pending') return true
-    const resolvedAt = p.paidAt || p.createdAt
-    return now - resolvedAt < SEVEN_DAYS
-  })
-  if (before !== store.pending.length) changed = true
-  if (changed) writeStore(store)
-  return store
 }
 
 // ============================================================================
 // CRUD
 // ============================================================================
-export function createPending(p: PendingPayment): void {
-  const store = cleanupStale(readStore())
-  store.pending.push(p)
-  writeStore(store)
+export async function createPending(p: PendingPayment): Promise<void> {
+  await maybeCleanup()
+  await prisma.pendingPayment.create({
+    data: {
+      reference: p.reference,
+      provider: p.provider,
+      providerRef: p.providerRef || null,
+      accountId: p.accountId,
+      email: p.email,
+      name: p.name,
+      tier: p.tier,
+      amountXAF: p.amountXAF,
+      docType: p.docType || null,
+      mode: p.mode,
+      status: p.status,
+      createdAt: BigInt(p.createdAt),
+      paidAt: p.paidAt ? BigInt(p.paidAt) : null,
+      failureReason: p.failureReason || null,
+    },
+  })
 }
 
-export function getPending(reference: string): PendingPayment | null {
-  const store = cleanupStale(readStore())
-  return store.pending.find((p) => p.reference === reference) || null
+export async function getPending(reference: string): Promise<PendingPayment | null> {
+  await maybeCleanup()
+  const row = await prisma.pendingPayment.findUnique({ where: { reference } })
+  return row ? toPending(row) : null
 }
 
-export function findPendingByProviderRef(
+export async function findPendingByProviderRef(
   provider: Exclude<PaymentProviderId, 'none'>,
   providerRef: string,
-): PendingPayment | null {
-  const store = cleanupStale(readStore())
-  return (
-    store.pending.find(
-      (p) => p.provider === provider && p.providerRef === providerRef,
-    ) || null
-  )
+): Promise<PendingPayment | null> {
+  const row = await prisma.pendingPayment.findFirst({
+    where: { provider, providerRef },
+  })
+  return row ? toPending(row) : null
 }
 
 /**
  * Update a pending payment's status. Returns the updated record, or null
  * if not found.
  */
-export function updatePending(
+export async function updatePending(
   reference: string,
   patch: Partial<PendingPayment>,
-): PendingPayment | null {
-  const store = cleanupStale(readStore())
-  const idx = store.pending.findIndex((p) => p.reference === reference)
-  if (idx === -1) return null
-  store.pending[idx] = { ...store.pending[idx], ...patch }
-  writeStore(store)
-  return store.pending[idx]
+): Promise<PendingPayment | null> {
+  try {
+    const data: Record<string, unknown> = {}
+    if (patch.providerRef !== undefined) data.providerRef = patch.providerRef || null
+    if (patch.status !== undefined) data.status = patch.status
+    if (patch.paidAt !== undefined) data.paidAt = patch.paidAt ? BigInt(patch.paidAt) : null
+    if (patch.failureReason !== undefined) data.failureReason = patch.failureReason || null
+    const row = await prisma.pendingPayment.update({
+      where: { reference },
+      data,
+    })
+    return toPending(row)
+  } catch {
+    return null
+  }
 }
 
 /**
- * Mark a pending payment as paid. Returns the updated record.
+ * Mark a pending payment as paid.
  */
-export function markPaid(reference: string): PendingPayment | null {
+export async function markPaid(reference: string): Promise<PendingPayment | null> {
   return updatePending(reference, { status: 'paid', paidAt: Date.now() })
 }
 
 /**
  * Mark a pending payment as failed.
  */
-export function markFailed(
+export async function markFailed(
   reference: string,
   reason: string,
-): PendingPayment | null {
+): Promise<PendingPayment | null> {
   return updatePending(reference, { status: 'failed', failureReason: reason })
 }
 

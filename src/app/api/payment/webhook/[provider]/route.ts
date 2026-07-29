@@ -44,7 +44,7 @@ export async function POST(
     // Log unknown provider attempts (could be a scanner or a misconfigured route)
     let scanBody = ''
     try { scanBody = await req.text() } catch { /* ignore */ }
-    logWebhookEvent(
+    await logWebhookEvent(
       buildEventInput(providerParam, scanBody, req.headers, {
         status: 'provider_unknown',
         httpStatus: 404,
@@ -65,7 +65,7 @@ export async function POST(
   try {
     body = await req.text()
   } catch {
-    logWebhookEvent(
+    await logWebhookEvent(
       buildEventInput(provider, '', req.headers, {
         status: 'body_unreadable',
         httpStatus: 400,
@@ -86,7 +86,7 @@ export async function POST(
     console.warn(
       `[webhook] ${provider} signature verification failed: ${verifyResult.error}`,
     )
-    logWebhookEvent(
+    await logWebhookEvent(
       buildEventInput(provider, body, req.headers, {
         status: 'invalid_sig',
         httpStatus: 400,
@@ -102,7 +102,7 @@ export async function POST(
   // If the webhook is for an event we don't fulfill on (e.g. payment.failed),
   // return 200 without doing anything.
   if (!verifyResult.reference) {
-    logWebhookEvent(
+    await logWebhookEvent(
       buildEventInput(provider, body, req.headers, {
         status: 'no_reference',
         httpStatus: 200,
@@ -113,12 +113,12 @@ export async function POST(
   }
 
   // Fulfill the payment (idempotent)
-  const fulfillResult = fulfillPayment(verifyResult.reference, provider)
+  const fulfillResult = await fulfillPayment(verifyResult.reference, provider)
   if (!fulfillResult.ok) {
     console.warn(
       `[webhook] ${provider} fulfillment failed for ref=${verifyResult.reference}: ${fulfillResult.error}`,
     )
-    logWebhookEvent(
+    await logWebhookEvent(
       buildEventInput(provider, body, req.headers, {
         status: 'fulfill_failed',
         httpStatus: 200, // 200 to stop provider retries
@@ -132,7 +132,7 @@ export async function POST(
     )
   }
 
-  logWebhookEvent(
+  await logWebhookEvent(
     buildEventInput(provider, body, req.headers, {
       status: fulfillResult.fulfilled ? 'fulfilled' : 'verified',
       httpStatus: 200,

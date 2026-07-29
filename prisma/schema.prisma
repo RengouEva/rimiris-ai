@@ -1,18 +1,172 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// Prisma schema for Rimiris AI — MySQL backend (Hostinger VPS deployment)
+//
+// All previously-file-backed stores are now MySQL tables:
+//   - Account                  ← .rimiris-accounts.json
+//   - PendingPayment           ← .payment-pending.json
+//   - PaymentWebhookEvent      ← .payment-webhook-log.json
+//   - Revenue                  ← .rimiris-revenue.json
+//   - PaymentConfig            ← .payment-config.json (provider creds, encrypted)
+//   - PaymentConfigAudit       ← .payment-config.audit.jsonl
+//
+// The User / Post models were the old Prisma SQLite demo — kept for backward
+// compat with the existing DATABASE_URL. New code uses Account instead.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
+// ============================================================================
+// User accounts — replaces .rimiris-accounts.json
+// ============================================================================
+model Account {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  salt         String
+  role         AccountRole @default(user)
+  tier         AccountTier @default(free)
+  createdAt    BigInt   @default(0)
+  lastLoginAt  BigInt?
+
+  // Relations
+  payments     PendingPayment[]
+  revenues     Revenue[]
+  webhookEvents PaymentWebhookEvent[] @relation("AccountWebhookEvents")
+
+  @@index([email])
+  @@map("accounts")
+}
+
+enum AccountRole {
+  user
+  admin
+  super_admin
+}
+
+enum AccountTier {
+  free
+  pro
+}
+
+// ============================================================================
+// Pending payments — replaces .payment-pending.json
+// ============================================================================
+model PendingPayment {
+  id            String   @id @default(uuid())
+  reference     String   @unique // rdr_xxx
+  provider      String   // stripe | campay | fedapay | flutterwave | paystack | notchpay | cinetpay
+  providerRef   String?  // provider's own session/tx id
+  accountId     String
+  email         String
+  name          String
+  tier          AccountTier @default(pro)
+  amountXAF     Int
+  docType       String?
+  mode          String   // test | live
+  status        PendingStatus @default(pending)
+  createdAt     BigInt   @default(0)
+  paidAt        BigInt?
+  failureReason String?  @db.Text
+
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([provider, providerRef])
+  @@index([status, createdAt])
+  @@map("pending_payments")
+}
+
+enum PendingStatus {
+  pending
+  paid
+  expired
+  failed
+}
+
+// ============================================================================
+// Webhook events — replaces .payment-webhook-log.json (capped 200)
+// ============================================================================
+model PaymentWebhookEvent {
+  id              String   @id @default(uuid())
+  ts              BigInt   @default(0)
+  provider        String
+  eventType       String?
+  reference       String?  // rdr_xxx extracted from payload, null if not found
+  status          String   // verified | invalid_sig | no_reference | fulfilled | fulfill_failed | provider_unknown | body_unreadable
+  httpStatus      Int
+  error           String?  @db.Text
+  signatureHeader String?  // masked, max 80 chars
+  bodyPreview     String?  @db.Text // first 500 chars
+  accountId       String?
+
+  account         Account? @relation("AccountWebhookEvents", fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([ts])
+  @@index([provider, ts])
+  @@index([status])
+  @@map("payment_webhook_events")
+}
+
+// ============================================================================
+// Revenue history — replaces .rimiris-revenue.json
+// ============================================================================
+model Revenue {
+  id         String   @id @default(uuid())
+  ts         BigInt   @default(0)
+  amount     Int
+  tier       AccountTier @default(pro)
+  accountId  String
+  provider   String?
+  reference  String?
+
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([ts])
+  @@map("revenues")
+}
+
+// ============================================================================
+// Payment provider config (encrypted at rest) — replaces .payment-config.json
+// ============================================================================
+// Single row keyed by `key='default'` — runtime reads always fetch that row.
+model PaymentConfig {
+  key             String   @id @default("default") // always 'default'
+  activeProvider  String   @default("stripe") // stripe | campay | ... | none
+  // Encrypted JSON blob of RuntimePaymentConfig.providers (encrypted creds).
+  // Stored as TEXT to allow large values (multiple providers each with 4-5 fields).
+  configJson     String   @db.LongText
+  updatedAt      BigInt   @default(0)
+  updatedBy      String?
+
+  @@map("payment_configs")
+}
+
+// ============================================================================
+// Audit log for payment config changes — replaces .payment-config.audit.jsonl
+// ============================================================================
+model PaymentConfigAudit {
+  id        String   @id @default(uuid())
+  ts        BigInt   @default(0)
+  admin     String
+  action    String   // activate | update | remove
+  provider  String
+  mode      String   // test | live
+  fields    String   @db.Text // JSON array of updated field keys
+
+  @@index([ts])
+  @@map("payment_config_audits")
+}
+
+// ============================================================================
+// Legacy Prisma demo tables (kept for backward compat — do not use)
+// ============================================================================
 model User {
   id        String   @id @default(cuid())
   email     String   @unique

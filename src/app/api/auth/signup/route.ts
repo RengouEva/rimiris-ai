@@ -3,19 +3,19 @@
  *
  * Replaces the client-side signUp for server-side trust. The client still
  * mirrors the session in localStorage for UI reactivity.
+ *
+ * Backend is MySQL via Prisma (was .rimiris-accounts.json file).
  */
 import { NextRequest, NextResponse } from 'next/server'
-import * as crypto from 'crypto'
 import {
   setSessionCookie,
   checkCSRF,
   checkLoginRateLimit,
   getClientIP,
-  ADMIN_EMAIL,
 } from '@/lib/iris/security'
 import {
-  readStore,
-  writeStore,
+  findAccountByEmail,
+  createAccount,
   applySuperAdminRule,
   normalizeEmail,
   toSession,
@@ -24,7 +24,7 @@ import {
   uuid,
   type ServerAccount,
 } from '../login/route'
-import { migrateLegacyTier, type TierId } from '@/lib/iris/tiers'
+import type { TierId } from '@/lib/iris/tiers'
 
 export const runtime = 'nodejs'
 
@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Veuillez saisir votre nom.' }, { status: 400 })
   }
 
-  const store = readStore()
-  if (store.accounts.some((a) => a.email === email)) {
+  const existing = await findAccountByEmail(email)
+  if (existing) {
     return NextResponse.json({ error: 'Un compte existe déjà avec cet email.' }, { status: 409 })
   }
 
@@ -96,8 +96,17 @@ export async function POST(req: NextRequest) {
     lastLoginAt: Date.now(),
   })
 
-  store.accounts.push(account)
-  writeStore(store)
+  try {
+    await createAccount(account)
+  } catch (e: any) {
+    // Prisma P2002 = unique constraint violation (race condition — two
+    // signups at the same time with the same email).
+    if (e?.code === 'P2002') {
+      return NextResponse.json({ error: 'Un compte existe déjà avec cet email.' }, { status: 409 })
+    }
+    console.error('[signup] Prisma error:', e)
+    return NextResponse.json({ error: 'Erreur serveur lors de la création du compte.' }, { status: 500 })
+  }
 
   const session = toSession(account)
   const res = NextResponse.json({ ok: true, session })
