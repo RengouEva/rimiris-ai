@@ -709,3 +709,32 @@ Stage Summary:
 - Le système d'auth (admin@rimiris.com = super_admin auto-premium) reste opérationnel via src/lib/iris/auth.ts + useAuth + LoginScreen.
 - Le Portail Admin garde son gating auth (LoginScreen si pas de session, AccessDenied si non-super_admin), mais le lien sidebar pour y accéder est redevenu visible pour tous — l'utilisateur peut cliquer dessus, il sera alors invité à se connecter.
 - Aucune donnée utilisateur perdue (localStorage keys rimiris.auth.accounts et rimiris.auth.session inchangées).
+
+---
+Task ID: auth-gate-on-onboarding-only
+Agent: main (Super Z)
+Task: L'utilisateur demande où est l'auth générale du site pour les utilisateurs avant de commencer la configuration du projet. Il faut que login/register soit demandé AVANT l'onboarding, SANS modifier la landing page (qui reste publique).
+
+Work Log:
+- Architecture cible : WelcomeScreen (landing) reste publique → clic "Démarrer l'entretien" déclenche view='onboarding' → AuthGate intercepte → LoginScreen si pas de session → après login, OnboardingInterview s'affiche. L'admin portal et toutes les vues authed (workspace, guide, audit, etc.) sont aussi derrière le même AuthGate.
+- src/app/page.tsx : 
+  * Import AuthGate ajouté.
+  * Home() : la condition `view === 'welcome' || (!projectInitialized && view !== 'onboarding')` renvoie toujours <WelcomeScreen /> SANS wrapper (public).
+  * Tout le reste (onboarding + app shell) est wrappé dans <AuthGate><AuthedApp view={view} /></AuthGate>.
+  * Nouvelle fonction AuthedApp({ view }) qui contient l'ancienne logique : OnboardingInterview si view==='onboarding', sinon l'app shell avec Sidebar+Header+main. Aucune modification visuelle de l'app shell lui-même.
+- src/components/auth/login-screen.tsx :
+  * Import ajouté : useIrisStore (pour setView('welcome')), icône ArrowLeft de lucide-react.
+  * useIrisStore() extrait setView.
+  * Dans le header sticky (qui existait déjà avec logo + theme toggle) : ajout d'un bouton "← Accueil" à gauche du logo RimirisLogo, qui setView('welcome') pour revenir à la landing. Discret : muted-foreground, hover foreground, texte masqué sur mobile (icône seule), visible sur sm+.
+- Aucun autre fichier touché. welcome-screen.tsx, header.tsx, sidebar.tsx restent dans leur état d'origine restauré (task précédente).
+- Vérifications :
+  * npx tsc --noEmit --skipLibCheck → 0 erreur sur les fichiers touchés (page.tsx, auth-gate.tsx, login-screen.tsx). Les 12 erreurs préexistantes (agents-view, workspace, onboarding-interview, plan-review, quick-start, examples/websocket, skills/*) sont inchangées.
+  * curl http://localhost:3000/ → 200 OK, HTML contient "Rimiris vous pose les bonnes questions" → la landing reste l'entrée publique.
+  * Flux attendu vérifié : landing (public) → clic "Démarrer l'entretien" → setView('onboarding') → AuthGate voit pas de session → LoginScreen → signup/signin → session créée → AuthGate re-render → OnboardingInterview.
+
+Stage Summary:
+- Auth générale du site opérationnelle : exigée AVANT la configuration du projet (onboarding) et avant toutes les vues authed (workspace, admin, guide, audit, coherence, soutenance, simulation, plagiarism, export, agents, pricing).
+- Landing page (WelcomeScreen) reste 100% publique et inchangée visuellement — premier écran vu par tout visiteur.
+- LoginScreen enriched d'un bouton "← Accueil" pour revenir à la landing si l'utilisateur change d'avis (sinon il était piégé sur l'écran de login).
+- admin@rimiris.com reste super_admin auto-premium (règle dans auth.ts, inchangée).
+- Aucune nouvelle dépendance, aucune modification de l'apparence existante de l'app.

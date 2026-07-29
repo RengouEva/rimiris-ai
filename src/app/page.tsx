@@ -17,6 +17,7 @@ import { AuditView } from '@/components/iris/audit-view'
 import { GuideView } from '@/components/iris/guide-view'
 import { AdminPortal } from '@/components/admin/admin-portal'
 import { PricingView } from '@/components/monetization/pricing-view'
+import { AuthGate } from '@/components/auth/auth-gate'
 
 // Valid view IDs that can be passed via ?view= for PWA shortcuts.
 const VALID_VIEWS: ViewMode[] = [
@@ -52,9 +53,22 @@ export default function Home() {
   }, [projectInitialized, setView])
 
   // Full-screen views (no app shell)
+  // The WelcomeScreen (landing page) is public — no auth required.
+  // Everything past the landing (onboarding + workspace + admin + pricing)
+  // requires a logged-in account, enforced by <AuthGate>.
   if (view === 'welcome' || (!projectInitialized && view !== 'onboarding')) {
     return <WelcomeScreen />
   }
+
+  // Auth-gated: onboarding interview + app shell.
+  return (
+    <AuthGate>
+      <AuthedApp view={view} />
+    </AuthGate>
+  )
+}
+
+function AuthedApp({ view }: { view: ViewMode }) {
   if (view === 'onboarding') {
     return <OnboardingInterview />
   }

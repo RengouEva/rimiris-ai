@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, Lock, User as UserIcon, ArrowRight, LogIn, UserPlus, Crown, ShieldCheck } from 'lucide-react'
+import { Mail, Lock, User as UserIcon, ArrowRight, LogIn, UserPlus, Crown, ShieldCheck, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,11 +11,13 @@ import { RimirisLogo } from '@/components/iris/rimiris-logo'
 import { ImmersiveBackground } from '@/components/iris/immersive-background'
 import { ThemeToggle } from '@/components/iris/theme-toggle'
 import { signIn, signUp, ADMIN_EMAIL } from '@/lib/iris/auth'
+import { useIrisStore } from '@/store/iris-store'
 import { toast } from 'sonner'
 
 type Mode = 'signin' | 'signup'
 
 export function LoginScreen() {
+  const { setView } = useIrisStore()
   const [mode, setMode] = React.useState<Mode>('signin')
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
@@ -55,7 +57,17 @@ export function LoginScreen() {
 
       <header className="relative z-10 border-b border-border/40 backdrop-blur-sm bg-background/60 sticky top-0">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <RimirisLogo size="lg" withWordmark />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setView('welcome')}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-full px-2 py-1"
+              title="Retour à l'accueil"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Accueil</span>
+            </button>
+            <RimirisLogo size="lg" withWordmark />
+          </div>
           <ThemeToggle />
         </div>
       </header>
