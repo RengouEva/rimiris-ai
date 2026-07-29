@@ -120,7 +120,7 @@ export function PlanReview() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setView('interview')}
+              onClick={() => setView('onboarding')}
               className="rounded-full"
             >
               <ArrowLeft className="h-4 w-4 mr-1" />

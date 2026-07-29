@@ -1,23 +1,35 @@
+# Rimiris AI — Caddyfile (production reverse proxy)
+#
+# SECURITY: This file is INTENTIONALLY minimal. The previous version had an
+# open SSRF proxy (VULN-01) where any client could pass ?XTransformPort=<N>
+# and have Caddy reverse-proxy to localhost:<N> — exposing every internal
+# service (databases, admin panels, Prometheus, etc.) to the public internet.
+#
+# That handler has been REMOVED. Only the legitimate Next.js backend is
+# proxied. If you need a transformation proxy in the future, configure it
+# as an explicit named route with a fixed upstream — never take the upstream
+# from a query parameter.
+
 :81 {
-	@transform_port_query {
-		query XTransformPort=*
+	# Single, explicit upstream — the Next.js dev/standalone server.
+	reverse_proxy localhost:3000 {
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
 	}
 
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
-
-	handle {
-		reverse_proxy localhost:3000 {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
+	# Security headers (defense-in-depth — also set by Next.js middleware).
+	# HSTS only over HTTPS; Caddy serves HTTP here so we set it anyway in
+	# case of TLS-terminating upstream proxy.
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(self), usb=()"
+		# Remove Server and X-Powered-By to reduce fingerprinting
+		-Server
+		-X-Powered-By
 	}
 }

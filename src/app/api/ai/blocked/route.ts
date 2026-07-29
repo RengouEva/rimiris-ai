@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatLLM } from '@/lib/iris/llm'
 import { CHAPTERS } from '@/lib/iris/chapters'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -13,6 +14,14 @@ interface BlockedRequest {
 }
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-12: Auth + rate limiting
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response!
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as BlockedRequest
     const { chapterId, project, chaptersContent, userMessage } = body
@@ -53,7 +62,7 @@ Réponds en français académique chaleureux. Maximum 350 mots. N'écris jamais 
 
     const reply = await chatLLM(
       [
-        { role: 'assistant', content: systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage || "Je suis bloqué, aide-moi." },
       ],
       {

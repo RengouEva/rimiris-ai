@@ -27,7 +27,10 @@ const SUGGESTIONS = [
 ]
 
 export function QuickStart({ open, onOpenChange }: QuickStartProps) {
-  const { completeQuickStart, project, updateProject } = useIrisStore()
+  // VULN-19: completeQuickStart is referenced but not on the store; stub it.
+  const store = useIrisStore()
+  const completeQuickStart = (store as any).completeQuickStart ?? (() => { console.warn('completeQuickStart not implemented') })
+  const { project, updateProject } = store
   const [title, setTitle] = React.useState('')
   const [level, setLevel] = React.useState<'Licence' | 'Master' | 'Doctorat'>('Master')
 

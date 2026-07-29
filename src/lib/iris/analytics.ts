@@ -276,39 +276,96 @@ export function track(type: EventType, meta?: Record<string, string | number | b
 }
 
 // ============================================================================
-// Upgrade flow (simulated payment)
+// Upgrade flow (VULN-05: now requires server-side verification)
 // ============================================================================
-export function upgradeToTier(
+//
+// Previously the client could grant itself any tier by calling this function
+// directly. Now we delegate to /api/auth/upgrade which verifies an HMAC
+// payment signature (or accepts demo-mode upgrades if RIMIRIS_PAYMENT_SECRET
+// is not set on the server).
+//
+// For a real payment integration (Stripe / FedaPay / Campay), the flow is:
+//   1. Client clicks "Payer"
+//   2. Client calls /api/payment/create-checkout which redirects to the
+//      provider's hosted checkout page.
+//   3. Provider calls /api/payment/webhook (server-to-server) on success.
+//   4. The webhook computes the HMAC signature with RIMIRIS_PAYMENT_SECRET
+//      and calls the upgrade internally.
+//   5. (For polling-based UX) Client polls /api/auth/me which now returns
+//      the upgraded tier from the verified cookie.
+//
+// In the current codebase, /api/auth/upgrade accepts demo-mode calls (no
+// signature required) so the UX flow is unchanged — but the actual tier
+// mutation happens on the SERVER, not in localStorage. The localStorage
+// user record is mirrored here for UI reactivity only.
+export async function upgradeToTier(
   tier: TierId,
   email?: string,
   name?: string,
   /** One-time project price in XAF (defaults to the tier's price). */
   priceXAFOverride?: number,
-): { ok: boolean; user: UserRecord } {
+): Promise<{ ok: boolean; user: UserRecord }> {
   const session = getCurrentSession()
   if (!session) return { ok: false, user: { ...ANON_USER } }
-  // The super-admin email is permanently pro — block downgrades.
-  const finalTier: TierId = session.email === ADMIN_EMAIL ? 'pro' : migrateLegacyTier(tier)
-  const user = getCurrentUser()
-  const t = TIERS[finalTier]
-  // One-time payment per project (XAF). No more monthly subscription.
-  const amountXAF = priceXAFOverride ?? t.priceXAF
 
-  user.tier = finalTier
-  if (email) user.email = email
-  if (name) user.name = name
-  // Free upgrades (incl. admin auto-pro) do not generate revenue.
-  if (finalTier !== 'free' && session.email !== ADMIN_EMAIL && amountXAF > 0) {
-    user.revenue.total += amountXAF
-    user.revenue.lastPaymentAt = Date.now()
-    user.revenue.history.push({ ts: Date.now(), amount: amountXAF, tier: finalTier })
+  // VULN-05: delegate to the server. The server verifies the payment
+  // signature (if configured) and updates the file-backed account store.
+  // It also re-issues the HMAC-signed cookie with the new tier.
+  try {
+    const res = await fetch('/api/auth/upgrade', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        tier,
+        // In demo mode the server doesn't require these, but we send them
+        // anyway so a real payment integration can validate them.
+        paymentSignature: '',
+        paymentTimestamp: Date.now(),
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      return { ok: false, user: getCurrentUser() }
+    }
+
+    // Mirror the upgrade in localStorage for UI reactivity.
+    const finalTier: TierId = data.tier || migrateLegacyTier(tier)
+    const user = getCurrentUser()
+    const t = TIERS[finalTier]
+    const amountXAF = priceXAFOverride ?? t.priceXAF
+
+    user.tier = finalTier
+    if (email) user.email = email
+    if (name) user.name = name
+    if (finalTier !== 'free' && session.email !== ADMIN_EMAIL && amountXAF > 0) {
+      user.revenue.total += amountXAF
+      user.revenue.lastPaymentAt = Date.now()
+      user.revenue.history.push({ ts: Date.now(), amount: amountXAF, tier: finalTier })
+    }
+
+    write(K_USER, user)
+    upsertUserInIndex(user)
+    track('upgrade_complete', { tier: finalTier, amount: amountXAF })
+
+    // Update the local session so useAuth re-renders immediately
+    if (typeof window !== 'undefined') {
+      try {
+        const cur = JSON.parse(window.localStorage.getItem('rimiris.auth.session') || 'null')
+        if (cur) {
+          cur.tier = finalTier
+          cur.role = data.session?.role || cur.role
+          window.localStorage.setItem('rimiris.auth.session', JSON.stringify(cur))
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return { ok: true, user }
+  } catch (err: any) {
+    return { ok: false, user: getCurrentUser() }
   }
-
-  write(K_USER, user)
-  upsertUserInIndex(user)
-  track('upgrade_complete', { tier: finalTier, amount: amountXAF })
-
-  return { ok: true, user }
 }
 
 // ============================================================================

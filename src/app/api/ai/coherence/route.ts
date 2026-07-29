@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatLLM } from '@/lib/iris/llm'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -10,6 +11,14 @@ interface CoherenceRequest {
 }
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-12: Auth + rate limiting
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response!
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as CoherenceRequest
     const { project, sections } = body
@@ -71,7 +80,7 @@ Si aucune incohérence, retourne {"issues": []}. Maximum 8 problèmes.`
 
     const raw = await chatLLM(
       [
-        { role: 'assistant', content: systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: 'Analyse la cohérence et retourne le JSON.' },
       ],
       {
@@ -81,7 +90,7 @@ Si aucune incohérence, retourne {"issues": []}. Maximum 8 problèmes.`
       },
     ) || '{}'
 
-    let issues = []
+    let issues: any[] = []
     try {
       const jsonMatch = raw.match(/\{[\s\S]*\}/)
       const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw)

@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card'
 import { RimirisLogo } from '@/components/iris/rimiris-logo'
 import { ImmersiveBackground } from '@/components/iris/immersive-background'
 import { ThemeToggle } from '@/components/iris/theme-toggle'
-import { signIn, signUp, ADMIN_EMAIL } from '@/lib/iris/auth'
+import { signIn, signUp } from '@/lib/iris/auth'
 import { toast } from 'sonner'
 
 type Mode = 'signin' | 'signup'
@@ -34,7 +34,7 @@ export function LoginScreen() {
       if (!res.ok) {
         setError(res.error)
       } else {
-        const isAdmin = res.session.email === ADMIN_EMAIL
+        const isAdmin = res.session.role === 'super_admin'
         toast.success(
           isAdmin
             ? `Bienvenue, ${res.session.name} — accès super administrateur accordé.`
@@ -193,21 +193,13 @@ export function LoginScreen() {
               </Button>
             </form>
 
-            {/* Admin hint */}
-            {mode === 'signup' && (
-              <div className="mt-5 p-3 rounded-lg border border-primary/20 bg-primary/5 text-xs text-muted-foreground flex items-start gap-2">
-                <Crown className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                <p>
-                  L'email <code className="bg-muted px-1 py-0.5 rounded">{ADMIN_EMAIL}</code> est
-                  automatiquement promu <strong>super administrateur</strong> avec accès Pro
-                  (toutes les fonctionnalités + portail CRM).
-                </p>
-              </div>
-            )}
+            {/* Admin hint removed (VULN-06) — disclosing the admin email on the
+                public login screen made it trivial for attackers to target the
+                super-admin account with brute-force / credential-stuffing. */}
 
             <p className="mt-5 text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
               <ShieldCheck className="h-3 w-3" />
-              Vos identifiants restent dans votre navigateur (SHA-256 + sel).
+              Authentification sécurisée · cookie httpOnly signé HMAC.
             </p>
           </Card>
         </motion.div>

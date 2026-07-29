@@ -166,12 +166,16 @@ function getModel(provider: LLMProvider): string {
 
 function getApiKey(provider: LLMProvider): string {
   const rc = readRuntimeConfig()
+  // VULN-15: keys are stored AES-256-GCM encrypted on disk. Decrypt here.
+  // decryptSecret() returns '' for empty/missing values and gracefully
+  // returns '' for legacy plaintext values (backward compat).
+  const { decryptSecret } = require('./security')
   switch (provider) {
-    case 'openai':      return rc.openaiApiKey      || process.env.OPENAI_API_KEY      || ''
-    case 'anthropic':   return rc.anthropicApiKey   || process.env.ANTHROPIC_API_KEY   || ''
-    case 'mistral':     return rc.mistralApiKey     || process.env.MISTRAL_API_KEY     || ''
-    case 'openrouter':  return rc.openrouterApiKey  || process.env.OPENROUTER_API_KEY  || ''
-    case 'local':       return rc.localApiKey       || process.env.LOCAL_API_KEY       || ''
+    case 'openai':      return decryptSecret(rc.openaiApiKey || '')      || process.env.OPENAI_API_KEY      || ''
+    case 'anthropic':   return decryptSecret(rc.anthropicApiKey || '')   || process.env.ANTHROPIC_API_KEY   || ''
+    case 'mistral':     return decryptSecret(rc.mistralApiKey || '')     || process.env.MISTRAL_API_KEY     || ''
+    case 'openrouter':  return decryptSecret(rc.openrouterApiKey || '')  || process.env.OPENROUTER_API_KEY  || ''
+    case 'local':       return decryptSecret(rc.localApiKey || '')       || process.env.LOCAL_API_KEY       || ''
     default:            return ''
   }
 }
@@ -275,9 +279,15 @@ async function chatOpenAICompatible(
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${cfg.apiKey}`,
-      // OpenRouter recommends these optional headers for analytics
+      // OpenRouter recommends these optional headers for analytics.
+      // Use the configurable site URL (VULN-14) instead of a hardcoded
+      // domain — in dev / preview environments the hardcoded URL would
+      // have leaked the production brand into OpenRouter's analytics.
       ...(cfg.baseUrl.includes('openrouter')
-        ? { 'HTTP-Referer': 'https://rimiris.ai', 'X-Title': 'Rimiris AI' }
+        ? {
+            'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'https://rimiris.ai',
+            'X-Title': 'Rimiris AI',
+          }
         : {}),
     },
     body: JSON.stringify(body),

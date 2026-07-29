@@ -231,8 +231,8 @@ export function AdminPortal() {
     return () => window.removeEventListener('focus', onFocus)
   }, [session])
 
-  function handleLogout() {
-    signOut()
+  async function handleLogout() {
+    await signOut()
     // The login screen will re-render automatically via the useAuth subscriber.
   }
 

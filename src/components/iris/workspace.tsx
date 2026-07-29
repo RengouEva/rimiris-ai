@@ -63,7 +63,6 @@ const STATUS_CONFIG: Record<SectionStatus, { label: string; color: string; dot: 
   not_started: { label: 'Vide', color: 'text-muted-foreground', dot: 'bg-muted-foreground/30' },
   interview: { label: 'Entretien', color: 'text-violet-500', dot: 'bg-violet-500' },
   validated: { label: 'Validé', color: 'text-cyan-500', dot: 'bg-cyan-500' },
-  in_progress: { label: 'En cours', color: 'text-amber-500', dot: 'bg-amber-500' },
   draft: { label: 'Brouillon', color: 'text-blue-500', dot: 'bg-blue-500' },
   humanized: { label: 'Humanisé', color: 'text-fuchsia-500', dot: 'bg-fuchsia-500' },
   completed: { label: 'Terminé', color: 'text-emerald-500', dot: 'bg-emerald-500' },

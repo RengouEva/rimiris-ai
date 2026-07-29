@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'fs'
 import * as path from 'path'
 import { invalidateLLMConfigCache, type LLMProvider } from '@/lib/iris/llm'
-import { getCurrentSession, isSuperAdmin } from '@/lib/iris/auth'
+import {
+  requireSuperAdmin,
+  encryptSecret,
+  decryptSecret,
+  getSessionFromRequest,
+  ADMIN_EMAIL,
+} from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 
@@ -47,49 +53,64 @@ function maskKey(k?: string): string {
   return `${k.slice(0, 4)}••••${k.slice(-4)}`
 }
 
-function ensureAdmin() {
-  const session = getCurrentSession()
-  if (!isSuperAdmin(session)) {
-    return NextResponse.json(
-      { error: 'Forbidden — super admin only.' },
-      { status: 403 },
-    )
-  }
+function ensureAdmin(req: NextRequest) {
+  // VULN-03: was using client-side getCurrentSession()/isSuperAdmin() which
+  // read localStorage (a client-only API that returns null on the server).
+  // The old check was therefore ALWAYS bypassed on the server. Now we read
+  // the HMAC-signed httpOnly cookie and verify the super_admin role.
+  const auth = requireSuperAdmin(req)
+  if (!auth.ok) return auth.response
   return null
+}
+
+// Helper to read a decrypted key from the encrypted config
+function readKey(cfg: RuntimeLLMConfig, field: keyof RuntimeLLMConfig): string {
+  const v = (cfg as any)[field]
+  if (!v) return ''
+  // VULN-15: stored encrypted; decrypt on read.
+  return decryptSecret(v)
 }
 
 // ============================================================================
 // GET /api/admin/llm-config
 // Returns the current config (API keys are masked).
 // ============================================================================
-export async function GET() {
-  const forbidden = ensureAdmin()
+export async function GET(req: NextRequest) {
+  const forbidden = ensureAdmin(req)
   if (forbidden) return forbidden
 
   const cfg = readConfig()
+  // Decrypt keys for masking (so the admin can see "sk-••••••abcd" even
+  // though the value on disk is encrypted).
+  const decOpenai = readKey(cfg, 'openaiApiKey') || process.env.OPENAI_API_KEY || ''
+  const decAnthropic = readKey(cfg, 'anthropicApiKey') || process.env.ANTHROPIC_API_KEY || ''
+  const decMistral = readKey(cfg, 'mistralApiKey') || process.env.MISTRAL_API_KEY || ''
+  const decOpenrouter = readKey(cfg, 'openrouterApiKey') || process.env.OPENROUTER_API_KEY || ''
+  const decLocal = readKey(cfg, 'localApiKey') || process.env.LOCAL_API_KEY || ''
+
   return NextResponse.json({
     provider: cfg.provider || process.env.LLM_PROVIDER || 'zai',
     model: cfg.model || process.env.LLM_MODEL || '',
     openai: {
-      hasKey: !!(cfg.openaiApiKey || process.env.OPENAI_API_KEY),
-      masked: maskKey(cfg.openaiApiKey || process.env.OPENAI_API_KEY),
+      hasKey: !!decOpenai,
+      masked: maskKey(decOpenai),
       baseUrl: cfg.openaiBaseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
     },
     anthropic: {
-      hasKey: !!(cfg.anthropicApiKey || process.env.ANTHROPIC_API_KEY),
-      masked: maskKey(cfg.anthropicApiKey || process.env.ANTHROPIC_API_KEY),
+      hasKey: !!decAnthropic,
+      masked: maskKey(decAnthropic),
     },
     mistral: {
-      hasKey: !!(cfg.mistralApiKey || process.env.MISTRAL_API_KEY),
-      masked: maskKey(cfg.mistralApiKey || process.env.MISTRAL_API_KEY),
+      hasKey: !!decMistral,
+      masked: maskKey(decMistral),
     },
     openrouter: {
-      hasKey: !!(cfg.openrouterApiKey || process.env.OPENROUTER_API_KEY),
-      masked: maskKey(cfg.openrouterApiKey || process.env.OPENROUTER_API_KEY),
+      hasKey: !!decOpenrouter,
+      masked: maskKey(decOpenrouter),
     },
     local: {
-      hasKey: !!(cfg.localApiKey || process.env.LOCAL_API_KEY),
-      masked: maskKey(cfg.localApiKey || process.env.LOCAL_API_KEY),
+      hasKey: !!decLocal,
+      masked: maskKey(decLocal),
       baseUrl: cfg.localBaseUrl || process.env.LOCAL_BASE_URL || 'http://localhost:11434/v1',
     },
   })
@@ -110,7 +131,7 @@ export async function GET() {
 // }
 // ============================================================================
 export async function POST(req: NextRequest) {
-  const forbidden = ensureAdmin()
+  const forbidden = ensureAdmin(req)
   if (forbidden) return forbidden
 
   try {
@@ -134,6 +155,7 @@ export async function POST(req: NextRequest) {
       cfg.localBaseUrl = body.localBaseUrl.trim() || undefined
     }
     // API keys: empty string = leave unchanged; null = clear; otherwise set
+    // VULN-15: keys are ENCRYPTED with AES-256-GCM before being written to disk.
     const keyFields = ['openaiApiKey', 'anthropicApiKey', 'mistralApiKey', 'openrouterApiKey', 'localApiKey'] as const
     for (const field of keyFields) {
       const v = body[field]
@@ -143,7 +165,7 @@ export async function POST(req: NextRequest) {
       } else if (v === '') {
         // leave unchanged
       } else {
-        ;(cfg as any)[field] = String(v).trim()
+        ;(cfg as any)[field] = encryptSecret(String(v).trim())
       }
     }
 

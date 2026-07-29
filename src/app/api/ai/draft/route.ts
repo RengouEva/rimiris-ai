@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { chatLLM } from '@/lib/iris/llm'
 import { AGENTS } from '@/lib/iris/agents'
 import { buildGuideContext, buildProjectContext } from '@/lib/iris/prompt-context'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 export const maxDuration = 90
@@ -51,6 +52,14 @@ interface DraftRequestBody {
 // ============================================================================
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-12: Auth + rate limiting
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response!
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as DraftRequestBody
     const {
@@ -155,8 +164,8 @@ EXEMPLE DE FORMAT ATTENDU :
 <p>On peut identifier trois phases principales :</p>
 <ul><li>Première phase : ...</li><li>Deuxième phase : ...</li></ul>`
 
-    const messages: { role: 'assistant' | 'user'; content: string }[] = [
-      { role: 'assistant', content: systemPrompt },
+    const messages: { role: 'system' | 'assistant' | 'user'; content: string }[] = [
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: userInstruction || 'Génère un brouillon structuré pour cette section.' },
     ]
 

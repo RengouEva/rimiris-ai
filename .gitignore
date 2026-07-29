@@ -61,3 +61,7 @@ server.log
 # Logo upload metadata (admin portal)
 .logo-meta.json
 upload/admin-uploads/
+
+# Security: account store + revenue records (server-side, contains password hashes)
+.rimiris-accounts.json
+.rimiris-revenue.json

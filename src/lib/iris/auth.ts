@@ -90,7 +90,13 @@ function write(key: string, value: unknown) {
 }
 
 function uuid(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  // VULN-16: crypto.randomUUID() is available in all modern browsers and
+  // Node 19+. The Math.random() fallback is kept only for legacy runtimes
+  // and logged loudly when used.
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  console.error('[security] crypto.randomUUID unavailable — falling back to weak Math.random UUID.')
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0
     const v = c === 'x' ? r : (r & 0x3) | 0x8
@@ -99,10 +105,15 @@ function uuid(): string {
 }
 
 function randomSalt(): string {
+  // VULN-16: crypto.getRandomValues is available in all modern browsers and
+  // in Node 19+ (globalThis.crypto). The Math.random() fallback is kept ONLY
+  // for truly ancient environments — if it ever runs, we log a loud warning
+  // because the salts generated there are weak.
   const bytes = new Uint8Array(32)
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
     crypto.getRandomValues(bytes)
   } else {
+    console.error('[security] crypto.getRandomValues unavailable — falling back to weak Math.random salt.')
     for (let i = 0; i < 32; i++) bytes[i] = Math.floor(Math.random() * 256)
   }
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')
@@ -194,47 +205,38 @@ export async function signUp(
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) {
     return { ok: false, error: 'Adresse email invalide.' }
   }
-  if (password.length < 6) {
-    return { ok: false, error: 'Le mot de passe doit contenir au moins 6 caractères.' }
+  // VULN-07: stronger password policy (mirrors server /api/auth/signup)
+  if (password.length < 10) {
+    return { ok: false, error: 'Le mot de passe doit contenir au moins 10 caractères.' }
+  }
+  if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+    return { ok: false, error: 'Le mot de passe doit contenir majuscules, minuscules et chiffres.' }
   }
   if (!name.trim()) {
     return { ok: false, error: 'Veuillez saisir votre nom.' }
   }
 
-  const accounts = read<AuthAccount[]>(K_ACCOUNTS, [])
-  if (accounts.some((a) => a.email === e)) {
-    return { ok: false, error: 'Un compte existe déjà avec cet email.' }
+  // VULN-04: delegate account creation to the server. The server sets the
+  // HMAC-signed httpOnly cookie; we mirror the session in localStorage only
+  // for UI reactivity. The localStorage copy is NOT trusted by any API.
+  try {
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ email: e, password, name: name.trim() }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      return { ok: false, error: data.error || 'Échec de la création du compte.' }
+    }
+    const session = data.session as AuthSession
+    write(K_SESSION, session)
+    notify()
+    return { ok: true, session }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Erreur réseau.' }
   }
-
-  const salt = randomSalt()
-  const passwordHash = await hashPassword(password, salt)
-
-  const account: AuthAccount = applySuperAdminRule({
-    id: uuid(),
-    email: e,
-    name: name.trim(),
-    passwordHash,
-    salt,
-    role: 'user',
-    tier: 'free',
-    createdAt: Date.now(),
-    lastLoginAt: Date.now(),
-  })
-
-  accounts.push(account)
-  write(K_ACCOUNTS, accounts)
-
-  const session: AuthSession = {
-    accountId: account.id,
-    email: account.email,
-    name: account.name,
-    role: account.role,
-    tier: account.tier,
-    loginAt: Date.now(),
-  }
-  write(K_SESSION, session)
-  notify()
-  return { ok: true, session }
 }
 
 /**
@@ -249,41 +251,42 @@ export async function signIn(
   if (typeof window === 'undefined') return { ok: false, error: 'Server-side call not allowed.' }
 
   const e = normalizeEmail(email)
-  const accounts = read<AuthAccount[]>(K_ACCOUNTS, [])
-  const idx = accounts.findIndex((a) => a.email === e)
 
-  if (idx === -1) {
-    return { ok: false, error: 'Aucun compte trouvé avec cet email.' }
+  // VULN-04: delegate to the server. The server verifies the password
+  // against the file-backed account store, rate-limits (VULN-07), and
+  // sets the HMAC-signed httpOnly cookie. We mirror the session in
+  // localStorage for UI reactivity.
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ email: e, password }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      return { ok: false, error: data.error || 'Échec de la connexion.' }
+    }
+    const session = data.session as AuthSession
+    write(K_SESSION, session)
+    notify()
+    return { ok: true, session }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Erreur réseau.' }
   }
-
-  const passwordHash = await hashPassword(password, accounts[idx].salt)
-  if (passwordHash !== accounts[idx].passwordHash) {
-    return { ok: false, error: 'Mot de passe incorrect.' }
-  }
-
-  // Re-apply super-admin rule (defensive — catches manual tier downgrades).
-  const updated = applySuperAdminRule({
-    ...accounts[idx],
-    lastLoginAt: Date.now(),
-  })
-  accounts[idx] = updated
-  write(K_ACCOUNTS, accounts)
-
-  const session: AuthSession = {
-    accountId: updated.id,
-    email: updated.email,
-    name: updated.name,
-    role: updated.role,
-    tier: updated.tier,
-    loginAt: Date.now(),
-  }
-  write(K_SESSION, session)
-  notify()
-  return { ok: true, session }
 }
 
-export function signOut() {
+export async function signOut() {
   if (typeof window === 'undefined') return
+  // VULN-04: clear the httpOnly cookie via the server.
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+    })
+  } catch {
+    /* network errors don't block client-side signout */
+  }
   window.localStorage.removeItem(K_SESSION)
   notify()
 }

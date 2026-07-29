@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatLLM } from '@/lib/iris/llm'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -17,6 +18,14 @@ interface SubjectsRequest {
 }
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-12: Auth + rate limiting
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response!
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as SubjectsRequest
     const { project, keywords } = body
@@ -46,7 +55,7 @@ Réponds en français académique. Format Markdown lisible.`
 
     const reply = await chatLLM(
       [
-        { role: 'assistant', content: systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: `Propose-moi 5 sujets de mémoire.` },
       ],
       {

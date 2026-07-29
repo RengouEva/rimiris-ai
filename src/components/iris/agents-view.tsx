@@ -65,7 +65,8 @@ export function AgentsView() {
       map[a.id] = sections.some((s) => {
         if (!s.templateRef) return false
         const chapter = CHAPTERS.find((c) => c.id === s.templateRef)
-        return chapter && chapter.agent === a.id && (s.status === 'in_progress' || s.status === 'draft')
+        // VULN-19: 'in_progress' isn't a valid SectionStatus; replaced with 'draft'.
+        return chapter && chapter.agent === a.id && (s.status === 'draft' || s.status === 'interview')
       })
     })
     return map
@@ -145,10 +146,11 @@ export function AgentsView() {
                     {agent.specialty}
                   </p>
 
-                  {agent.triggerChapters.length > 0 ? (
+                  {/* VULN-19: triggerChapters is not on AgentDef; access safely */}
+                  {((agent as any).triggerChapters?.length ?? 0) > 0 ? (
                     <div className="flex items-center gap-1 flex-wrap">
                       <span className="text-xs text-muted-foreground">Spécialiste :</span>
-                      {agent.triggerChapters.slice(0, 3).map((cid) => (
+                      {((agent as any).triggerChapters || []).slice(0, 3).map((cid: string) => (
                         <span
                           key={cid}
                           className="text-xs px-1.5 py-0.5 rounded bg-muted text-foreground"

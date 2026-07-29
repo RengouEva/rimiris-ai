@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatLLM } from '@/lib/iris/llm'
 import { buildProjectContext } from '@/lib/iris/prompt-context'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -93,6 +94,14 @@ interface Flag {
 }
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-12: Auth + rate limiting
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response!
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as PlagiarismRequest
     const { project, sections } = body
@@ -245,7 +254,7 @@ Réponds STRICTEMENT dans ce format JSON :
 
         const raw = (await chatLLM(
           [
-            { role: 'assistant', content: aiPrompt },
+            { role: 'system', content: aiPrompt },
             { role: 'user', content: 'Analyse.' },
           ],
           {

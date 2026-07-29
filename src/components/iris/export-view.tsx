@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
+import { sanitizeHtml } from '@/lib/iris/sanitize'
 
 // ============================================================================
 // ExportView — page indépendante avec sa propre sidebar
@@ -236,7 +237,7 @@ function PrintableMemoire({ project, sections }: { project: any; sections: any[]
             <h2>
               {idx + 1}. {s.title}
             </h2>
-            <div dangerouslySetInnerHTML={{ __html: s.content }} />
+            <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(s.content) }} />
           </div>
         )
       })}
@@ -386,7 +387,7 @@ function PreviewPanel({ project, sections }: { project: any; sections: any[] }) 
                 </h2>
                 <div
                   className="prose-iris text-sm leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: s.content }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(s.content) }}
                 />
               </PreviewPage>
             ))}
@@ -1223,7 +1224,7 @@ function PreviewContent({ project, sections }: { project: any; sections: any[] }
             </h2>
             <div
               className="text-sm leading-relaxed prose-iris"
-              dangerouslySetInnerHTML={{ __html: s.content }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(s.content) }}
             />
           </div>
         )

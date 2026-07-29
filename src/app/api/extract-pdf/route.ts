@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import * as crypto from 'node:crypto'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 const execFileAsync = promisify(execFile)
 
@@ -26,6 +28,25 @@ export const maxDuration = 60
 // ============================================================================
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-17: Auth + Content-Length validation
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
+  // VULN-17: Validate Content-Length BEFORE reading the body to prevent
+  // memory exhaustion via oversized uploads.
+  const contentLength = parseInt(req.headers.get('content-length') || '0', 10)
+  const MAX_UPLOAD_BYTES = 30 * 1024 * 1024 // 30 MB hard cap (25 MB PDF + multipart overhead)
+  if (contentLength > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: `Upload trop volumineux (${(contentLength / 1024 / 1024).toFixed(1)} MB). Maximum : 30 MB.` },
+      { status: 413 },
+    )
+  }
+
   let tmpPdfPath: string | null = null
   try {
     const formData = await req.formData()
@@ -58,7 +79,11 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer)
     const tmpDir = join(tmpdir(), 'iris-pdf-extract')
     await mkdir(tmpDir, { recursive: true })
-    tmpPdfPath = join(tmpDir, `guide-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`)
+    // VULN-16: use crypto.randomBytes instead of Math.random() for the
+    // temp filename — Math.random() is not cryptographically secure and
+    // predictable filenames would let an attacker pre-create symlinks.
+    const randId = crypto.randomBytes(8).toString('hex')
+    tmpPdfPath = join(tmpDir, `guide-${Date.now()}-${randId}.pdf`)
     await writeFile(tmpPdfPath, buffer)
 
     // Run a small Python script that uses pdfplumber to extract text + page count

@@ -129,6 +129,9 @@ export function OnboardingInterview() {
 // ============================================================================
 
 function OnboardingHeader({ step }: { step: OnboardingStep }) {
+  // VULN-19: setView was referenced but not in scope (the header is a separate
+  // sub-component). Wire it from the store.
+  const { setView } = useIrisStore()
   const steps: { id: OnboardingStep; label: string; icon: any }[] = [
     { id: 'collect', label: 'Projet', icon: Building2 },
     { id: 'understanding', label: 'Compréhension', icon: Library },

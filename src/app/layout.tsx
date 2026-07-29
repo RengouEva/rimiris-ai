@@ -253,13 +253,12 @@ export default function RootLayout({
                     priceCurrency: "EUR",
                     availability: "https://schema.org/InStock",
                   },
-                  aggregateRating: {
-                    "@type": "AggregateRating",
-                    ratingValue: "4.8",
-                    reviewCount: "128",
-                    bestRating: "5",
-                    worstRating: "1",
-                  },
+                  // VULN-13: Removed fake AggregateRating (ratingValue: 4.8,
+                  // reviewCount: 128) — this was misleading SEO that violated
+                  // Google's structured data guidelines and could have led to
+                  // manual action against the site in search results.
+                  // Re-enable only when real reviews exist and are collected
+                  // through a verified review system.
                   featureList: [
                     "Entretien guidé pour cadrer le sujet de mémoire",
                     "Génération automatique de plan structuré",

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatLLM } from '@/lib/iris/llm'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -132,6 +133,14 @@ function pickQuestionBank(sectionTitle: string): { id: string; question: string;
 }
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-12: Auth + rate limiting
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response!
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as SectionInterviewRequest
     const {
@@ -190,7 +199,7 @@ export async function POST(req: NextRequest) {
       const explanation = await chatLLM(
         [
           {
-            role: 'assistant',
+            role: 'system',
             content: `Tu es le Coach méthodologique de Rimiris. L'étudiant ne sait pas répondre à cette question. Explique-lui le concept en français académique, en 3-4 phrases maximum, avec un exemple concret adapté à son domaine (${project.filiere || 'général'}). Ne lui donne PAS la réponse, mais aide-le à la trouver lui-même.
 
 Question : "${nextQuestion.question}"
@@ -213,7 +222,7 @@ Domaine : ${themeUnderstanding?.domain || project.filiere || 'non précisé'}`,
       const raw = await chatLLM(
         [
           {
-            role: 'assistant',
+            role: 'system',
             content: `Tu es le Coach méthodologique de Rimiris. L'étudiant veut que tu lui proposes plusieurs réponses. Génère 3 propositions argumentées, spécifiques à son contexte.
 
 Question : "${nextQuestion.question}"
@@ -262,7 +271,7 @@ Réponds UNIQUEMENT en JSON :
       const example = await chatLLM(
         [
           {
-            role: 'assistant',
+            role: 'system',
             content: `Tu es le Coach méthodologique de Rimiris. L'étudiant veut voir un exemple. Affiche un exemple concret, adapté à son domaine, en 3-5 phrases.
 
 Question : "${nextQuestion.question}"
@@ -294,7 +303,7 @@ Réponds en français académique, max 150 mots.`,
       const raw = await chatLLM(
         [
           {
-            role: 'assistant',
+            role: 'system',
             content: `Tu es le Contrôleur qualité de Rimiris. Vérifie les réponses collectées pour cette section avant la rédaction.
 
 SECTION : "${sectionTitle}"

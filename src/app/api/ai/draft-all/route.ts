@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { chatLLM } from '@/lib/iris/llm'
 import { AGENTS } from '@/lib/iris/agents'
 import { buildGuideContext, buildProjectContext } from '@/lib/iris/prompt-context'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300 // 5 minutes — enough for 5-8 sections
@@ -52,6 +53,14 @@ interface DraftAllResponse {
 }
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-12: Auth + rate limiting
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response!
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as DraftAllRequest
     const { project, themeUnderstanding, problemContext, sections, mode = 'all_empty' } = body
@@ -132,7 +141,7 @@ ${guideContext ? `8. RESPECTE strictement les exigences du guide méthodologique
 
         const rawHtml = await chatLLM(
           [
-            { role: 'assistant', content: sectionPrompt },
+            { role: 'system', content: sectionPrompt },
             {
               role: 'user',
               content: `Génère le brouillon de la section "${sec.title}".`,

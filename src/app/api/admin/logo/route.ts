@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as fs from 'fs'
 import * as path from 'path'
 import sharp from 'sharp'
-import { getCurrentSession, isSuperAdmin } from '@/lib/iris/auth'
+import { requireSuperAdmin, getSessionFromRequest } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 // Up to 8 MB logo upload (raw PNG/SVG can be large)
@@ -28,14 +28,11 @@ interface LogoMeta {
 // ============================================================================
 // Auth — mirrors /api/admin/llm-config
 // ============================================================================
-function ensureAdmin() {
-  const session = getCurrentSession()
-  if (!isSuperAdmin(session)) {
-    return NextResponse.json(
-      { error: 'Forbidden — super admin only.' },
-      { status: 403 },
-    )
-  }
+function ensureAdmin(req: NextRequest) {
+  // VULN-03: was using client-side getCurrentSession()/isSuperAdmin() —
+  // always bypassed on server. Now uses HMAC-signed cookie verification.
+  const auth = requireSuperAdmin(req)
+  if (!auth.ok) return auth.response
   return null
 }
 
@@ -58,8 +55,8 @@ function writeMeta(m: LogoMeta) {
 // GET /api/admin/logo
 // Returns logo metadata (last update, dimensions, transparency status).
 // ============================================================================
-export async function GET() {
-  const forbidden = ensureAdmin()
+export async function GET(req: NextRequest) {
+  const forbidden = ensureAdmin(req)
   if (forbidden) return forbidden
 
   const meta = readMeta()
@@ -84,10 +81,20 @@ export async function GET() {
 // to be opaque).
 // ============================================================================
 export async function POST(req: NextRequest) {
-  const forbidden = ensureAdmin()
+  const forbidden = ensureAdmin(req)
   if (forbidden) return forbidden
 
-  const session = getCurrentSession()
+  // VULN-17: Content-Length check BEFORE reading the body
+  const contentLength = parseInt(req.headers.get('content-length') || '0', 10)
+  const MAX_UPLOAD_BYTES = 12 * 1024 * 1024 // 12 MB cap (8 MB logo + multipart overhead)
+  if (contentLength > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: `Upload trop volumineux (${(contentLength / 1024 / 1024).toFixed(1)} MB). Maximum : 12 MB.` },
+      { status: 413 },
+    )
+  }
+
+  const session = getSessionFromRequest(req)
 
   try {
     const formData = await req.formData()

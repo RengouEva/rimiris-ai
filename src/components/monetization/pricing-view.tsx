@@ -188,8 +188,8 @@ export function PricingView() {
         <UpgradeDialog
           tier={upgradeTarget}
           onClose={() => setUpgradeTarget(null)}
-          onSuccess={(name, email) => {
-            upgradeToTier(upgradeTarget, email, name)
+          onSuccess={async (name, email) => {
+            await upgradeToTier(upgradeTarget, email, name)
             setCurrentUser(getCurrentUser())
             toast.success(`Bienvenue dans le plan ${TIERS[upgradeTarget].name} ! 🎉`)
             setUpgradeTarget(null)

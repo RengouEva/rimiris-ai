@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatLLM } from '@/lib/iris/llm'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 export const maxDuration = 90
@@ -29,6 +30,14 @@ interface ProblemBuildRequestBody {
 }
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-12: Auth + rate limiting
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response!
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as ProblemBuildRequestBody
     const { theme, understanding, level = 'Master', field, rejected = [], editBase } = body
@@ -86,7 +95,7 @@ Réponds UNIQUEMENT avec ce JSON strict :
 
     const raw = await chatLLM(
       [
-        { role: 'assistant', content: systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: `Propose 3 hypothèses de contexte pour : ${theme}` },
       ],
       {

@@ -35,6 +35,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { sanitizeHtml } from '@/lib/iris/sanitize'
 
 // ============================================================================
 // SectionWorkflowPanel — the right-side sliding panel that runs the per-section
@@ -987,7 +988,7 @@ function DraftStep({
           <div
             className="rounded-xl border border-border bg-white text-black p-4 prose-iris max-h-[400px] overflow-y-auto text-sm"
             style={{ fontSize: '11pt', lineHeight: 1.6 }}
-            dangerouslySetInnerHTML={{ __html: draftHtml }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(draftHtml) }}
           />
           <div className="flex gap-1.5">
             <Button

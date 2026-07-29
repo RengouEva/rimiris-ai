@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatLLM } from '@/lib/iris/llm'
 import { buildGuideContext, buildProjectContext } from '@/lib/iris/prompt-context'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -85,6 +86,14 @@ function getDraftedSections(sections: { title: string; content: string }[]) {
 }
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-12: Auth + rate limiting
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response!
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as SimulationRequest
     const { action, project, sections, soutenanceData, history, studentAnswer, forceRole } = body
@@ -135,7 +144,7 @@ Réponds UNIQUEMENT avec le texte de ton intervention (pas de JSON, pas de préf
 
       const reply = (await chatLLM(
         [
-          { role: 'assistant', content: systemPrompt },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: 'Ouvre la soutenance.' },
         ],
         {
@@ -220,7 +229,7 @@ Réponds STRICTEMENT dans ce format JSON :
 
       const raw = (await chatLLM(
         [
-          { role: 'assistant', content: systemPrompt },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: 'Continue la soutenance.' },
         ],
         {
@@ -302,7 +311,7 @@ Réponds STRICTEMENT dans ce format JSON :
 
       const raw = (await chatLLM(
         [
-          { role: 'assistant', content: systemPrompt },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: 'Rends ton délibéré.' },
         ],
         {

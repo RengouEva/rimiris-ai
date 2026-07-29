@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { chatLLM } from '@/lib/iris/llm'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -67,6 +68,14 @@ export const INTERVIEW_STEPS = [
 ] as const
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-12: Auth + rate limiting
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response!
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as InterviewRequestBody
     const answers = body.answers || []
@@ -95,7 +104,7 @@ export async function POST(req: NextRequest) {
         const reformulated = await chatLLM(
           [
             {
-              role: 'assistant',
+              role: 'system',
               content: `Tu es Pr. Rimiris, directeur de mémoire. L'étudiant vient de répondre à la question "${lastAnswer.question}". Sa réponse : "${lastAnswer.answer}".
 
 Tu dois maintenant poser la question suivante : "${step.question}".
@@ -134,7 +143,7 @@ INSTRUCTIONS :
             const raw = await chatLLM(
               [
                 {
-                  role: 'assistant',
+                  role: 'system',
                   content: `Tu es Pr. Rimiris. À partir du sujet "${topicAnswer.answer}" (niveau ${levelAnswer?.answer || 'Master'}), propose 3 problématiques académiques formulées sous forme de questions de recherche. Chaque problématique doit être :
 - Une vraie question (qui se termine par "?")
 - Spécifique et défendable

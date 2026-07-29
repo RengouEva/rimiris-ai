@@ -4,6 +4,7 @@
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { CHAPTERS } from '@/lib/iris/chapters'
 
 // ============================================================================
 // Types de base
@@ -284,6 +285,7 @@ interface IrisState {
 
   // Actions — Sections
   addSection: (title?: string, templateRef?: string) => string
+  importTemplate: () => void  // VULN-19: was missing from store; now implemented
   renameSection: (id: string, title: string) => void
   deleteSection: (id: string) => void
   duplicateSection: (id: string) => void
@@ -484,6 +486,28 @@ export const useIrisStore = create<IrisState>()(
           activeSectionId: id,
         }))
         return id
+      },
+
+      // VULN-19: importTemplate was referenced from workspace.tsx but never
+      // implemented. Imports all standard academic chapters (CHAPTERS) as
+      // sections with their templateRef wired up.
+      importTemplate: () => {
+        const now = Date.now()
+        const newSections = CHAPTERS.map((c, idx) => ({
+          id: makeId(),
+          title: c.title,
+          content: '',
+          messages: [],
+          wordCount: 0,
+          lastEdited: null,
+          status: 'not_started' as SectionStatus,
+          templateRef: c.id,
+          interviewAnswers: [],
+        }))
+        set((state) => ({
+          sections: [...state.sections, ...newSections],
+          activeSectionId: state.activeSectionId || newSections[0]?.id || null,
+        }))
       },
 
       renameSection: (id, title) =>

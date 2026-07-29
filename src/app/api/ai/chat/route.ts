@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { chatLLM } from '@/lib/iris/llm'
 import { AGENTS } from '@/lib/iris/agents'
 import { CHAPTERS } from '@/lib/iris/chapters'
+import { requireSession, checkLLMRateLimit } from '@/lib/iris/security'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -32,6 +33,14 @@ interface ChatRequestBody {
 }
 
 export async function POST(req: NextRequest) {
+  // VULN-02 + VULN-12: Auth + rate limiting
+  const auth = requireSession(req)
+  if (!auth.ok) return auth.response!
+  const llmRL = checkLLMRateLimit(req, auth.session!.accountId)
+  if (!llmRL.allowed) {
+    return NextResponse.json({ error: llmRL.error }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as ChatRequestBody
     const {
@@ -110,8 +119,8 @@ ${blockedMode
 - Si l'étudiant a déjà rédigé un brouillon, fais des retours précis sur SON texte.
 - Réponds en français académique chaleureux, jamais générique.`
 
-    const messages: { role: 'assistant' | 'user'; content: string }[] = [
-      { role: 'assistant', content: systemPrompt },
+    const messages: { role: 'system' | 'assistant' | 'user'; content: string }[] = [
+      { role: 'system', content: systemPrompt },
       ...history.slice(-6),
       { role: 'user', content: userMessage },
     ]
