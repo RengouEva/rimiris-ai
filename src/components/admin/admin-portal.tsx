@@ -6,6 +6,7 @@ import {
   Users, DollarSign, TrendingUp, Activity, Lock, LogOut,
   Search, ArrowUpRight, ArrowDownRight, Crown, Sparkles,
   Download, FileText, Brain, Eye, ChevronRight, ShieldAlert,
+  Image as ImageIcon, Upload, CheckCircle2, AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -210,7 +211,7 @@ export function AdminPortal() {
   const [stats, setStats] = React.useState<GlobalStats | null>(null)
   const [rows, setRows] = React.useState<AdminUserRow[]>([])
   const [search, setSearch] = React.useState('')
-  const [tab, setTab] = React.useState<'overview' | 'users' | 'revenue' | 'tiers' | 'llm'>('overview')
+  const [tab, setTab] = React.useState<'overview' | 'users' | 'revenue' | 'tiers' | 'llm' | 'branding'>('overview')
 
   // Load real data (no demo seeding).
   React.useEffect(() => {
@@ -292,6 +293,7 @@ export function AdminPortal() {
             ['revenue', 'Revenus'],
             ['tiers', 'Plans & Tiers'],
             ['llm', 'Configuration IA'],
+            ['branding', 'Apparence'],
           ] as const).map(([id, label]) => (
             <button
               key={id}
@@ -601,6 +603,10 @@ export function AdminPortal() {
 
             {tab === 'llm' && (
               <LLMConfigPanel />
+            )}
+
+            {tab === 'branding' && (
+              <BrandingPanel />
             )}
           </>
         )}
@@ -932,6 +938,267 @@ function LLMConfigPanel() {
           })}
         </div>
       </Card>
+    </motion.div>
+  )
+}
+
+// ============================================================================
+// Branding Panel — lets the admin upload a new logo.
+// Transparency is preserved (sharp on server, no flattening to white).
+// ============================================================================
+function BrandingPanel() {
+  const [meta, setMeta] = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [uploading, setUploading] = React.useState(false)
+  const [dragOver, setDragOver] = React.useState(false)
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null)
+  const [toast, setToast] = React.useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
+  function flash(type: 'success' | 'error', msg: string) {
+    setToast({ type, msg })
+    setTimeout(() => setToast(null), 4500)
+  }
+
+  // Load current logo metadata
+  React.useEffect(() => {
+    fetch('/api/admin/logo', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => {
+        setMeta(data)
+        setLoading(false)
+      })
+      .catch(() => {
+        setLoading(false)
+        flash('error', 'Impossible de charger les métadonnées du logo.')
+      })
+  }, [])
+
+  async function handleFile(file: File) {
+    // Client-side validation
+    const allowed = ['image/png', 'image/webp', 'image/svg+xml', 'image/svg', 'image/jpeg', 'image/jpg']
+    if (!allowed.includes(file.type.toLowerCase())) {
+      flash('error', `Type non supporté : ${file.type}. Utilisez PNG, WebP, SVG ou JPG.`)
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      flash('error', `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum : 8 MB.`)
+      return
+    }
+
+    // Show local preview immediately
+    setPreviewUrl(URL.createObjectURL(file))
+
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/admin/logo', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Échec de l\'upload')
+
+      setMeta({ ...data.meta, urls: data.urls })
+      flash('success', data.message || 'Logo mis à jour.')
+
+      // Force-refresh the visible RimirisLogo instances by bumping the URL
+      // query param. The component reads /logo.webp; we update
+      // document.location to bust caches without a full reload.
+      // (Next/Image will re-fetch automatically if src changes.)
+    } catch (e: any) {
+      flash('error', e?.message || 'Échec de l\'upload.')
+      setPreviewUrl(null)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOver(false)
+    const f = e.dataTransfer.files?.[0]
+    if (f) handleFile(f)
+  }
+
+  if (loading) return <div className="p-8 text-muted-foreground">Chargement…</div>
+
+  const cacheBust = meta?.updatedAt ? `?v=${meta.updatedAt}` : ''
+  const isTransparent = meta?.sourceTransparent === true
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-4">
+      {toast && (
+        <div className={`p-3 rounded-lg text-sm ${
+          toast.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
+        }`}>
+          {toast.msg}
+        </div>
+      )}
+
+      {/* Transparency status banner */}
+      <Card className={`p-4 ${isTransparent ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/50'}`}>
+        <div className="flex items-start gap-3">
+          {isTransparent ? (
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+          ) : (
+            <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          )}
+          <div className="text-sm">
+            {isTransparent ? (
+              <>
+                <p className="font-medium text-emerald-800">Logo transparent détecté</p>
+                <p className="text-emerald-700 mt-0.5">
+                  Le logo actuel possède un canal alpha. Les coins apparaîtront transparents sur tous les fonds
+                  (sauf <code>apple-touch-icon.png</code> qui doit rester opaque pour iOS).
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-medium text-amber-800">Logo opaque détecté</p>
+                <p className="text-amber-700 mt-0.5">
+                  L'image source n'a pas de transparence (JPEG ou PNG aplati). Les coins seront opaques.
+                  Pour un rendu propre, uploadez un <strong>PNG avec fond transparent</strong>.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Current logo preview at multiple sizes */}
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <ImageIcon className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold">Logo actuel</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-5">
+          Aperçu aux différentes tailles utilisées dans l'application.
+          {meta?.updatedAt && (
+            <span className="block mt-1 text-xs">
+              Dernière mise à jour : {new Date(meta.updatedAt).toLocaleString('fr-FR')}
+              {meta.updatedBy ? ` par ${meta.updatedBy}` : ''}
+              {meta.sourceW && meta.sourceH ? ` · Source : ${meta.sourceW}×${meta.sourceH} (${meta.sourceFormat || '?'})` : ''}
+            </span>
+          )}
+        </p>
+
+        {/* Checkerboard background to visualize transparency */}
+        <div
+          className="grid grid-cols-2 sm:grid-cols-5 gap-4 p-4 rounded-lg border bg-[length:20px_20px] bg-[position:0_0,0_10px,10px_-10px,-10px_0px]"
+          style={{
+            backgroundImage: 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)',
+            backgroundColor: '#fff',
+          }}
+        >
+          {[
+            { label: 'sm (32px)', size: 'sm' as const, px: 32 },
+            { label: 'md (40px)', size: 'md' as const, px: 40 },
+            { label: 'lg (48px)', size: 'lg' as const, px: 48 },
+            { label: 'xl (80px)', size: 'xl' as const, px: 80 },
+            { label: '2xl (120px)', size: '2xl' as const, px: 120 },
+          ].map(({ label, size, px }) => (
+            <div key={label} className="flex flex-col items-center gap-2">
+              <div
+                className={`relative rounded-lg overflow-hidden`}
+                style={{ width: px, height: px }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewUrl || `/logo.webp${cacheBust}`}
+                  alt="Logo preview"
+                  width={px}
+                  height={px}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <span className="text-[10px] text-muted-foreground">{label}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Upload zone */}
+      <Card className="p-6">
+        <h3 className="font-semibold mb-1">Importer un nouveau logo</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Formats acceptés : <strong>PNG</strong>, <strong>WebP</strong>, <strong>SVG</strong>, JPG.
+          Le fichier est traité côté serveur avec <code>sharp</code> — le canal alpha est préservé
+          (aucune aplatissement sur fond blanc). Taille max : 8 MB.
+        </p>
+
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          onClick={() => inputRef.current?.click()}
+          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+            dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+          }`}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/png,image/webp,image/svg+xml,image/svg,image/jpeg,image/jpg"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) handleFile(f)
+              e.target.value = '' // reset so same file can be re-uploaded
+            }}
+          />
+          {uploading ? (
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-muted-foreground">Traitement en cours…</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <Upload className="h-8 w-8 text-muted-foreground" />
+              <p className="text-sm font-medium">
+                Cliquez pour choisir un fichier ou glissez-déposez ici
+              </p>
+              <p className="text-xs text-muted-foreground">PNG transparent recommandé (1024×1024 idéal)</p>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Generated formats overview */}
+      <Card className="p-6">
+        <h3 className="font-semibold mb-1">Formats générés automatiquement</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          À partir de votre fichier source, l'admin génère et déploie automatiquement ces formats.
+          Tous préservent la transparence (sauf <code>apple-touch-icon.png</code> pour iOS).
+        </p>
+        <div className="grid sm:grid-cols-2 gap-2 text-xs">
+          {[
+            ['logo.png', '512×512', 'Logo principal (PNG)'],
+            ['logo.webp', '512×512', 'Logo principal (WebP — recommandé)'],
+            ['favicon.png', '32×32', 'Favicon navigateur'],
+            ['favicon-16.png', '16×16', 'Favicon legacy'],
+            ['favicon.ico', '32×32', 'Favicon Windows / ancien'],
+            ['icon-192.png', '192×192', 'PWA Android'],
+            ['icon-512.png', '512×512', 'PWA Android (splash)'],
+            ['icon-maskable-192.png', '192×192', 'PWA maskable (safe 80%)'],
+            ['icon-maskable-512.png', '512×512', 'PWA maskable (splash)'],
+            ['apple-touch-icon.png', '180×180', 'iOS (fond blanc obligatoire)'],
+          ].map(([file, dims, desc]) => (
+            <div key={file} className="flex items-start gap-2 p-2 rounded border bg-muted/30">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <code className="text-[11px] font-mono">{file}</code>
+                <span className="text-muted-foreground"> — {dims}</span>
+                <p className="text-muted-foreground mt-0.5">{desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <p className="text-xs text-muted-foreground text-center pb-4">
+        💡 Conseil : pour un rendu optimal sur tous les fonds (clair, sombre, coloré), exportez votre
+        logo en PNG avec fond transparent. Évitez JPG (pas de transparence) et les PNG déjà aplatis
+        sur fond blanc.
+      </p>
     </motion.div>
   )
 }

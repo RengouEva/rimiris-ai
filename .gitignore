@@ -58,3 +58,6 @@ prompt
 server.log
 # Skills directory
 /skills/
+# Logo upload metadata (admin portal)
+.logo-meta.json
+upload/admin-uploads/
