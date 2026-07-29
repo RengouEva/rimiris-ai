@@ -1,8 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { Menu, ChevronLeft } from 'lucide-react'
+import { Menu, ChevronLeft, Sparkles, ShieldCheck } from 'lucide-react'
 import { useIrisStore } from '@/store/iris-store'
+import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -21,7 +22,11 @@ export function Header() {
     view,
     setView,
   } = useIrisStore()
+  const { session } = useAuth()
   const [mobileOpen, setMobileOpen] = React.useState(false)
+
+  const isPro = session?.tier === 'pro'
+  const isAdmin = session?.role === 'admin'
 
   const totalWords = sections.reduce((sum, s) => sum + s.wordCount, 0)
   const completed = sections.filter((s) => s.status === 'completed').length
@@ -84,6 +89,27 @@ export function Header() {
               dans la barre d'outils de l'éditeur).
             - Sur les autres vues : bouton "Retour au mémoire". */}
         <div className="flex items-center gap-1.5">
+          {/* Tier badge — persists across views so the user sees Pro status
+              right after the checkout toast. Admin gets a distinct badge. */}
+          {isPro && (
+            <button
+              onClick={() => setView('pricing')}
+              title={isAdmin ? 'Compte administrateur — Pro illimité' : 'Plan Pro actif pour ce projet'}
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
+            >
+              {isAdmin ? (
+                <>
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Admin
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Pro
+                </>
+              )}
+            </button>
+          )}
           {view !== 'workspace' && view !== 'export' && (
             <Button
               size="sm"

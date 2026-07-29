@@ -65,3 +65,9 @@ upload/admin-uploads/
 # Security: account store + revenue records (server-side, contains password hashes)
 .rimiris-accounts.json
 .rimiris-revenue.json
+
+# Payment runtime files (server-side, contains payment references + webhook payloads)
+.payment-config.json
+.payment-config.audit.jsonl
+.payment-pending.json
+.payment-webhook-log.json

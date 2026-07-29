@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyWebhook, type PaymentProviderId } from '@/lib/iris/payment-providers'
 import { fulfillPayment } from '@/lib/iris/payment-fulfillment'
+import { logWebhookEvent, buildEventInput } from '@/lib/iris/payment-webhook-log'
 
 export const runtime = 'nodejs'
 
@@ -23,6 +24,7 @@ export const runtime = 'nodejs'
 //      - Records the revenue in .rimiris-revenue.json
 //      - Marks the pending as 'paid'
 //   3. Returns 200 to the provider (idempotent — multiple calls are safe).
+//   4. Logs the event to .payment-webhook-log.json for admin debugging.
 // ============================================================================
 
 // Force dynamic — never cache webhook responses
@@ -39,6 +41,16 @@ export async function POST(
   const { provider: providerParam } = await params
   const provider = providerParam as Exclude<PaymentProviderId, 'none'>
   if (!VALID_PROVIDERS.includes(provider)) {
+    // Log unknown provider attempts (could be a scanner or a misconfigured route)
+    let scanBody = ''
+    try { scanBody = await req.text() } catch { /* ignore */ }
+    logWebhookEvent(
+      buildEventInput(providerParam, scanBody, req.headers, {
+        status: 'provider_unknown',
+        httpStatus: 404,
+        error: `Provider '${providerParam}' is not in the supported list.`,
+      }),
+    )
     return NextResponse.json(
       { error: 'Provider inconnu.' },
       { status: 404 },
@@ -53,6 +65,13 @@ export async function POST(
   try {
     body = await req.text()
   } catch {
+    logWebhookEvent(
+      buildEventInput(provider, '', req.headers, {
+        status: 'body_unreadable',
+        httpStatus: 400,
+        error: 'req.text() threw — likely a connection abort or oversize payload.',
+      }),
+    )
     return NextResponse.json(
       { error: 'Body illisible.' },
       { status: 400 },
@@ -67,6 +86,13 @@ export async function POST(
     console.warn(
       `[webhook] ${provider} signature verification failed: ${verifyResult.error}`,
     )
+    logWebhookEvent(
+      buildEventInput(provider, body, req.headers, {
+        status: 'invalid_sig',
+        httpStatus: 400,
+        error: verifyResult.error,
+      }),
+    )
     return NextResponse.json(
       { error: 'Signature invalide.' },
       { status: 400 },
@@ -76,6 +102,13 @@ export async function POST(
   // If the webhook is for an event we don't fulfill on (e.g. payment.failed),
   // return 200 without doing anything.
   if (!verifyResult.reference) {
+    logWebhookEvent(
+      buildEventInput(provider, body, req.headers, {
+        status: 'no_reference',
+        httpStatus: 200,
+        error: 'Signature OK but no actionable reference in payload.',
+      }),
+    )
     return NextResponse.json({ ok: true, fulfilled: false, reason: 'no-action' })
   }
 
@@ -85,11 +118,28 @@ export async function POST(
     console.warn(
       `[webhook] ${provider} fulfillment failed for ref=${verifyResult.reference}: ${fulfillResult.error}`,
     )
+    logWebhookEvent(
+      buildEventInput(provider, body, req.headers, {
+        status: 'fulfill_failed',
+        httpStatus: 200, // 200 to stop provider retries
+        error: fulfillResult.error,
+        reference: verifyResult.reference,
+      }),
+    )
     return NextResponse.json(
       { ok: false, error: fulfillResult.error },
       { status: 200 }, // 200 to stop provider retries
     )
   }
+
+  logWebhookEvent(
+    buildEventInput(provider, body, req.headers, {
+      status: fulfillResult.fulfilled ? 'fulfilled' : 'verified',
+      httpStatus: 200,
+      reference: verifyResult.reference,
+      error: fulfillResult.fulfilled ? undefined : 'Already fulfilled (idempotent replay).',
+    }),
+  )
 
   return NextResponse.json({
     ok: true,

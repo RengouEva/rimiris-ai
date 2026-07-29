@@ -8,6 +8,7 @@ import {
   Download, FileText, Brain, Eye, ChevronRight, ShieldAlert,
   Image as ImageIcon, Upload, CheckCircle2, AlertTriangle,
   CreditCard, Zap, Trash2, Rocket, History,
+  Webhook, RefreshCw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1730,6 +1731,9 @@ function PaymentProvidersPanel({ sessionEmail }: { sessionEmail: string }) {
         )}
       </Card>
 
+      {/* Webhook event log — last 20 events received by /api/payment/webhook/[provider] */}
+      <WebhookLogPanel />
+
       {/* Security reminder footer */}
       <Card className="p-4 border-amber-200 bg-amber-50/40">
         <div className="flex items-start gap-2 text-xs text-amber-800">
@@ -1747,5 +1751,224 @@ function PaymentProvidersPanel({ sessionEmail }: { sessionEmail: string }) {
         </div>
       </Card>
     </motion.div>
+  )
+}
+
+// ============================================================================
+// WebhookLogPanel — last 20 webhook events received from payment providers.
+// Useful for debugging "I paid but my account wasn't upgraded" tickets.
+// ============================================================================
+type WebhookStatus =
+  | 'verified'
+  | 'invalid_sig'
+  | 'no_reference'
+  | 'no_action'
+  | 'fulfilled'
+  | 'fulfill_failed'
+  | 'provider_unknown'
+  | 'body_unreadable'
+
+interface WebhookEventRow {
+  id: string
+  ts: number
+  provider: string
+  eventType?: string
+  reference?: string | null
+  status: WebhookStatus
+  httpStatus: number
+  error?: string
+  signatureHeader?: string
+  bodyPreview?: string
+}
+
+const WEBHOOK_STATUS_META: Record<
+  WebhookStatus,
+  { label: string; color: string; icon: 'check' | 'x' | 'alert' | 'idle' | 'fail' }
+> = {
+  fulfilled:       { label: 'Fulfill OK',  color: 'text-emerald-600 bg-emerald-50 border-emerald-200',  icon: 'check' },
+  verified:        { label: 'Replay OK',    color: 'text-blue-600 bg-blue-50 border-blue-200',          icon: 'check' },
+  no_reference:    { label: 'Pas de réf.',  color: 'text-amber-600 bg-amber-50 border-amber-200',       icon: 'idle' },
+  no_action:       { label: 'Ignoré',       color: 'text-muted-foreground bg-muted border-border',      icon: 'idle' },
+  invalid_sig:     { label: 'Sig. invalide',color: 'text-red-600 bg-red-50 border-red-200',             icon: 'x' },
+  fulfill_failed:  { label: 'Fulfill KO',   color: 'text-red-700 bg-red-100 border-red-300',            icon: 'fail' },
+  provider_unknown:{ label: 'Provider ?',   color: 'text-red-600 bg-red-50 border-red-200',             icon: 'alert' },
+  body_unreadable: { label: 'Body ?',       color: 'text-red-600 bg-red-50 border-red-200',             icon: 'alert' },
+}
+
+function WebhookLogPanel() {
+  const [events, setEvents] = React.useState<WebhookEventRow[]>([])
+  const [stats, setStats] = React.useState<{
+    totalLogged: number
+    last24h: number
+    fulfilled: number
+    invalidSig: number
+    fulfillFailed: number
+    noReference: number
+  } | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [expanded, setExpanded] = React.useState<string | null>(null)
+  const [autoRefresh, setAutoRefresh] = React.useState(true)
+
+  const load = React.useCallback(() => {
+    fetch('/api/admin/payment-weblogs?limit=20', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => {
+        setEvents(data.events || [])
+        setStats(data.stats || null)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  React.useEffect(() => {
+    load()
+    if (!autoRefresh) return
+    const t = setInterval(load, 5000) // 5s live refresh
+    return () => clearInterval(t)
+  }, [load, autoRefresh])
+
+  async function clearLog() {
+    if (!confirm('Vider le journal des webhooks ? Cette action est irréversible.')) return
+    await fetch('/api/admin/payment-weblogs', { method: 'DELETE' })
+    load()
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Webhook className="h-4 w-4 text-primary" />
+          <h3 className="font-semibold text-sm">Journal des webhooks</h3>
+          {stats && (
+            <span className="text-xs text-muted-foreground">
+              · 20 derniers · {stats.last24h} dernières 24h
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="h-3 w-3"
+            />
+            Auto-refresh 5s
+          </label>
+          <Button size="sm" variant="ghost" onClick={load} className="h-7 px-2 text-xs">
+            <RefreshCw className="h-3 w-3 mr-1" /> Refresh
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={clearLog}
+            className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+          >
+            <Trash2 className="h-3 w-3 mr-1" /> Vider
+          </Button>
+        </div>
+      </div>
+
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+          <div className="rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-1.5">
+            <p className="text-[10px] uppercase text-emerald-700 font-medium">Fulfilled 24h</p>
+            <p className="text-base font-bold text-emerald-700">{stats.fulfilled}</p>
+          </div>
+          <div className="rounded-md border border-red-200 bg-red-50/50 px-3 py-1.5">
+            <p className="text-[10px] uppercase text-red-700 font-medium">Sig. invalide 24h</p>
+            <p className="text-base font-bold text-red-700">{stats.invalidSig}</p>
+          </div>
+          <div className="rounded-md border border-red-300 bg-red-100/50 px-3 py-1.5">
+            <p className="text-[10px] uppercase text-red-800 font-medium">Fulfill KO 24h</p>
+            <p className="text-base font-bold text-red-800">{stats.fulfillFailed}</p>
+          </div>
+          <div className="rounded-md border border-amber-200 bg-amber-50/50 px-3 py-1.5">
+            <p className="text-[10px] uppercase text-amber-700 font-medium">Sans réf. 24h</p>
+            <p className="text-base font-bold text-amber-700">{stats.noReference}</p>
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground mb-3">
+        Chaque notification de paiement reçue par <code className="bg-muted px-1 rounded">/api/payment/webhook/[provider]</code> est
+        enregistrée ici (200 entrées max, FIFO). Le body est tronqué à 500 caractères, la signature masquée.
+      </p>
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground text-center py-6">Chargement…</p>
+      ) : events.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">
+          Aucun webhook reçu pour le moment. Lancez un paiement test pour voir l'événement apparaître ici.
+        </p>
+      ) : (
+        <div className="space-y-1.5 max-h-[28rem] overflow-y-auto">
+          {events.map((e) => {
+            const meta = WEBHOOK_STATUS_META[e.status] || WEBHOOK_STATUS_META.no_action
+            const isExpanded = expanded === e.id
+            return (
+              <div
+                key={e.id}
+                className="border border-border rounded-md text-xs hover:bg-muted/30 transition-colors"
+              >
+                <button
+                  onClick={() => setExpanded(isExpanded ? null : e.id)}
+                  className="w-full flex items-center gap-2 p-2.5 text-left"
+                >
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-semibold flex-shrink-0 ${meta.color}`}>
+                    {meta.label}
+                  </span>
+                  <span className="font-mono text-[11px] text-muted-foreground flex-shrink-0">
+                    {e.provider}
+                  </span>
+                  {e.reference && (
+                    <span className="font-mono text-[11px] text-primary truncate">
+                      {e.reference}
+                    </span>
+                  )}
+                  {e.eventType && (
+                    <span className="text-[10px] text-muted-foreground truncate hidden sm:inline">
+                      · {e.eventType}
+                    </span>
+                  )}
+                  <span className="flex-1" />
+                  <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                    {new Date(e.ts).toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit' })}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">HTTP {e.httpStatus}</span>
+                  <ChevronRight className={`h-3 w-3 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                </button>
+                {isExpanded && (
+                  <div className="border-t border-border px-2.5 py-2 space-y-1.5 bg-muted/20">
+                    {e.error && (
+                      <div>
+                        <p className="text-[10px] uppercase text-muted-foreground font-medium">Erreur</p>
+                        <p className="font-mono text-[11px] text-red-600 break-all">{e.error}</p>
+                      </div>
+                    )}
+                    {e.signatureHeader && (
+                      <div>
+                        <p className="text-[10px] uppercase text-muted-foreground font-medium">Signature (masquée)</p>
+                        <p className="font-mono text-[11px] text-muted-foreground break-all">{e.signatureHeader}</p>
+                      </div>
+                    )}
+                    {e.bodyPreview && (
+                      <div>
+                        <p className="text-[10px] uppercase text-muted-foreground font-medium">Body (500 chars max)</p>
+                        <pre className="font-mono text-[11px] text-foreground/80 whitespace-pre-wrap break-all bg-background p-2 rounded border border-border max-h-32 overflow-y-auto">{e.bodyPreview}</pre>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-[10px] uppercase text-muted-foreground font-medium">ID</p>
+                      <p className="font-mono text-[11px] text-muted-foreground">{e.id}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Card>
   )
 }
