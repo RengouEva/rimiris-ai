@@ -81,7 +81,7 @@ export function WelcomeScreen() {
           </div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary text-xs font-medium mb-6">
             <Sparkles className="h-3.5 w-3.5" />
-            Votre directeur de mémoire virtuel
+            Votre directeur de mémoire académique
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-5">
             Rimiris vous pose les bonnes questions.

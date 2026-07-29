@@ -1,14 +1,14 @@
 {
-  "name": "Rimiris AI — Directeur de mémoire virtuel",
-  "short_name": "Rimiris",
-  "description": "Plateforme IA d'accompagnement à la rédaction académique, de l'idée de recherche jusqu'à la soutenance.",
+  "name": "Rimiris AI — Directeur de mémoire académique",
+  "short_name": "Rimiris AI",
+  "description": "Directeur de mémoire académique propulsé par l'IA. Rédigez votre mémoire, thèse ou dissertation avec méthode : entretien guidé, plan structuré, rédaction section par section, anti-plagiat et préparation à la soutenance.",
   "id": "/",
-  "start_url": "/",
+  "start_url": "/?utm_source=pwa&utm_medium=install",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui", "browser"],
   "orientation": "any",
-  "theme_color": "#6D28D9",
+  "theme_color": "#145DD6",
   "background_color": "#FFFFFF",
   "lang": "fr",
   "dir": "ltr",
@@ -49,26 +49,27 @@
     {
       "name": "Mon mémoire",
       "short_name": "Mémoire",
-      "description": "Accéder directement à l'éditeur de sections",
-      "url": "/?view=workspace",
+      "description": "Accéder à l'éditeur de sections du mémoire",
+      "url": "/?view=workspace&utm_source=pwa_shortcut",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Guide méthodologique",
       "short_name": "Guide",
-      "description": "Gérer le guide méthodologique de votre université",
-      "url": "/?view=guide",
+      "description": "Gérer le guide méthodologique de votre université (UQAC, ENIEG…)",
+      "url": "/?view=guide&utm_source=pwa_shortcut",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Exporter",
       "short_name": "Exporter",
       "description": "Exporter le mémoire (PDF, Word, HTML, Markdown)",
-      "url": "/?view=export",
+      "url": "/?view=export&utm_source=pwa_shortcut",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ],
   "screenshots": [],
   "prefer_related_applications": false,
-  "related_applications": []
+  "related_applications": [],
+  "scope_extensions": []
 }

@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     const problem = answerMap['problem'] || '(non précisée)'
     const terrain = answerMap['terrain'] || '(non précisé)'
 
-    const systemPrompt = `Tu es Pr. Rimiris, directeur de mémoire virtuel. À partir des éléments fournis par l'étudiant, propose un PLAN de mémoire cohérent et adapté à son niveau.
+    const systemPrompt = `Tu es Pr. Rimiris, directeur de mémoire académique. À partir des éléments fournis par l'étudiant, propose un PLAN de mémoire cohérent et adapté à son niveau.
 
 ÉLÉMENTS DE L'ÉTUDIANT :
 - Sujet : ${topic}

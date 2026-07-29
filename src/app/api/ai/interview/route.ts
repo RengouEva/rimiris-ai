@@ -28,7 +28,7 @@ export const INTERVIEW_STEPS = [
     id: 'topic',
     field: 'title',
     question:
-      "Bonjour, je suis Pr. Rimiris, votre directeur de mémoire virtuel. Pour bien démarrer, dites-moi en une phrase : sur quel sujet voulez-vous écrire votre mémoire ?",
+      "Bonjour, je suis Pr. Rimiris, votre directeur de mémoire académique. Pour bien démarrer, dites-moi en une phrase : sur quel sujet voulez-vous écrire votre mémoire ?",
     placeholder: 'Ex : L\'impact du télétravail sur la productivité des employés',
     helper: 'Pas besoin d\'être parfait — on affinera ensemble.',
   },
