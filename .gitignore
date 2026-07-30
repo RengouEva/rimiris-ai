@@ -34,6 +34,10 @@ yarn-error.log*
 .env*
 !.env.template
 
+# Allow the ready-to-use .env template in download/ (for user convenience)
+!download/rimiris-ai.env
+!download/**/*.env
+
 # runtime LLM config (written by admin portal)
 .llm-config.json
 
