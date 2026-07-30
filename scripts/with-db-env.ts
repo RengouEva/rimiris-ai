@@ -1,14 +1,13 @@
 /**
- * CLI wrapper: loads .env, builds DATABASE_URL from DB_* fields, then runs
+ * CLI wrapper: loads .env, builds DATABASE_URL from DB_FILE, then runs
  * the given command (typically `prisma ...` or `tsx scripts/seed-admin.ts`).
  *
  * WHY
  * ----
  * The Prisma CLI reads `env("DATABASE_URL")` from `prisma/schema.prisma`, but
- * the user wants to specify DB credentials as separate fields (DB_HOST,
- * DB_USER, ...). This wrapper assembles DATABASE_URL from those fields before
- * delegating to the wrapped command, so the user never has to write a
- * `mysql://user:pass@host:port/db` URL by hand.
+ * for SQLite the URL format is `file:<path>`. This wrapper builds that URL
+ * from the DB_FILE env var (or uses the default `./prisma/rimiris.db`)
+ * before delegating to the wrapped command.
  *
  * USAGE
  * -----
@@ -69,38 +68,47 @@ loadEnvFile(resolve(cwd, '.env.local'))
 loadEnvFile(resolve(cwd, '.env'))
 
 // ----------------------------------------------------------------------------
-// 2) Build DATABASE_URL from DB_* fields (or use existing DATABASE_URL).
+// 2) Build DATABASE_URL from DB_FILE (or use existing DATABASE_URL).
 //    Dynamic import so the .env values above are visible to db-config.ts.
+//    Wrapped in an async main() because top-level await is not supported
+//    in CJS output (which tsx defaults to for .ts files).
 // ----------------------------------------------------------------------------
-const { databaseUrl } = await import('../src/lib/db-config.js')
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = databaseUrl
+async function main() {
+  const { databaseUrl } = await import('../src/lib/db-config.js')
+  if (!process.env.DATABASE_URL) {
+    process.env.DATABASE_URL = databaseUrl
+  }
+
+  // ----------------------------------------------------------------------------
+  // 3) Spawn the wrapped command with the now-populated env.
+  // ----------------------------------------------------------------------------
+  const [cmd, ...args] = process.argv.slice(2)
+  if (!cmd) {
+    console.error(
+      '[with-db-env] No command given.\n' +
+        'Usage: tsx scripts/with-db-env.ts <cmd> [args...]\n' +
+        '  e.g. tsx scripts/with-db-env.ts prisma db push --accept-data-loss'
+    )
+    process.exit(1)
+  }
+
+  const child = spawn(cmd, args, {
+    stdio: 'inherit',
+    env: process.env,
+    shell: process.platform === 'win32',
+  })
+
+  child.on('error', (err) => {
+    console.error(`[with-db-env] Failed to spawn "${cmd}":`, err.message)
+    process.exit(1)
+  })
+
+  child.on('exit', (code) => {
+    process.exit(code ?? 1)
+  })
 }
 
-// ----------------------------------------------------------------------------
-// 3) Spawn the wrapped command with the now-populated env.
-// ----------------------------------------------------------------------------
-const [cmd, ...args] = process.argv.slice(2)
-if (!cmd) {
-  console.error(
-    '[with-db-env] No command given.\n' +
-      'Usage: tsx scripts/with-db-env.ts <cmd> [args...]\n' +
-      '  e.g. tsx scripts/with-db-env.ts prisma db push --accept-data-loss'
-  )
+main().catch((err) => {
+  console.error('[with-db-env] Fatal:', err)
   process.exit(1)
-}
-
-const child = spawn(cmd, args, {
-  stdio: 'inherit',
-  env: process.env,
-  shell: process.platform === 'win32',
-})
-
-child.on('error', (err) => {
-  console.error(`[with-db-env] Failed to spawn "${cmd}":`, err.message)
-  process.exit(1)
-})
-
-child.on('exit', (code) => {
-  process.exit(code ?? 1)
 })

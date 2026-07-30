@@ -21,9 +21,9 @@
 
 import { PrismaClient } from '@prisma/client'
 
-// Side-effect import: builds process.env.DATABASE_URL from DB_* fields
-// (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME) so PrismaClient can
-// connect. Must run BEFORE new PrismaClient(). See src/lib/db-config.ts.
+// Side-effect import: builds process.env.DATABASE_URL from DB_FILE
+// (a single file path) so PrismaClient can connect. Must run BEFORE
+// new PrismaClient(). See src/lib/db-config.ts.
 import './db-config'
 
 const globalForPrisma = globalThis as unknown as {

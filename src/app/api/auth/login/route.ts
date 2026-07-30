@@ -24,9 +24,15 @@ import {
 } from '@/lib/iris/security'
 import { migrateLegacyTier, type TierId } from '@/lib/iris/tiers'
 import { prisma } from '@/lib/db'
-import type { Account, AccountRole, AccountTier } from '@prisma/client'
+import type { Account } from '@prisma/client'
 
 export const runtime = 'nodejs'
+
+// Local union types for the role/tier fields. SQLite doesn't support Prisma
+// enums, so these fields are stored as TEXT. We keep the TS types here so the
+// rest of the codebase (signup, upgrade, fulfillment) doesn't need to change.
+export type AccountRole = 'user' | 'admin' | 'super_admin'
+export type AccountTier = 'free' | 'pro'
 
 // ============================================================================
 // Types — kept compatible with the old ServerAccount so the rest of the

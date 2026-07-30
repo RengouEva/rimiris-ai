@@ -72,3 +72,11 @@ upload/admin-uploads/
 .payment-config.audit.jsonl
 .payment-pending.json
 .payment-webhook-log.json
+
+# SQLite database files (runtime, contains user data + payment records)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+prisma/*.db
+prisma/*.db-journal

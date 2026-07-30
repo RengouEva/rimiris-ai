@@ -96,53 +96,35 @@ for k in SECRETS:
 if not dup:
     print("  OK      all 6 secrets are distinct")
 
-# 5) DATABASE credentials: either DATABASE_URL (legacy) OR DB_* fields (preferred)
-print("\n[4] Database credentials")
+# 5) DATABASE credentials: SQLite — DB_FILE (preferred) OR DATABASE_URL (legacy)
+print("\n[4] Database credentials (SQLite)")
 db_url = env.get('DATABASE_URL', '')
-db_host = env.get('DB_HOST', '')
-db_port = env.get('DB_PORT', '3306')
-db_user = env.get('DB_USER', '')
-db_pw   = env.get('DB_PASSWORD', '')
-db_name = env.get('DB_NAME', '')
+db_file = env.get('DB_FILE', '')
 
 if db_url:
-    # Legacy form: validate URL format
-    m = re.match(r'^mysql://([^:]+):([^@]+)@([^:]+):(\d+)/(\S+)$', db_url)
-    if m:
-        user, pw, host, port, name = m.groups()
-        pw_strength = 'STRONG' if len(pw) >= 16 else ('OK' if len(pw) >= 8 else 'WEAK')
-        print(f"  OK      DATABASE_URL format valid (legacy form)")
-        print(f"          user={user}  host={host}:{port}  db={name}")
-        print(f"          password length={len(pw)} ({pw_strength})")
-        if 'rimiris_password' in pw or 'YourStrong' in pw:
-            all_ok = False
-            print(f"  ⚠️      placeholder password detected — replace with real creds")
-        print(f"  NOTE    consider migrating to DB_HOST/DB_USER/.../DB_NAME fields")
+    # Legacy form: validate URL format (must start with file:)
+    if db_url.startswith('file:'):
+        path = db_url[5:]
+        print(f"  OK      DATABASE_URL set (legacy form, SQLite)")
+        print(f"          path = {path}")
+        print(f"  NOTE    consider using DB_FILE instead for clarity")
     else:
         all_ok = False
         print(f"  BAD     DATABASE_URL={db_url}")
-elif db_host and db_user and db_pw and db_name:
-    # Preferred form: separate fields
-    pw_strength = 'STRONG' if len(db_pw) >= 16 else ('OK' if len(db_pw) >= 8 else 'WEAK')
-    print(f"  OK      separate DB_* fields detected (preferred form)")
-    print(f"          host={db_host}:{db_port}  user={db_user}  db={db_name}")
-    print(f"          password length={len(db_pw)} ({pw_strength})")
-    if 'rimiris_password' in db_pw or 'YourStrong' in db_pw:
-        all_ok = False
-        print(f"  ⚠️      placeholder password detected — replace with real creds")
-    if db_host in ('127.0.0.1', 'localhost'):
-        print(f"  NOTE    host is local — fine for dev, replace for prod")
-    # Warn about special chars that would have broken the old URL form
-    if any(c in db_pw for c in '@:/#?'):
-        print(f"  OK      password contains URL-special chars — safe (auto-encoded at runtime)")
+        print(f"          must start with 'file:' for SQLite")
+elif db_file:
+    print(f"  OK      DB_FILE set (preferred form)")
+    print(f"          path = {db_file}")
+    if db_file.startswith('./') or db_file.startswith('../'):
+        print(f"  NOTE    relative path — will be resolved against project root")
+    elif not db_file.startswith('/'):
+        print(f"  NOTE    non-absolute path — will be resolved against project root")
+    else:
+        print(f"  OK      absolute path — will be created at this exact location")
 else:
-    all_ok = False
-    missing = [k for k, v in [
-        ('DB_HOST', db_host), ('DB_USER', db_user),
-        ('DB_PASSWORD', db_pw), ('DB_NAME', db_name)
-    ] if not v]
-    print(f"  BAD     no DB credentials found")
-    print(f"          set either DATABASE_URL OR the separate fields: {', '.join(missing)}")
+    # Neither set — code will default to ./prisma/rimiris.db
+    print(f"  OK      no DB_FILE or DATABASE_URL set — using default")
+    print(f"          default = ./prisma/rimiris.db (relative to project root)")
 
 # 6) LLM_PROVIDER
 print("\n[5] LLM provider")

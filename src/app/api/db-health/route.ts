@@ -63,21 +63,16 @@ export async function GET(req: NextRequest) {
 
   // 1) Env vars (masked)
   const envKeys = [
-    'DB_HOST',
-    'DB_PORT',
-    'DB_USER',
-    'DB_PASSWORD',
-    'DB_NAME',
-    'DB_SSL',
-    'DB_CONNECTION_LIMIT',
+    'DB_FILE',
     'DATABASE_URL',
   ]
   for (const k of envKeys) {
     const v = process.env[k]
     if (v === undefined) {
       report.env[k] = '(not set)'
-    } else if (k === 'DB_PASSWORD' || k === 'DATABASE_URL') {
-      report.env[k] = mask(v)
+    } else if (k === 'DATABASE_URL') {
+      // For SQLite URLs, the path is not really a secret but mask anyway.
+      report.env[k] = mask(v, 12)
     } else {
       report.env[k] = v
     }

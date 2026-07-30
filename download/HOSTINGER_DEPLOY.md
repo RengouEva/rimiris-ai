@@ -1,7 +1,11 @@
 # Déploiement Hostinger VPS — Rimiris AI
 
-Guide complet pour déployer Rimiris AI sur un VPS Hostinger KVM avec MySQL,
+Guide complet pour déployer Rimiris AI sur un VPS Hostinger KVM avec SQLite,
 Nginx, PM2, SSL Let's Encrypt, et backup automatique.
+
+> **Backend DB** : SQLite (fichier `.db` sur disque). Aucun serveur MySQL à
+> installer, aucune erreur d'authentification `caching_sha2_password`.
+> Pour revenir à MySQL plus tard, voir section 15 en bas de ce document.
 
 ---
 
@@ -25,7 +29,7 @@ ssh root@VPS_IP
 ### 2.1 Mises à jour + paquets de base
 ```bash
 apt update && apt upgrade -y
-apt install -y curl wget git ufw fail2ban nginx mysql-server certbot python3-certbot-nginx
+apt install -y curl wget git ufw fail2ban nginx certbot python3-certbot-nginx
 ```
 
 ### 2.2 Node.js 20 LTS (via NodeSource)
@@ -48,36 +52,20 @@ source ~/.bashrc
 
 ---
 
-## 3. Configuration MySQL
+## 3. Préparation du dossier de données SQLite
 
-### 3.1 Sécuriser MySQL
+La base de données est un simple fichier `.db` sur le disque. On le place dans
+`/var/lib/rimiris/` pour qu'il survive aux `git pull` et aux rebuilds.
+
 ```bash
-mysql_secure_installation
-# - Set root password? Y
-# - Remove anonymous users? Y
-# - Disallow remote root login? Y
-# - Remove test database? Y
-# - Reload privilege tables? Y
+mkdir -p /var/lib/rimiris
+chown -R $(whoami):$(whoami) /var/lib/rimiris
+chmod 700 /var/lib/rimiris
 ```
 
-### 3.2 Créer la base + l'utilisateur Rimiris
-```bash
-mysql -u root -p
-```
-
-```sql
-CREATE DATABASE rimiris_prod CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'rimiris'@'localhost' IDENTIFIED BY 'UNE_BONNE_PASSWORD_16_CHARS';
-GRANT ALL PRIVILEGES ON rimiris_prod.* TO 'rimiris'@'localhost';
-FLUSH PRIVILEGES;
-EXIT;
-```
-
-### 3.3 Vérifier
-```bash
-mysql -u rimiris -p rimiris_prod -e "SHOW TABLES;"
-# Empty set — la base est prête, les tables seront créées par Prisma
-```
+> **Aucune configuration supplémentaire** — pas de serveur MySQL à démarrer,
+> pas d'utilisateur à créer, pas de mot de passe à retenir. Le fichier `.db`
+> sera créé automatiquement par Prisma au premier démarrage.
 
 ---
 
@@ -104,22 +92,20 @@ nano .env.production
 
 Modifie ces valeurs :
 ```bash
-# Champs séparés (RECOMMANDÉ — gère les caractères spéciaux dans le mot de passe)
-DB_HOST="127.0.0.1"
-DB_PORT="3306"
-DB_USER="rimiris"
-DB_PASSWORD="UNE_BONNE_PASSWORD_16_CHARS"
-DB_NAME="rimiris_prod"
+# SQLite — juste le chemin du fichier .db. Rien d'autre à configurer.
+DB_FILE="/var/lib/rimiris/rimiris.db"
 
-# Optionnel : SSL pour MySQL distant, allowPublicKeyRetrieval pour MySQL 8 localhost
-DB_SSL="false"                          # "true" pour MySQL distant ou Hostinger mutualisé
-DB_SSL_ACCEPT="accept_invalid_certs"    # pour certs auto-signés (avec DB_SSL=true)
-DB_ALLOW_PUBLIC_KEY_RETRIEVAL="true"    # auto-ajouté quand DB_SSL=false — requis pour
-                                        # MySQL 8 caching_sha2_password sur connexion non-TLS
-
+# Secrets (générés avec openssl rand -hex 32)
 RIMIRIS_SESSION_SECRET="<un-nouveau-secret-de-64-chars-hex>"
 RIMIRIS_ENCRYPTION_KEY="<une-nouvelle-cle-de-64-chars-hex>"
 RIMIRIS_PAYMENT_SECRET="<un-nouveau-secret-de-64-chars-hex>"
+
+# Alias legacy (certains modules les lisent encore — garder synchronisés)
+SESSION_SECRET="<le_même_que_RIMIRIS_SESSION_SECRET>"
+ENCRYPTION_KEY="<le_même_que_RIMIRIS_ENCRYPTION_KEY>"
+PAYMENT_SECRET="<le_même_que_RIMIRIS_PAYMENT_SECRET>"
+
+NEXT_PUBLIC_SITE_URL="https://rimiris.ai"
 LLM_PROVIDER=zai
 NODE_ENV=production
 ```
@@ -128,6 +114,7 @@ Générer des secrets aléatoires :
 ```bash
 openssl rand -hex 32  # pour SESSION_SECRET
 openssl rand -hex 32  # pour ENCRYPTION_KEY
+openssl rand -hex 32  # pour PAYMENT_SECRET
 ```
 
 ### 4.4 Build + migration DB
@@ -138,9 +125,13 @@ set -a; source .env.production; set +a
 # Générer le client Prisma
 npx prisma generate
 
-# Créer toutes les tables dans MySQL
+# Créer toutes les tables dans SQLite (le fichier .db est créé au passage)
 npx prisma migrate deploy
 # OU si pas de migrations : npx prisma db push --accept-data-loss
+
+# Vérifier que le fichier .db existe
+ls -lh /var/lib/rimiris/rimiris.db
+# → -rw-r--r-- 1 user user 64K ... rimiris.db
 
 # Créer le compte admin
 npm run seed:admin
@@ -269,9 +260,9 @@ certbot renew --dry-run
 ```bash
 ufw allow OpenSSH
 ufw allow 'Nginx Full'  # 80 + 443
-ufw deny 3306           # MySQL jamais exposé à Internet
 ufw enable
 ufw status verbose
+# Pas de port MySQL à fermer — SQLite est un fichier, pas un serveur réseau.
 ```
 
 ### 9.2 Fail2ban — brute-force SSH
@@ -311,12 +302,17 @@ systemctl restart sshd
 
 ---
 
-## 10. Backup automatique MySQL
+## 10. Backup automatique SQLite
 
 ### 10.1 Script de backup quotidien
+
+Le backup SQLite est trivial : c'est juste une copie de fichier. On utilise
+la commande `.backup` de SQLite pour garantir un fichier cohérent même si
+l'app est en train d'écrire.
+
 ```bash
-mkdir -p /var/backups/mysql
-nano /usr/local/bin/backup-mysql.sh
+mkdir -p /var/backups/rimiris
+nano /usr/local/bin/backup-sqlite.sh
 ```
 
 Contenu :
@@ -324,23 +320,32 @@ Contenu :
 #!/bin/bash
 set -e
 DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR=/var/backups/mysql
-mysqldump -u rimiris -p'UNE_BONNE_PASSWORD_16_CHARS' rimiris_prod | gzip > $BACKUP_DIR/rimiris_prod_$DATE.sql.gz
+BACKUP_DIR=/var/backups/rimiris
+DB_FILE=/var/lib/rimiris/rimiris.db
+
+# Utiliser sqlite3 .backup pour un snapshot cohérent
+# (ou juste cp si sqlite3 n'est pas installé)
+if command -v sqlite3 >/dev/null 2>&1; then
+  sqlite3 "$DB_FILE" ".backup '$BACKUP_DIR/rimiris_$DATE.db'"
+else
+  cp "$DB_FILE" "$BACKUP_DIR/rimiris_$DATE.db"
+fi
+gzip "$BACKUP_DIR/rimiris_$DATE.db"
 
 # Rotation : garder 7 jours
-find $BACKUP_DIR -name "rimiris_prod_*.sql.gz" -mtime +7 -delete
+find "$BACKUP_DIR" -name "rimiris_*.db.gz" -mtime +7 -delete
 
 # Optionnel : push vers Hostinger Object Storage (S3-compatible)
-# aws s3 cp $BACKUP_DIR/rimiris_prod_$DATE.sql.gz s3://rimiris-backups/ --endpoint-url ...
+# aws s3 cp $BACKUP_DIR/rimiris_$DATE.db.gz s3://rimiris-backups/ --endpoint-url ...
 ```
 
 ```bash
-chmod +x /usr/local/bin/backup-mysql.sh
+chmod +x /usr/local/bin/backup-sqlite.sh
 
 # Cron : tous les jours à 3h du matin
 crontab -e
 # Ajouter :
-0 3 * * * /usr/local/bin/backup-mysql.sh >> /var/log/backup-mysql.log 2>&1
+0 3 * * * /usr/local/bin/backup-sqlite.sh >> /var/log/backup-sqlite.log 2>&1
 ```
 
 ---
@@ -399,13 +404,19 @@ tail -f /var/log/nginx/access.log
 tail -f /var/log/nginx/error.log
 ```
 
-### 12.3 MySQL slow queries
+### 12.3 SQLite — vérifier l'état du fichier DB
 ```bash
-nano /etc/mysql/mysql.conf.d/mysqld.cnf
-# slow_query_log = 1
-# slow_query_log_file = /var/log/mysql/slow.log
-# long_query_time = 2
-systemctl restart mysql
+# Taille du fichier .db
+ls -lh /var/lib/rimiris/rimiris.db
+
+# Nombre de lignes par table (si sqlite3 est installé)
+sqlite3 /var/lib/rimiris/rimiris.db \
+  "SELECT 'accounts', COUNT(*) FROM accounts UNION ALL \
+   SELECT 'pending_payments', COUNT(*) FROM pending_payments UNION ALL \
+   SELECT 'revenues', COUNT(*) FROM revenues;"
+
+# Ou sans sqlite3 : utiliser l'endpoint /api/db-health
+curl "https://rimiris.ai/api/db-health?token=$RIMIRIS_PAYMENT_SECRET" | jq
 ```
 
 ---
@@ -434,40 +445,52 @@ npx prisma generate
 pm2 restart rimiris
 ```
 
-### Erreur "Authentication failed for user ..." (MySQL 8 caching_sha2_password)
+### Erreur "Database does not exist" / "no such table"
 
-**Symptôme** : `/api/auth/login` et `/api/auth/signup` renvoient 503. Le endpoint
-`/api/db-health?token=<RIMIRIS_PAYMENT_SECRET>` affiche :
-```
-"error": "Authentication failed against database server, the provided database
- credentials for 'u..._rimirisai' are not valid"
-```
-Pourtant le même mot de passe fonctionne dans phpMyAdmin.
+Le fichier `.db` n'a pas été créé ou la migration n'a pas été appliquée.
 
-**Cause** : MySQL 8 utilise `caching_sha2_password` par défaut. Sur une connexion
-non-TLS, le driver `mysql2` refuse d'échanger la clé publique RSA du serveur pour
-chiffrer le mot de passe — sauf si `allowPublicKeyRetrieval=true` est passé.
-
-**Fix automatique (depuis le commit du 2026-07-31)** : le code ajoute
-automatiquement `allowPublicKeyRetrieval=true` quand `DB_SSL=false`. Il suffit de
-`git pull` + redéployer :
 ```bash
 cd /var/www/rimiris-ai
-git pull
-npm ci
-npx prisma generate
-npm run build
+set -a; source .env.production; set +a
+npx prisma migrate deploy
+ls -lh /var/lib/rimiris/rimiris.db
+# → doit afficher un fichier non vide (≥ 16K)
+
+npm run seed:admin  # recrée le compte admin si nécessaire
 pm2 restart rimiris
 ```
 
-**Fix alternatif (si le code ne peut pas être mis à jour)** — basculer le user
-MySQL vers l'ancien plugin d'auth :
-```sql
--- Dans phpMyAdmin ou mysql CLI :
-ALTER USER 'u658795094_rimirisai'@'%'
-  IDENTIFIED WITH mysql_native_password BY '<le_même_mot_de_passe>';
-FLUSH PRIVILEGES;
+### Erreur "unable to open database file" (permissions)
+
+Le user qui fait tourner PM2 n'a pas le droit d'écrire dans `/var/lib/rimiris/`.
+
+```bash
+# Vérifier le propriétaire du dossier
+ls -ld /var/lib/rimiris
+#drwx------ 2 root root 4096 ... /var/lib/rimiris
+
+# Donner la propriété au user qui fait tourner l'app
+chown -R $(pm2 jlist | jq -r '.[0].pm2_env.uid // "www-data"'):$(pm2 jlist | jq -r '.[0].pm2_env.gid // "www-data"') /var/lib/rimiris
+chmod 700 /var/lib/rimiris
+pm2 restart rimiris
 ```
+
+### Erreur "database is locked" (concurrence SQLite)
+
+SQLite utilise un verrou au niveau du fichier. Si tu vois cette erreur sous
+forte charge, c'est que plusieurs écritures se font en parallèle.
+
+- Solution court terme : redémarrer PM2 (`pm2 restart rimiris`).
+- Solution long terme : passer à MySQL/Postgres (voir section 15).
+
+### Endpoint /api/auth/login ou /api/auth/signup renvoie 503
+
+Vérifier l'état de la DB via le endpoint diagnostic :
+```bash
+curl "https://rimiris.ai/api/db-health?token=$RIMIRIS_PAYMENT_SECRET" | jq
+```
+Le champ `connection.ok` doit être `true`. Si `false`, le message d'erreur
+exact est dans `connection.error`.
 
 ### Erreur "DATABASE_URL not found"
 ```bash
@@ -477,19 +500,30 @@ pm2 start "bun .next/standalone/server.js" --name rimiris --env production --env
 pm2 save
 ```
 
-### MySQL "Too many connections"
-```bash
-mysql -u root -p -e "SHOW VARIABLES LIKE 'max_connections';"
-# Augmenter dans /etc/mysql/mysql.conf.d/mysqld.cnf :
-# max_connections = 200
-systemctl restart mysql
-```
-
 ### SSL expiré
 ```bash
 certbot renew
 systemctl reload nginx
 ```
+
+---
+
+## 15. Revenir à MySQL plus tard
+
+Quand tu seras prêt à passer à MySQL (par exemple si la charge augmente),
+il suffira de :
+
+1. Modifier `prisma/schema.prisma` : `provider = "sqlite"` → `provider = "mysql"`.
+2. Recréer les `enum` (si besoin) et les annotations `@db.Text` / `@db.LongText`.
+3. Configurer MySQL (voir l'ancien guide Hostinger dans l'historique git).
+4. Remplacer `DB_FILE` par `DB_HOST` / `DB_USER` / `DB_PASSWORD` / `DB_NAME`
+   dans `.env.production`.
+5. `npx prisma migrate dev --name mysql_init` (génère la migration MySQL).
+6. Pour migrer les données existantes : `sqlite3 .db .dump > dump.sql` puis
+   adapter et rejouer dans MySQL.
+
+La structure du code (modèles Prisma, queries) ne change pas — seulement le
+provider et les types de colonnes spécifiques.
 
 ---
 
