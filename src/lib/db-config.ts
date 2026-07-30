@@ -18,6 +18,21 @@
  * 3. Set `process.env.DATABASE_URL` so Prisma (which reads
  *    `env("DATABASE_URL")` from schema.prisma) picks it up.
  *
+ * MYSQL 8 AUTH PLUGIN HANDLING (important)
+ * ----------------------------------------
+ * MySQL 8 ships with `caching_sha2_password` as the default auth plugin.
+ * Over a non-TLS connection, the driver must retrieve the server's RSA
+ * public key to encrypt the password — but it WILL NOT do so unless
+ * `allowPublicKeyRetrieval=true` is passed. Without this, connections fail
+ * with `ER_NOT_SUPPORTED_AUTH_MODE` / "Authentication failed for user ...",
+ * which is the #1 cause of "MySQL works in phpMyAdmin but not in my Node app"
+ * on Hostinger / cPanel / shared hosting.
+ *
+ * We therefore auto-add `allowPublicKeyRetrieval=true` to NON-SSL
+ * connections (the default). To disable, set
+ * `DB_ALLOW_PUBLIC_KEY_RETRIEVAL=false`. This is safe over localhost/
+ * unix socket; for remote MySQL, prefer `DB_SSL=true` instead.
+ *
  * CONSUMERS
  * ---------
  * - Next.js runtime: imported by `src/lib/db.ts` before PrismaClient init.
@@ -61,8 +76,16 @@ export function buildDatabaseUrl(): string {
   // DB_SSL_ACCEPT=accept_invalid_certs — useful for Hostinger/cPanel where the
   // MySQL server uses a self-signed cert. Without this, Prisma rejects the
   // SSL handshake. Set DB_SSL=true + DB_SSL_ACCEPT=accept_invalid_certs on
-  // hosts with self-signed certs.
-  const sslAccept = process.env.DB_SSL_ACCEPT || ''
+  // hosts with self-signed certs. Defaults to "accept_invalid_certs" so that
+  // enabling DB_SSL=true "just works" on shared hosting.
+  const sslAccept = process.env.DB_SSL_ACCEPT || 'accept_invalid_certs'
+  // DB_ALLOW_PUBLIC_KEY_RETRIEVAL — when SSL is OFF (the default for
+  // localhost), MySQL 8's caching_sha2_password plugin requires the driver
+  // to fetch the server's RSA public key to encrypt the password. The driver
+  // refuses to do this unless explicitly opted in. Default: "true" so that
+  // out-of-the-box localhost connections work on MySQL 8. Set to "false" only
+  // if you've already migrated the user to mysql_native_password.
+  const allowPkr = (process.env.DB_ALLOW_PUBLIC_KEY_RETRIEVAL || 'true').toLowerCase() === 'true'
 
   // Percent-encode user & password so special chars (@, :, /, #, space, etc.)
   // don't break the URL parser. encodeURIComponent is the right tool here.
@@ -74,8 +97,13 @@ export function buildDatabaseUrl(): string {
   params.set('connection_limit', connLimit)
   if (ssl) {
     params.set('ssl', 'true')
-    // When SSL is on, also pass through sslaccept if provided.
+    // When SSL is on, also pass through sslaccept (defaults to accept_invalid_certs).
     if (sslAccept) params.set('sslaccept', sslAccept)
+  } else if (allowPkr) {
+    // Non-SSL connection to MySQL 8: enable RSA public key retrieval so
+    // caching_sha2_password can encrypt the password. Safe over localhost;
+    // for remote hosts prefer DB_SSL=true.
+    params.set('allowPublicKeyRetrieval', 'true')
   }
   const queryStr = params.toString()
 

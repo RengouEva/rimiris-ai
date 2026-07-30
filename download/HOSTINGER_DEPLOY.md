@@ -104,9 +104,22 @@ nano .env.production
 
 Modifie ces valeurs :
 ```bash
-DATABASE_URL="mysql://rimiris:UNE_BONNE_PASSWORD_16_CHARS@127.0.0.1:3306/rimiris_prod"
+# Champs séparés (RECOMMANDÉ — gère les caractères spéciaux dans le mot de passe)
+DB_HOST="127.0.0.1"
+DB_PORT="3306"
+DB_USER="rimiris"
+DB_PASSWORD="UNE_BONNE_PASSWORD_16_CHARS"
+DB_NAME="rimiris_prod"
+
+# Optionnel : SSL pour MySQL distant, allowPublicKeyRetrieval pour MySQL 8 localhost
+DB_SSL="false"                          # "true" pour MySQL distant ou Hostinger mutualisé
+DB_SSL_ACCEPT="accept_invalid_certs"    # pour certs auto-signés (avec DB_SSL=true)
+DB_ALLOW_PUBLIC_KEY_RETRIEVAL="true"    # auto-ajouté quand DB_SSL=false — requis pour
+                                        # MySQL 8 caching_sha2_password sur connexion non-TLS
+
 RIMIRIS_SESSION_SECRET="<un-nouveau-secret-de-64-chars-hex>"
 RIMIRIS_ENCRYPTION_KEY="<une-nouvelle-cle-de-64-chars-hex>"
+RIMIRIS_PAYMENT_SECRET="<un-nouveau-secret-de-64-chars-hex>"
 LLM_PROVIDER=zai
 NODE_ENV=production
 ```
@@ -421,6 +434,41 @@ npx prisma generate
 pm2 restart rimiris
 ```
 
+### Erreur "Authentication failed for user ..." (MySQL 8 caching_sha2_password)
+
+**Symptôme** : `/api/auth/login` et `/api/auth/signup` renvoient 503. Le endpoint
+`/api/db-health?token=<RIMIRIS_PAYMENT_SECRET>` affiche :
+```
+"error": "Authentication failed against database server, the provided database
+ credentials for 'u..._rimirisai' are not valid"
+```
+Pourtant le même mot de passe fonctionne dans phpMyAdmin.
+
+**Cause** : MySQL 8 utilise `caching_sha2_password` par défaut. Sur une connexion
+non-TLS, le driver `mysql2` refuse d'échanger la clé publique RSA du serveur pour
+chiffrer le mot de passe — sauf si `allowPublicKeyRetrieval=true` est passé.
+
+**Fix automatique (depuis le commit du 2026-07-31)** : le code ajoute
+automatiquement `allowPublicKeyRetrieval=true` quand `DB_SSL=false`. Il suffit de
+`git pull` + redéployer :
+```bash
+cd /var/www/rimiris-ai
+git pull
+npm ci
+npx prisma generate
+npm run build
+pm2 restart rimiris
+```
+
+**Fix alternatif (si le code ne peut pas être mis à jour)** — basculer le user
+MySQL vers l'ancien plugin d'auth :
+```sql
+-- Dans phpMyAdmin ou mysql CLI :
+ALTER USER 'u658795094_rimirisai'@'%'
+  IDENTIFIED WITH mysql_native_password BY '<le_même_mot_de_passe>';
+FLUSH PRIVILEGES;
+```
+
 ### Erreur "DATABASE_URL not found"
 ```bash
 # Le fichier .env.production doit être chargé par PM2
@@ -445,4 +493,4 @@ systemctl reload nginx
 
 ---
 
-Dernière mise à jour : 2026-07-30
+Dernière mise à jour : 2026-07-31
