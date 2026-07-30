@@ -58,6 +58,11 @@ export function buildDatabaseUrl(): string {
   const port = process.env.DB_PORT || '3306'
   const ssl = (process.env.DB_SSL || 'false').toLowerCase() === 'true'
   const connLimit = process.env.DB_CONNECTION_LIMIT || '10'
+  // DB_SSL_ACCEPT=accept_invalid_certs — useful for Hostinger/cPanel where the
+  // MySQL server uses a self-signed cert. Without this, Prisma rejects the
+  // SSL handshake. Set DB_SSL=true + DB_SSL_ACCEPT=accept_invalid_certs on
+  // hosts with self-signed certs.
+  const sslAccept = process.env.DB_SSL_ACCEPT || ''
 
   // Percent-encode user & password so special chars (@, :, /, #, space, etc.)
   // don't break the URL parser. encodeURIComponent is the right tool here.
@@ -67,7 +72,11 @@ export function buildDatabaseUrl(): string {
   // Build query string with URLSearchParams (handles encoding of values).
   const params = new URLSearchParams()
   params.set('connection_limit', connLimit)
-  if (ssl) params.set('ssl', 'true')
+  if (ssl) {
+    params.set('ssl', 'true')
+    // When SSL is on, also pass through sslaccept if provided.
+    if (sslAccept) params.set('sslaccept', sslAccept)
+  }
   const queryStr = params.toString()
 
   return `mysql://${encUser}:${encPass}@${host}:${port}/${name}${

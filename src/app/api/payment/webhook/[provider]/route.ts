@@ -81,21 +81,24 @@ export async function POST(
   // Verify the provider's signature
   const verifyResult = await verifyWebhook(provider, body, req.headers)
   if (!verifyResult.valid) {
-    // Always return 200 to providers to prevent retries, but log the failure.
-    // Some providers (Stripe) will retry on 4xx/5xx indefinitely.
+    // CRITICAL: return 200 (not 4xx) to providers to prevent infinite retries.
+    // Stripe retries 4xx/5xx up to 16 times over 3 days — for an invalid
+    // signature that will NEVER succeed, this is pure noise. Returning 200
+    // tells the provider "got it, don't retry" while we still log the failure
+    // in the DB for admin review.
     console.warn(
       `[webhook] ${provider} signature verification failed: ${verifyResult.error}`,
     )
     await logWebhookEvent(
       buildEventInput(provider, body, req.headers, {
         status: 'invalid_sig',
-        httpStatus: 400,
+        httpStatus: 200,  // Changed from 400 to 200 to prevent provider retries
         error: verifyResult.error,
       }),
     )
     return NextResponse.json(
-      { error: 'Signature invalide.' },
-      { status: 400 },
+      { ok: true, fulfilled: false, reason: 'invalid-signature' },
+      { status: 200 },
     )
   }
 

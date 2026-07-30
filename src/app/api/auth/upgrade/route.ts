@@ -86,6 +86,18 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.response!
   const session = auth.session!
 
+  // CRITICAL SECURITY CHECK: refuse upgrades in production if no payment
+  // secret is configured. Without this, demo mode (which auto-accepts any
+  // upgrade request) would let any authenticated user become Pro for free
+  // if the env var is missing or accidentally removed during redeploy.
+  if (!PAYMENT_SECRET && process.env.NODE_ENV === 'production') {
+    console.error('[upgrade] FATAL: RIMIRIS_PAYMENT_SECRET not set in production. Refusing upgrade to avoid privilege escalation.')
+    return NextResponse.json(
+      { error: 'Service de paiement non configuré. Contactez l\'administrateur.' },
+      { status: 503 },
+    )
+  }
+
   let body: any
   try {
     body = await req.json()

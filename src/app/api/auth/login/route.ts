@@ -253,7 +253,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Adresse email invalide.' }, { status: 400 })
   }
 
-  const stored = await findAccountByEmail(email)
+  // DB read must be wrapped — otherwise a DB connection failure bubbles up
+  // as an opaque 500 with no body, making debugging painful.
+  let stored: ServerAccount | null
+  try {
+    stored = await findAccountByEmail(email)
+  } catch (e: any) {
+    console.error('[login] DB read error (findAccountByEmail):', e)
+    return NextResponse.json(
+      {
+        error: 'Service indisponible. Vérifiez la connexion à la base de données.',
+        hint: process.env.NODE_ENV === 'development' ? String(e?.message || e) : undefined,
+      },
+      { status: 503 },
+    )
+  }
   if (!stored) {
     // Same error as wrong password to avoid email enumeration.
     return NextResponse.json(
@@ -271,12 +285,17 @@ export async function POST(req: NextRequest) {
   }
 
   // Persist lastLoginAt (and the enforced role/tier in case the super-admin
-  // rule changed something).
-  await updateAccount(account.id, {
-    lastLoginAt: Date.now(),
-    role: account.role,
-    tier: account.tier,
-  })
+  // rule changed something). Wrap in try/catch so a transient DB error does
+  // NOT block login — the session is still valid.
+  try {
+    await updateAccount(account.id, {
+      lastLoginAt: Date.now(),
+      role: account.role,
+      tier: account.tier,
+    })
+  } catch (e: any) {
+    console.error('[login] DB write error (updateAccount, non-blocking):', e)
+  }
 
   const session = toSession(account)
   const res = NextResponse.json({ ok: true, session })
