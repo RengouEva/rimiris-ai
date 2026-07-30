@@ -76,7 +76,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Veuillez saisir votre nom.' }, { status: 400 })
   }
 
-  const existing = await findAccountByEmail(email)
+  // DB read must be wrapped — otherwise a DB connection failure bubbles up
+  // as an opaque 500 with no body, making debugging painful.
+  let existing: ServerAccount | null
+  try {
+    existing = await findAccountByEmail(email)
+  } catch (e: any) {
+    console.error('[signup] DB read error (findAccountByEmail):', e)
+    return NextResponse.json(
+      {
+        error: 'Service indisponible. Vérifiez la connexion à la base de données.',
+        // Helpful hint in dev only — never expose internals in prod.
+        hint: process.env.NODE_ENV === 'development' ? String(e?.message || e) : undefined,
+      },
+      { status: 503 },
+    )
+  }
   if (existing) {
     return NextResponse.json({ error: 'Un compte existe déjà avec cet email.' }, { status: 409 })
   }
@@ -104,8 +119,14 @@ export async function POST(req: NextRequest) {
     if (e?.code === 'P2002') {
       return NextResponse.json({ error: 'Un compte existe déjà avec cet email.' }, { status: 409 })
     }
-    console.error('[signup] Prisma error:', e)
-    return NextResponse.json({ error: 'Erreur serveur lors de la création du compte.' }, { status: 500 })
+    console.error('[signup] Prisma error (createAccount):', e)
+    return NextResponse.json(
+      {
+        error: 'Erreur serveur lors de la création du compte.',
+        hint: process.env.NODE_ENV === 'development' ? String(e?.message || e) : undefined,
+      },
+      { status: 500 },
+    )
   }
 
   const session = toSession(account)

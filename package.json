@@ -7,12 +7,12 @@
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
-    "db:push": "prisma db push --accept-data-loss",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset",
-    "db:deploy": "prisma migrate deploy",
-    "seed:admin": "tsx scripts/seed-admin.ts"
+    "db:push": "tsx scripts/with-db-env.ts prisma db push --accept-data-loss",
+    "db:generate": "tsx scripts/with-db-env.ts prisma generate",
+    "db:migrate": "tsx scripts/with-db-env.ts prisma migrate dev",
+    "db:reset": "tsx scripts/with-db-env.ts prisma migrate reset",
+    "db:deploy": "tsx scripts/with-db-env.ts prisma migrate deploy",
+    "seed:admin": "tsx scripts/with-db-env.ts tsx scripts/seed-admin.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -41,8 +41,9 @@ print(" ENV FILE VALIDATION — Rimiris AI")
 print("=" * 70)
 
 # 2) Required vars
+#    DB credentials: either DATABASE_URL (legacy) OR DB_HOST+DB_USER+DB_PASSWORD+DB_NAME
+#    We check both forms below, so neither is in the hard-required list.
 REQUIRED = [
-    'DATABASE_URL',
     'RIMIRIS_SESSION_SECRET',
     'RIMIRIS_ENCRYPTION_KEY',
     'RIMIRIS_PAYMENT_SECRET',
@@ -95,24 +96,53 @@ for k in SECRETS:
 if not dup:
     print("  OK      all 6 secrets are distinct")
 
-# 5) DATABASE_URL format
-print("\n[4] DATABASE_URL format")
-db = env.get('DATABASE_URL', '')
-m = re.match(r'^mysql://([^:]+):([^@]+)@([^:]+):(\d+)/(\S+)$', db)
-if m:
-    user, pw, host, port, name = m.groups()
-    pw_strength = 'STRONG' if len(pw) >= 16 else ('OK' if len(pw) >= 8 else 'WEAK')
-    print(f"  OK      format valid")
-    print(f"          user={user}  host={host}:{port}  db={name}")
-    print(f"          password length={len(pw)} ({pw_strength})")
-    if 'rimiris_password' in pw:
+# 5) DATABASE credentials: either DATABASE_URL (legacy) OR DB_* fields (preferred)
+print("\n[4] Database credentials")
+db_url = env.get('DATABASE_URL', '')
+db_host = env.get('DB_HOST', '')
+db_port = env.get('DB_PORT', '3306')
+db_user = env.get('DB_USER', '')
+db_pw   = env.get('DB_PASSWORD', '')
+db_name = env.get('DB_NAME', '')
+
+if db_url:
+    # Legacy form: validate URL format
+    m = re.match(r'^mysql://([^:]+):([^@]+)@([^:]+):(\d+)/(\S+)$', db_url)
+    if m:
+        user, pw, host, port, name = m.groups()
+        pw_strength = 'STRONG' if len(pw) >= 16 else ('OK' if len(pw) >= 8 else 'WEAK')
+        print(f"  OK      DATABASE_URL format valid (legacy form)")
+        print(f"          user={user}  host={host}:{port}  db={name}")
+        print(f"          password length={len(pw)} ({pw_strength})")
+        if 'rimiris_password' in pw or 'YourStrong' in pw:
+            all_ok = False
+            print(f"  ⚠️      placeholder password detected — replace with real creds")
+        print(f"  NOTE    consider migrating to DB_HOST/DB_USER/.../DB_NAME fields")
+    else:
+        all_ok = False
+        print(f"  BAD     DATABASE_URL={db_url}")
+elif db_host and db_user and db_pw and db_name:
+    # Preferred form: separate fields
+    pw_strength = 'STRONG' if len(db_pw) >= 16 else ('OK' if len(db_pw) >= 8 else 'WEAK')
+    print(f"  OK      separate DB_* fields detected (preferred form)")
+    print(f"          host={db_host}:{db_port}  user={db_user}  db={db_name}")
+    print(f"          password length={len(db_pw)} ({pw_strength})")
+    if 'rimiris_password' in db_pw or 'YourStrong' in db_pw:
         all_ok = False
         print(f"  ⚠️      placeholder password detected — replace with real creds")
-    if host in ('127.0.0.1', 'localhost'):
+    if db_host in ('127.0.0.1', 'localhost'):
         print(f"  NOTE    host is local — fine for dev, replace for prod")
+    # Warn about special chars that would have broken the old URL form
+    if any(c in db_pw for c in '@:/#?'):
+        print(f"  OK      password contains URL-special chars — safe (auto-encoded at runtime)")
 else:
     all_ok = False
-    print(f"  BAD     {db}")
+    missing = [k for k, v in [
+        ('DB_HOST', db_host), ('DB_USER', db_user),
+        ('DB_PASSWORD', db_pw), ('DB_NAME', db_name)
+    ] if not v]
+    print(f"  BAD     no DB credentials found")
+    print(f"          set either DATABASE_URL OR the separate fields: {', '.join(missing)}")
 
 # 6) LLM_PROVIDER
 print("\n[5] LLM provider")

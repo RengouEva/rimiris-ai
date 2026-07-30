@@ -1,0 +1,88 @@
+/**
+ * Builds the MySQL connection URL from separate DB_* env vars.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * On shared hosting (Hostinger, cPanel, etc.), users prefer to fill in
+ * discrete fields (DB_HOST, DB_USER, DB_PASSWORD, ...) rather than assemble
+ * a `mysql://user:pass@host:port/db` URL by hand. Special chars in passwords
+ * (`@`, `:`, `/`, `#`, space) break the URL if not percent-encoded, which is
+ * a constant source of "Cannot connect to database" tickets.
+ *
+ * STRATEGY
+ * --------
+ * 1. If `DATABASE_URL` is already set, use it as-is (backward compat for
+ *    users who already have a working URL).
+ * 2. Otherwise, build it from `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD`
+ *    / `DB_NAME`. URL-encode user + password so special chars are safe.
+ * 3. Set `process.env.DATABASE_URL` so Prisma (which reads
+ *    `env("DATABASE_URL")` from schema.prisma) picks it up.
+ *
+ * CONSUMERS
+ * ---------
+ * - Next.js runtime: imported by `src/lib/db.ts` before PrismaClient init.
+ * - Prisma CLI: imported by `scripts/with-db-env.ts` wrapper.
+ */
+
+/**
+ * Assemble the mysql:// URL from individual env vars.
+ * Throws a clear error if any required field is missing.
+ */
+export function buildDatabaseUrl(): string {
+  // Backward compat: explicit URL wins.
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL
+  }
+
+  const host = process.env.DB_HOST
+  const user = process.env.DB_USER
+  const password = process.env.DB_PASSWORD
+  const name = process.env.DB_NAME
+
+  const missing: string[] = []
+  if (!host) missing.push('DB_HOST')
+  if (!user) missing.push('DB_USER')
+  if (!password) missing.push('DB_PASSWORD')
+  if (!name) missing.push('DB_NAME')
+
+  if (missing.length > 0) {
+    throw new Error(
+      `[db-config] Missing DB credentials. Either:\n` +
+        `  (a) set DATABASE_URL="mysql://USER:PASSWORD@HOST:PORT/DB_NAME", OR\n` +
+        `  (b) set the separate fields: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME.\n` +
+        `  Missing: ${missing.join(', ')}.\n` +
+        `  See .env.template for reference.`
+    )
+  }
+
+  const port = process.env.DB_PORT || '3306'
+  const ssl = (process.env.DB_SSL || 'false').toLowerCase() === 'true'
+  const connLimit = process.env.DB_CONNECTION_LIMIT || '10'
+
+  // Percent-encode user & password so special chars (@, :, /, #, space, etc.)
+  // don't break the URL parser. encodeURIComponent is the right tool here.
+  const encUser = encodeURIComponent(user as string)
+  const encPass = encodeURIComponent(password as string)
+
+  // Build query string with URLSearchParams (handles encoding of values).
+  const params = new URLSearchParams()
+  params.set('connection_limit', connLimit)
+  if (ssl) params.set('ssl', 'true')
+  const queryStr = params.toString()
+
+  return `mysql://${encUser}:${encPass}@${host}:${port}/${name}${
+    queryStr ? `?${queryStr}` : ''
+  }`
+}
+
+/**
+ * The resolved URL — computed once at module load.
+ * Importing this module guarantees `process.env.DATABASE_URL` is set.
+ */
+export const databaseUrl = buildDatabaseUrl()
+
+// Make sure Prisma sees it too — Prisma reads process.env.DATABASE_URL
+// at client instantiation time, both in the Next.js runtime and the CLI.
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = databaseUrl
+}
